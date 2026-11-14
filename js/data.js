@@ -1,80 +1,164 @@
 // Powershot – Daten: Spieler, Turniere, Ausrüstung, Schwierigkeit
-// Die Fähigkeitswerte der echten Spieler sind frei geschätzt (nur fürs Spiel).
+// Die Namen, Plätze und Punkte sind die echte Weltrangliste vom 9. November 2026.
+// Die Fähigkeitswerte und das Aussehen sind frei geschätzt (nur fürs Spiel).
 
-// Weltrangliste Top 20, Stand 9. November 2026
+// Die besten Spieler mit von Hand eingestellten Werten.
 // Werte: s = Aufschlag, p = Kraft, t = Tempo, c = Präzision, v = Volley
-const TOP20 = [
-  ['zverev', 'Alexander Zverev', 'GER', 9550, 95, 90, 84, 90, 78, 1, 0xf0c8a0, 0xc9a45c, 0xffffff, 0x1a1a1a, 'band'],
-  ['sinner', 'Jannik Sinner', 'ITA', 9450, 90, 95, 90, 94, 80, 1, 0xf3cfb0, 0xc8642a, 0x1f6f43, 0xffffff, 'cap'],
-  ['alcaraz', 'Carlos Alcaraz', 'ESP', 7100, 86, 93, 96, 91, 90, 1, 0xe2b48c, 0x2b1d14, 0xf2e85c, 0x202020, 'none'],
-  ['shelton', 'Ben Shelton', 'USA', 5170, 97, 90, 85, 80, 82, -1, 0xc99872, 0x3a2a1c, 0x2e6fd8, 0xffffff, 'none'],
-  ['medvedev', 'Daniil Medvedev', 'RUS', 3820, 88, 82, 88, 92, 72, 1, 0xf0c8a0, 0x8a6a45, 0x7fd0e8, 0x20304a, 'none'],
-  ['cobolli', 'Flavio Cobolli', 'ITA', 3680, 80, 85, 90, 83, 74, 1, 0xe8bd98, 0x3a2a1c, 0xe84a3a, 0x1a1a1a, 'cap'],
-  ['fils', 'Arthur Fils', 'FRA', 3625, 86, 91, 88, 80, 76, 1, 0x8a5a3c, 0x1a1410, 0xffffff, 0x1f3f8f, 'band'],
-  ['tiafoe', 'Frances Tiafoe', 'USA', 3390, 84, 86, 90, 79, 85, 1, 0x7a4a30, 0x14100c, 0xff7a2a, 0x1a1a1a, 'band'],
-  ['deminaur', 'Alex de Minaur', 'AUS', 3370, 76, 78, 98, 88, 80, 1, 0xeec4a0, 0x4a3524, 0x1fb87a, 0xffffff, 'cap'],
-  ['fritz', 'Taylor Fritz', 'USA', 3285, 93, 90, 78, 85, 74, 1, 0xf0c8a0, 0x5a4028, 0x1a1a1a, 0x1a1a1a, 'band'],
-  ['jodar', 'Rafael Jodar', 'ESP', 3234, 82, 86, 86, 82, 74, 1, 0xe6ba94, 0x2b1d14, 0xd83a3a, 0xffffff, 'none'],
-  ['djokovic', 'Novak Djokovic', 'SRB', 2940, 86, 84, 84, 96, 84, 1, 0xeac09a, 0x2a2420, 0x2a4ab8, 0xffffff, 'none'],
-  ['paul', 'Tommy Paul', 'USA', 2925, 82, 82, 92, 85, 82, 1, 0xf0c8a0, 0x6a4a2c, 0xffffff, 0xc82a2a, 'cap'],
-  ['fauger', 'Felix Auger-Aliassime', 'CAN', 2875, 93, 88, 84, 80, 80, 1, 0x9a6a48, 0x1a1410, 0xe82a4a, 0xffffff, 'none'],
-  ['lehecka', 'Jiri Lehecka', 'CZE', 2540, 88, 90, 84, 80, 76, 1, 0xf0c8a0, 0x5a4028, 0x3a8ad8, 0x1a1a1a, 'cap'],
-  ['mensik', 'Jakub Mensik', 'CZE', 2500, 94, 87, 80, 79, 76, 1, 0xf0c8a0, 0x7a5a38, 0xb8e84a, 0x1a1a1a, 'none'],
-  ['davidovich', 'Alejandro Davidovich Fokina', 'ESP', 2500, 76, 84, 90, 82, 78, 1, 0xeac09a, 0xb89a5c, 0xff9a2a, 0x202020, 'band'],
-  ['ruud', 'Casper Ruud', 'NOR', 2435, 82, 88, 84, 86, 70, 1, 0xf2ccaa, 0xb8935a, 0x9a3ad8, 0xffffff, 'cap'],
-  ['nakashima', 'Brandon Nakashima', 'USA', 2360, 84, 82, 82, 84, 74, 1, 0xe6c09a, 0x1a1410, 0x2ab8b8, 0x1a1a1a, 'none'],
-  ['cerundolo', 'Francisco Cerundolo', 'ARG', 2220, 76, 88, 84, 82, 70, 1, 0xe8bd98, 0x3a2a1c, 0x7ac8ff, 0xffffff, 'band'],
+// [Platz, id, Name, Land, Punkte, s, p, t, c, v, Schlaghand, Haut, Haare, Hemd, Hose, Kopf]
+const STARS = [
+  [1, 'zverev', 'Alexander|Zverev', 'GER', 9550, 95, 90, 84, 90, 78, 1, 0xf0c8a0, 0xc9a45c, 0xffffff, 0x1a1a1a, 'band'],
+  [2, 'sinner', 'Jannik|Sinner', 'ITA', 9450, 90, 95, 90, 94, 80, 1, 0xf3cfb0, 0xc8642a, 0x1f6f43, 0xffffff, 'cap'],
+  [3, 'alcaraz', 'Carlos|Alcaraz', 'ESP', 6100, 86, 93, 96, 91, 90, 1, 0xe2b48c, 0x2b1d14, 0xf2e85c, 0x202020, 'none'],
+  [4, 'shelton', 'Ben|Shelton', 'USA', 4530, 97, 90, 85, 80, 82, -1, 0xc99872, 0x3a2a1c, 0x2e6fd8, 0xffffff, 'none'],
+  [5, 'medvedev', 'Daniil|Medvedev', 'RUS', 3860, 88, 82, 88, 92, 72, 1, 0xf0c8a0, 0x8a6a45, 0x7fd0e8, 0x20304a, 'none'],
+  [6, 'cobolli', 'Flavio|Cobolli', 'ITA', 3690, 80, 85, 90, 83, 74, 1, 0xe8bd98, 0x3a2a1c, 0xe84a3a, 0x1a1a1a, 'cap'],
+  [7, 'fils', 'Arthur|Fils', 'FRA', 3525, 86, 91, 88, 80, 76, 1, 0x8a5a3c, 0x1a1410, 0xffffff, 0x1f3f8f, 'band'],
+  [8, 'tiafoe', 'Frances|Tiafoe', 'USA', 3430, 84, 86, 90, 79, 85, 1, 0x7a4a30, 0x14100c, 0xff7a2a, 0x1a1a1a, 'band'],
+  [9, 'deminaur', 'Alex|de Minaur', 'AUS', 3410, 76, 78, 98, 88, 80, 1, 0xeec4a0, 0x4a3524, 0x1fb87a, 0xffffff, 'cap'],
+  [10, 'jodar', 'Rafael|Jodar', 'ESP', 3209, 82, 86, 86, 82, 74, 1, 0xe6ba94, 0x2b1d14, 0xd83a3a, 0xffffff, 'none'],
+  [11, 'djokovic', 'Novak|Djokovic', 'SRB', 3140, 86, 84, 84, 96, 84, 1, 0xeac09a, 0x2a2420, 0x2a4ab8, 0xffffff, 'none'],
+  [12, 'fritz', 'Taylor|Fritz', 'USA', 3095, 93, 90, 78, 85, 74, 1, 0xf0c8a0, 0x5a4028, 0x1a1a1a, 0x1a1a1a, 'band'],
+  [13, 'fauger', 'Felix|Auger-Aliassime', 'CAN', 2875, 93, 88, 84, 80, 80, 1, 0x9a6a48, 0x1a1410, 0xe82a4a, 0xffffff, 'none'],
+  [14, 'paul', 'Tommy|Paul', 'USA', 2775, 82, 82, 92, 85, 82, 1, 0xf0c8a0, 0x6a4a2c, 0xffffff, 0xc82a2a, 'cap'],
+  [15, 'lehecka', 'Jiri|Lehecka', 'CZE', 2580, 88, 90, 84, 80, 76, 1, 0xf0c8a0, 0x5a4028, 0x3a8ad8, 0x1a1a1a, 'cap'],
+  [16, 'mensik', 'Jakub|Mensik', 'CZE', 2545, 94, 87, 80, 79, 76, 1, 0xf0c8a0, 0x7a5a38, 0xb8e84a, 0x1a1a1a, 'none'],
+  [17, 'davidovich', 'Alejandro|Davidovich Fokina', 'ESP', 2510, 76, 84, 90, 82, 78, 1, 0xeac09a, 0xb89a5c, 0xff9a2a, 0x202020, 'band'],
+  [18, 'nakashima', 'Brandon|Nakashima', 'USA', 2375, 84, 82, 82, 84, 74, 1, 0xe6c09a, 0x1a1410, 0x2ab8b8, 0x1a1a1a, 'none'],
+  [19, 'tien', 'Learner|Tien', 'USA', 2345, 76, 80, 88, 88, 76, -1, 0xe6c09a, 0x1a1410, 0xffffff, 0x1f3f8f, 'cap'],
+  [20, 'cerundolo', 'Francisco|Cerundolo', 'ARG', 2260, 76, 88, 84, 82, 70, 1, 0xe8bd98, 0x3a2a1c, 0x7ac8ff, 0xffffff, 'band'],
+  [23, 'ruud', 'Casper|Ruud', 'NOR', 2035, 82, 88, 84, 86, 70, 1, 0xf2ccaa, 0xb8935a, 0x9a3ad8, 0xffffff, 'cap'],
 ];
+
+// Alle anderen Spieler der Top 100: 'Platz;Vorname|Nachname;Land;Punkte;Besonderheit'
+// Besonderheit: L = Linkshänder, dazu die Stärke (s, p, t, c oder v). Die Werte werden daraus berechnet.
+const REST = `21;Luciano|Darderi;ITA;2200;p
+22;Andrey|Rublev;RUS;2085;p
+24;Lorenzo|Musetti;ITA;1960;c
+25;Karen|Khachanov;RUS;1940;p
+26;Alexander|Bublik;KAZ;1895;s
+27;Valentin|Vacherot;MON;1780;s
+28;Alexander|Blockx;BEL;1665;p
+29;Hubert|Hurkacz;POL;1625;s
+30;Alejandro|Tabilo;CHI;1565;Lc
+31;Tomas Martin|Etcheverry;ARG;1550;p
+32;Arthur|Fery;GBR;1503;t
+33;Ignacio|Buse;PER;1445;c
+34;Stefanos|Tsitsipas;GRE;1440;v
+35;Alex|Michelsen;USA;1435;c
+36;Matteo|Arnaldi;ITA;1311;t
+37;Botic|van de Zandschulp;NED;1295;s
+38;Ugo|Humbert;FRA;1295;Lc
+39;Jan-Lennard|Struff;GER;1271;s
+40;Zizou|Bergs;BEL;1226;t
+41;Joao|Fonseca;BRA;1200;p
+42;Daniel|Merida;ESP;1195;c
+43;Matteo|Berrettini;ITA;1173;s
+44;Arthur|Gea;FRA;1146;t
+45;Cameron|Norrie;GBR;1145;Lt
+46;Quentin|Halys;FRA;1127;s
+47;Luca|van Assche;FRA;1105;t
+48;Mariano|Navone;ARG;1099;t
+49;Nuno|Borges;POR;1075;c
+50;Tallon|Griekspoor;NED;1075;s
+51;Denis|Shapovalov;CAN;1055;Lp
+52;Sebastian|Baez;ARG;1044;t
+53;Thiago Agustin|Tirante;ARG;1023;p
+54;Juan Manuel|Cerundolo;ARG;1000;Lc
+55;Raphael|Collignon;BEL;968;p
+56;Adolfo Daniel|Vallejo;PAR;947;t
+57;Jaime|Faria;POR;941;s
+58;Yannick|Hanfmann;GER;923;p
+59;Adrian|Mannarino;FRA;898;Lc
+60;Miomir|Kecmanovic;SRB;893;c
+61;Fabian|Marozsan;HUN;875;c
+62;Vit|Kopriva;CZE;844;c
+63;Daniel|Altmaier;GER;837;p
+64;Ethan|Quinn;USA;831;s
+65;Jaume|Munar;ESP;825;t
+66;Mattia|Bellucci;ITA;824;Lv
+67;Martin|Landaluce;ESP;822;p
+68;Arthur|Rinderknech;FRA;820;s
+69;Tomas|Machac;CZE;819;t
+70;James|Duckworth;AUS;814;s
+71;Roman|Safiullin;RUS;807;p
+72;Facundo|Diaz Acosta;ARG;807;Lt
+73;Terence|Atmane;FRA;787;Lp
+74;Pablo|Carreno Busta;ESP;773;c
+75;Zachary|Svajda;USA;759;c
+76;Roman Andres|Burruchaga;ARG;754;t
+77;Hamad|Medjedovic;SRB;751;p
+78;Alex|Molcan;SVK;747;Lt
+79;Titouan|Droguet;FRA;746;s
+80;Kyrian|Jacquet;FRA;741;c
+81;Camilo|Ugo Carabelli;ARG;730;t
+82;Kamil|Majchrzak;POL;725;c
+83;Rinky|Hijikata;AUS;693;v
+84;Aleksandar|Kovacevic;USA;693;s
+85;Coleman|Wong;HKG;692;p
+86;Sebastian|Korda;USA;690;c
+87;Nikoloz|Basilashvili;GEO;681;p
+88;Damir|Dzumhur;BIH;679;t
+89;Marcos|Giron;USA;676;t
+90;Jacob|Fearnley;GBR;671;p
+91;Marco|Trungelliti;ARG;670;c
+92;Dino|Prizmic;CRO;663;c
+93;Yunchaokete|Bu;CHN;646;p
+94;Jenson|Brooksby;USA;638;c
+95;Benjamin|Bonzi;FRA;630;v
+96;Marin|Cilic;CRO;629;s
+97;Toby|Samuel;GBR;625;s
+98;Adam|Walton;AUS;619;c
+99;Henrique|Rocha;POR;596;p
+100;Michael|Zheng;USA;594;c`;
 
 export const FLAGS = {
   GER: '🇩🇪', ITA: '🇮🇹', ESP: '🇪🇸', USA: '🇺🇸', RUS: '🏳️', FRA: '🇫🇷', AUS: '🇦🇺', SRB: '🇷🇸', CAN: '🇨🇦',
   CZE: '🇨🇿', NOR: '🇳🇴', ARG: '🇦🇷', GBR: '🇬🇧', POL: '🇵🇱', GRE: '🇬🇷', DEN: '🇩🇰', BRA: '🇧🇷', CHN: '🇨🇳',
   JPN: '🇯🇵', NED: '🇳🇱', SUI: '🇨🇭', AUT: '🇦🇹', BEL: '🇧🇪', CRO: '🇭🇷', CHI: '🇨🇱', KAZ: '🇰🇿', POR: '🇵🇹',
-  HUN: '🇭🇺', SWE: '🇸🇪', FIN: '🇫🇮',
+  HUN: '🇭🇺', SWE: '🇸🇪', FIN: '🇫🇮', MON: '🇲🇨', PER: '🇵🇪', PAR: '🇵🇾', SVK: '🇸🇰', HKG: '🇭🇰', GEO: '🇬🇪',
+  BIH: '🇧🇦',
 };
 
-function mk(a, rank) {
-  const [id, name, country, points, s, p, t, c, v, hand, skin, hair, shirt, shorts, head] = a;
-  const parts = name.split(' ');
+const HEMDEN = [0xe84a3a, 0x2e6fd8, 0xffffff, 0x1fb87a, 0xf2e85c, 0x9a3ad8, 0xff7a2a, 0x2ab8b8, 0x1a1a1a, 0xe82a8a];
+const HAUT = [0xf0c8a0, 0xe2b48c, 0xeac09a, 0xc99872, 0xf3cfb0, 0xe6ba94];
+const HAAR = [0x2b1d14, 0x5a4028, 0xb8935a, 0x1a1410, 0x8a6a45, 0x3a2a1c];
+
+function names(full) {
+  const [first, last] = full.split('|');
+  let short = last;
+  if (last === 'Davidovich Fokina') short = 'Davidovich F.';
+  if (first === 'Juan Manuel') short = 'J. M. Cerundolo';
+  return { name: first + ' ' + last, short };
+}
+
+function star(a) {
+  const [rank, id, full, country, points, s, p, t, c, v, hand, skin, hair, shirt, shorts, head] = a;
   return {
-    id, name, country, rank, basePoints: points, real: true,
-    short: parts[parts.length - 1] === 'Fokina' ? 'Davidovich F.' : parts.slice(1).join(' '),
+    id, ...names(full), country, rank, basePoints: points,
     stats: { s, p, t, c, v }, hand,
     look: { skin, hair, shirt, shorts, head, shoes: 0xffffff, racket: 0x202020 },
   };
 }
 
-// Erfundene Spieler für die Plätze 21–100
-const VOR = ['Luca', 'Mateo', 'Jonas', 'Hugo', 'Leo', 'Nils', 'Marco', 'Pavel', 'Tomas', 'Erik',
-  'Diego', 'Kenji', 'Milan', 'Oskar', 'Rui', 'Anton', 'Felipe', 'Jan', 'Noel', 'Viktor'];
-const NACH = ['Bergström', 'Castellan', 'Novotny', 'Vandermeer', 'Okafor', 'Lindqvist', 'Moreau', 'Ferrand',
-  'Kowalczyk', 'Bianchetti', 'Hartwig', 'Soriano', 'Takeda', 'Petrovan', 'Albrecht', 'Duarte', 'Keller',
-  'Marchetti', 'Sandoval', 'Nyberg'];
-const LAND = ['SWE', 'ESP', 'CZE', 'NED', 'GBR', 'FIN', 'FRA', 'BEL', 'POL', 'ITA', 'GER', 'ARG', 'JPN', 'CRO',
-  'AUT', 'POR', 'SUI', 'CHI', 'DEN', 'HUN', 'BRA', 'KAZ', 'AUS', 'USA', 'CAN', 'GRE'];
-const HEMDEN = [0xe84a3a, 0x2e6fd8, 0xffffff, 0x1fb87a, 0xf2e85c, 0x9a3ad8, 0xff7a2a, 0x2ab8b8, 0x1a1a1a, 0xe82a8a];
-const HAUT = [0xf0c8a0, 0xe2b48c, 0xc99872, 0x9a6a48, 0x7a4a30, 0xf3cfb0];
-const HAAR = [0x2b1d14, 0x5a4028, 0xb8935a, 0x1a1410, 0x8a6a45, 0xc8642a];
-
-function filler(i) {
-  const rank = 21 + i;
-  const name = VOR[(i * 7 + 3) % 20] + ' ' + NACH[(i * 3 + Math.floor(i / 20) * 5) % 20];
-  const base = 80 - i * 0.27;                       // Platz 21 ≈ 80, Platz 100 ≈ 59
-  const w = (k) => Math.round(Math.max(45, Math.min(92, base + (((i * 37 + k * 53) % 13) - 6))));
+function other(line) {
+  const [rk, full, country, pts, extra] = line.split(';');
+  const rank = +rk, i = rank - 21;
+  const n = names(full);
+  const strong = extra.replace('L', '');
+  const base = 78 - i * 0.24;                       // Platz 21 ≈ 78, Platz 100 ≈ 59
+  const w = (key, k) => Math.round(Math.max(48, Math.min(93, base + (((i * 37 + k * 53) % 9) - 4) + (key === strong ? 7 : -1))));
   return {
-    id: 'f' + rank, name, country: LAND[(i * 5 + 1) % LAND.length], rank, real: false,
-    short: name.split(' ')[1],
-    basePoints: Math.round(2200 * Math.pow(20 / rank, 1.25)),
-    stats: { s: w(1), p: w(2), t: w(3), c: w(4), v: w(5) },
-    hand: i % 9 === 4 ? -1 : 1,
+    id: n.short.toLowerCase().replace(/[^a-z]/g, ''), ...n, country, rank, basePoints: +pts,
+    stats: { s: w('s', 1), p: w('p', 2), t: w('t', 3), c: w('c', 4), v: w('v', 5) },
+    hand: extra.includes('L') ? -1 : 1,
     look: {
-      skin: HAUT[i % HAUT.length], hair: HAAR[(i * 5) % HAAR.length], shirt: HEMDEN[i % HEMDEN.length],
-      shorts: i % 3 === 0 ? 0xffffff : 0x1a1a1a, head: ['none', 'cap', 'band'][i % 3], shoes: 0xffffff, racket: 0x202020,
+      skin: HAUT[(i * 5 + 2) % HAUT.length], hair: HAAR[(i * 7 + 1) % HAAR.length], shirt: HEMDEN[(i * 3 + 1) % HEMDEN.length],
+      shorts: i % 3 === 0 ? 0xffffff : 0x1a1a1a, head: ['none', 'cap', 'band'][(i * 2) % 3], shoes: 0xffffff, racket: 0x202020,
     },
   };
 }
 
-export const PLAYERS = [...TOP20.map((a, i) => mk(a, i + 1)), ...Array.from({ length: 80 }, (_, i) => filler(i))];
+export const PLAYERS = [...STARS.map(star), ...REST.split('\n').map(other)].sort((a, b) => a.rank - b.rank);
 export const TOP_PLAYERS = PLAYERS.slice(0, 20);
 export const playerById = (id) => PLAYERS.find((p) => p.id === id);
 export const overall = (st) => Math.round((st.s + st.p + st.t + st.c + st.v) / 5);

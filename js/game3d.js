@@ -27,6 +27,7 @@ export class Game3D {
     this.camPos = new THREE.Vector3(0, 9, 30);
     this.camLook = new THREE.Vector3(0, 1, 0);
     this.quality = 'hoch';
+    this.realFigures = true;        // realistisches Spielermodell statt der einfachen Figur
     this.venueKey = '';
     this.buildProps();
     this.resize();
@@ -108,7 +109,7 @@ export class Game3D {
 
   setPlayers(a, b) {
     for (const av of this.avatars) if (av) av.dispose();
-    this.avatars = [new Avatar(a.look, 0, a.hand || 1), new Avatar(b.look, 1, b.hand || 1)];
+    this.avatars = [new Avatar(a.look, 0, a.hand || 1, this.realFigures), new Avatar(b.look, 1, b.hand || 1, this.realFigures)];
     for (const av of this.avatars) this.scene.add(av.group);
   }
 

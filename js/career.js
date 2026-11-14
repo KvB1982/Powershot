@@ -7,7 +7,27 @@ const KEY = 'powershot.karriere.v1';
 const WEIGHT = { GS: 2, M: 1, F: 1.5 };
 
 export function loadCareer() {
-  try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; }
+  try { return fixPoints(JSON.parse(localStorage.getItem(KEY))); } catch (e) { return null; }
+}
+
+// Punkte des "letzten Jahres" eines Spielers auf die Turniere verteilen
+function basePoints(p) {
+  const slots = TOURNAMENTS.filter((t) => t.cat !== 'F' || p.rank <= 8);
+  const sum = slots.reduce((s, t) => s + WEIGHT[t.cat], 0);
+  const out = {};
+  for (const t of slots) out[t.id] = Math.round(p.basePoints * WEIGHT[t.cat] / sum);
+  return out;
+}
+
+// Alte Spielstände kennen noch die erfundenen Spieler. Wer in der Liste fehlt, bekommt
+// seine Startpunkte, wer nicht mehr dabei ist, fliegt raus.
+function fixPoints(c) {
+  if (!c || !c.points) return c;
+  const known = new Set(['me', ...PLAYERS.map((p) => p.id)]);
+  for (const id of Object.keys(c.points)) if (!known.has(id)) delete c.points[id];
+  for (const p of PLAYERS) if (!c.points[p.id]) c.points[p.id] = basePoints(p);
+  if (c.tournament && Object.keys(c.tournament.players).some((id) => !known.has(id))) c.tournament = null;
+  return c;
 }
 export function saveCareer(c) {
   try { localStorage.setItem(KEY, JSON.stringify(c)); } catch (e) { /* kein Speicher */ }
@@ -19,13 +39,7 @@ export function deleteCareer() {
 // opts: { name, country, hand, look }
 export function newCareer(opts) {
   const points = {};
-  for (const p of PLAYERS) {
-    // Punkte des "letzten Jahres" auf die Turniere verteilen
-    const slots = TOURNAMENTS.filter((t) => t.cat !== 'F' || p.rank <= 8);
-    const sum = slots.reduce((s, t) => s + WEIGHT[t.cat], 0);
-    points[p.id] = {};
-    for (const t of slots) points[p.id][t.id] = Math.round(p.basePoints * WEIGHT[t.cat] / sum);
-  }
+  for (const p of PLAYERS) points[p.id] = basePoints(p);
   points.me = {};
   return {
     v: 1, name: opts.name || 'Spieler', country: opts.country || 'GER', hand: opts.hand || 1, look: opts.look,

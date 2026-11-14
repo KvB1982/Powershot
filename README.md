@@ -26,7 +26,7 @@ bekommt man es als Vollbild-App.
 
 | Modus | Was |
 |---|---|
-| **Freies Spiel** | Einen der Top 20 der Weltrangliste wählen (Stand 9. November 2026), Gegner und Stadion aussuchen. |
+| **Freies Spiel** | Einen der Top 100 der Weltrangliste wählen (Stand 9. November 2026), Gegner und Stadion aussuchen. |
 | **Turnier** | Ein einzelnes Turnier mit einem Profi durchspielen. |
 | **Karriere** | Eigenen Spieler erstellen, bei Platz 101 starten, die Saison spielen: 4 Grand Slams, 9 Masters 1000, ATP Finals. Ranglistenpunkte, Preisgeld, Ausrüstung kaufen, Fähigkeiten steigern. |
 | **Training** | Ballmaschine (Zielfelder treffen) und Aufschlagtraining. In der Karriere bringt Training Erfahrung. |
@@ -35,7 +35,16 @@ Vereinfachungen gegenüber der echten Tour: Grand Slams haben ein 32er-Feld, Mas
 Die ATP Finals laufen wie in echt: zwei Vierergruppen, Halbfinale, Finale. Die Weltrangliste rechnet
 wie die echte: Jedes Turnier ersetzt die Punkte desselben Turniers aus dem Vorjahr.
 
-Die Fähigkeitswerte der echten Spieler sind frei geschätzt, die Plätze 21 bis 100 sind erfundene Spieler.
+Alle 100 Spieler tragen die echten Namen, Plätze und Punkte der Weltrangliste vom 9. November 2026.
+Die Fähigkeitswerte und das Aussehen sind frei geschätzt (Platz 1 bis 20 von Hand, der Rest nach Platz und Spielertyp berechnet).
+
+## Die Spielerfigur
+
+Die Figur in `assets/spieler.glb` wurde mit 3D AI Studio erzeugt (ein neutraler Spieler in T-Pose, rund 9.000 Dreiecke).
+Der Generator liefert nur ein starres Modell ohne Skelett und ohne Animationen. Das Skelett kommt deshalb aus dem Spiel selbst:
+`js/figur.js` verteilt die Oberfläche auf 13 Knochen, `js/avatar.js` bewegt diese Knochen mit denselben Posen
+(Vorhand, Rückhand, Aufschlag, Laufen, Jubel), die auch die einfache Figur benutzt. Hemd, Hose, Haut und Haare werden
+je Spieler umgefärbt, Linkshänder werden gespiegelt. Unter „Einstellungen → Spielerfiguren“ kann man auf die einfache Figur zurückschalten.
 
 ## Steuerung
 
@@ -80,7 +89,8 @@ Einstellbar unter „Einstellungen“. Auf Geräten mit Touchscreen ist „Touch
 | `js/rules.js` | Zählweise: Punkte, Spiele, Sätze, Tiebreak, Aufschlagwechsel |
 | `js/match.js` | Das laufende Match: Aufschlag, Ballwechsel, Regeln, Computergegner, Training |
 | `js/controls.js` | Die drei Steuerungsarten |
-| `js/avatar.js` | 3D-Spielerfigur mit Posen und Bewegungen |
+| `js/avatar.js` | Skelett der Spielerfigur mit Posen und Bewegungen |
+| `js/figur.js` | Lädt das realistische Spielermodell, verbindet es mit dem Skelett, färbt es um |
 | `js/stadium.js` | Stadion: Platz, Netz, Tribünen, Zuschauer, Licht |
 | `js/game3d.js` | Kamera, Ball, Markierungen, Verbindung von Match, Figuren und Sound |
 | `js/audio.js` | Sound (wird im Browser erzeugt, keine Sounddateien) |

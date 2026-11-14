@@ -4,6 +4,74 @@
 // Angaben als [vor, seite, hoch] in Metern aus Sicht der Figur (seite: + = Schlaghand).
 
 import * as THREE from 'three';
+import { figureReady, makeFigure, REST, BONES } from './figur.js';
+
+// Maße des Skeletts: einmal für die einfache Figur aus Kapseln, einmal für das realistische Modell
+const DIM_SIMPLE = { upper: 0.30, fore: 0.28, reach: 0.57, thigh: 0.45, shin: 0.45, shW: 0.2, hipW: 0.1, shUp: 0.55, neckUp: 0.06, headUp: 0.21, ankle: 0 };
+const DIM_REAL = { upper: 0.275, fore: 0.347, reach: 0.60, thigh: 0.42, shin: 0.425, shW: 0.192, hipW: 0.09, shUp: 0.48, neckUp: 0.145, headUp: 0.30, ankle: 0.02 };
+
+// --- Knochen-Rahmen: Ursprung + drei Achsen, alles als [vor, seite, hoch] ---
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const norm = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+// Rahmen mit y-Achse entlang "along"; "hint" legt fest, wie der Knochen um sich selbst gedreht ist
+function frame(o, along, hint) {
+  const ey = norm(along);
+  const k = hint[0] * ey[0] + hint[1] * ey[1] + hint[2] * ey[2];
+  let ex = [hint[0] - k * ey[0], hint[1] - k * ey[1], hint[2] - k * ey[2]];
+  if (Math.hypot(ex[0], ex[1], ex[2]) < 1e-4) ex = cross(ey, [0.3, 0.5, 0.8]);
+  ex = norm(ex);
+  return { o, ex, ey, ez: cross(ex, ey) };
+}
+// Steht aufrecht und schaut nach vorn; yaw dreht um die Hochachse, nod nickt nach vorn
+function upright(o, yaw = 0, nod = 0) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cn = Math.cos(nod), sn = Math.sin(nod);
+  const ex = [-sy, cy, 0];
+  const ey = [cy * sn, sy * sn, cn];
+  return { o, ex, ey, ez: cross(ex, ey) };
+}
+const ARM_BEND = [-0.4, 0.6, -1], KNEE_BEND = [1, 0.15, 0.2];
+const mirror = (p) => [p[0], -p[1], p[2]];
+
+// Alle 13 Knochen-Rahmen aus den Gelenkpunkten (J) berechnen. Dieselbe Funktion gilt für die
+// Ruhe-Pose des Modells und für jede Pose im Spiel – so passt beides genau zusammen.
+function boneFrames(J) {
+  const F = {};
+  F.pelvis = upright(J.hip);
+  F.chest = frame(J.hip, sub(J.neck, J.hip), sub(J.shR, J.shL));
+  F.head = upright(J.neck, J.yaw || 0, J.nod || 0);
+  for (const [s, m] of [['R', 1], ['L', -1]]) {
+    const sh = J['sh' + s], el = J['el' + s], hd = J['hand' + s];
+    const n = cross(J['armBend' + s], norm(sub(hd, sh)));
+    F['upper' + s] = frame(sh, sub(el, sh), n);
+    F['fore' + s] = frame(el, sub(hd, el), n);
+    const hip = J['hip' + s], kn = J['knee' + s], ft = J['foot' + s];
+    const k = cross([KNEE_BEND[0], KNEE_BEND[1] * m, KNEE_BEND[2]], norm(sub(ft, hip)));
+    F['thigh' + s] = frame(hip, sub(kn, hip), k);
+    F['shin' + s] = frame(kn, sub(ft, kn), k);
+    F['foot' + s] = upright(ft);
+  }
+  return F;
+}
+
+// Die Ruhe-Pose (T-Pose) des Modells und ihre Umkehr-Matrizen
+let restInverses = null;
+function getRestInverses() {
+  if (restInverses) return restInverses;
+  const J = {
+    hip: REST.hip, neck: REST.neck,
+    shR: REST.sh, shL: mirror(REST.sh), elR: REST.elbow, elL: mirror(REST.elbow), handR: REST.grip, handL: mirror(REST.grip),
+    armBendR: [-1, 0, 0], armBendL: [-1, 0, 0],
+    hipR: REST.leg, hipL: mirror(REST.leg), kneeR: REST.knee, kneeL: mirror(REST.knee), footR: REST.ankle, footL: mirror(REST.ankle),
+  };
+  const F = boneFrames(J);
+  const G = (p) => new THREE.Vector3(p[1], p[2], -p[0]);
+  restInverses = BONES.map((name) => {
+    const fr = F[name];
+    return new THREE.Matrix4().makeBasis(G(fr.ex), G(fr.ey), G(fr.ez)).setPosition(G(fr.o)).invert();
+  });
+  return restInverses;
+}
 
 const POSES = {
   ready:     { r: [0.34, 0.10, 0.98], d: [0.35, -0.75, 0.55], l: [0.36, -0.14, 1.04] },
@@ -66,7 +134,10 @@ function stringTexture() {
 
 export class Avatar {
   // look: { skin, hair, shirt, shorts, head:'none'|'cap'|'band', shoes, racket }
-  constructor(look, side, hand = 1) {
+  // real = true: das realistische Modell benutzen (wenn es geladen ist)
+  constructor(look, side, hand = 1, real = true) {
+    this.real = real && figureReady();
+    this.dim = this.real ? DIM_REAL : DIM_SIMPLE;
     this.side = side;
     this.d = side === 0 ? 1 : -1;
     this.hand = hand;
@@ -79,6 +150,13 @@ export class Avatar {
 
   build(look) {
     const M = this.m = {};
+    if (this.real) {
+      const fig = makeFigure(look, this.hand, getRestInverses());
+      this.bones = fig.bones;
+      this.group.add(fig.mesh, ...fig.bones);
+      this.buildRacket(look);
+      return;
+    }
     const skin = stdMat(look.skin, 0.7), shirt = stdMat(look.shirt), shorts = stdMat(look.shorts);
     const shoe = stdMat(look.shoes ?? 0xffffff, 0.6);
     const add = (name, geo, mat) => {
@@ -134,7 +212,12 @@ export class Avatar {
       head.add(band);
     }
 
-    // Schläger: Griff, Hals, Rahmen und Saiten. Der Griff zeigt in +Y, die Fläche schaut nach +Z.
+    this.buildRacket(look);
+  }
+
+  // Schläger: Griff, Hals, Rahmen und Saiten. Der Griff zeigt in +Y, die Fläche schaut nach +Z.
+  buildRacket(look) {
+    const M = this.m;
     const rk = M.racket = new THREE.Group();
     this.group.add(rk);
     const frameMat = stdMat(look.racket ?? 0x202020, 0.4);
@@ -210,36 +293,53 @@ export class Avatar {
     const bob = Math.sin(a.time * 4) * 0.012 * (1 - run);
     const crouch = 0.05 + 0.06 * (a.art !== 'sv' ? a.prep : 0) + (a.mood === 'sad' ? 0.04 * a.moodK : 0);
     const hipH = 0.90 - crouch + bob + run * Math.abs(Math.sin(a.step)) * 0.035;
-    const shH = hipH + 0.55;
+    const dm = this.dim;
+    const shH = hipH + dm.shUp;
     const lean = 0.05 + 0.07 * run;
 
     let twist = clamp(pose.r[0] / 0.85, -0.6, 0.6);
     if (pose.r[1] < -0.15) twist = -twist * 0.5;
-    const shR = [lean + 0.2 * Math.sin(twist), 0.2 * Math.cos(twist), shH];
-    const shL = [lean - 0.2 * Math.sin(twist), -0.2 * Math.cos(twist), shH];
-    const neck = [lean, 0, shH + 0.06];
-    const headP = [lean + 0.03, 0, shH + 0.21 - (a.mood === 'sad' ? 0.03 * a.moodK : 0)];
+    const shR = [lean + dm.shW * Math.sin(twist), dm.shW * Math.cos(twist), shH];
+    const shL = [lean - dm.shW * Math.sin(twist), -dm.shW * Math.cos(twist), shH];
+    const neck = [lean, 0, shH + dm.neckUp];
+    const headP = [lean + 0.03, 0, shH + dm.headUp - (a.mood === 'sad' ? 0.03 * a.moodK : 0)];
     const hipMid = [0, 0, hipH];
-    const hipR = [0, 0.1, hipH], hipL = [0, -0.1, hipH];
+    const hipR = [0, dm.hipW, hipH], hipL = [0, -dm.hipW, hipH];
 
     const stance = 0.17 + 0.06 * a.prep;
     const swingLeg = Math.sin(a.step) * 0.4 * run;
     const lift = Math.cos(a.step) * 0.24 * run;
-    const footR = [a.dir[0] * swingLeg, stance + a.dir[1] * swingLeg, 0.07 + Math.max(0, lift)];
-    const footL = [-a.dir[0] * swingLeg, -stance - a.dir[1] * swingLeg, 0.07 + Math.max(0, -lift)];
-    const kneeR = ik(hipR, footR, 0.45, 0.45, [1, 0.15, 0.2]);
-    const kneeL = ik(hipL, footL, 0.45, 0.45, [1, -0.15, 0.2]);
+    const footR = [a.dir[0] * swingLeg, stance + a.dir[1] * swingLeg, 0.07 + dm.ankle + Math.max(0, lift)];
+    const footL = [-a.dir[0] * swingLeg, -stance - a.dir[1] * swingLeg, 0.07 + dm.ankle + Math.max(0, -lift)];
+    const kneeR = ik(hipR, footR, dm.thigh, dm.shin, [1, 0.15, 0.2]);
+    const kneeL = ik(hipL, footL, dm.thigh, dm.shin, [1, -0.15, 0.2]);
 
-    const handR = limitReach(shR, pose.r, 0.57);
-    const handL = limitReach(shL, pose.l, 0.57);
-    const elR = ik(shR, handR, 0.30, 0.28, [-0.4, 0.6, -1]);
-    const elL = ik(shL, handL, 0.30, 0.28, [-0.4, -0.6, -1]);
+    const handR = limitReach(shR, pose.r, dm.reach);
+    const handL = limitReach(shL, pose.l, dm.reach);
+    const armBendR = ARM_BEND, armBendL = mirror(ARM_BEND);
+    const elR = ik(shR, handR, dm.upper, dm.fore, armBendR);
+    const elL = ik(shL, handL, dm.upper, dm.fore, armBendL);
 
     // --- In die Welt umrechnen und die Körperteile hinsetzen ---
     const px = this.pos.x, pz = this.pos.z;
     const W = (p) => new THREE.Vector3(px + p[1] * hand * d, p[2], pz - p[0] * d);
     const D = (p) => new THREE.Vector3(p[1] * hand * d, p[2], -p[0] * d);
     const M = this.m;
+    let yaw = 0;
+    if (st.ball) yaw = clamp(Math.atan2((st.ball.x - px) * d, Math.abs(st.ball.z - pz) + 2), -0.7, 0.7);
+    if (this.real) {
+      // Realistisches Modell: nur die Knochen einstellen, die Oberfläche folgt von allein
+      const F = boneFrames({
+        hip: hipMid, neck, shR, shL, elR, elL, handR, handL, armBendR, armBendL, hipR, hipL, kneeR, kneeL, footR, footL,
+        yaw: yaw * hand, nod: a.mood === 'sad' ? 0.35 * a.moodK : 0,
+      });
+      for (let i = 0; i < BONES.length; i++) {
+        const fr = F[BONES[i]], b = this.bones[i];
+        b.matrix.makeBasis(D(fr.ex), D(fr.ey), D(fr.ez)).setPosition(W(fr.o));
+        b.matrixWorldNeedsUpdate = true;
+      }
+      this.handLWorld = W(handL);
+    } else {
     const limb = (mesh, a3, b3, t0 = 0, t1 = 1) => {
       const A = W(a3), B = W(b3);
       const P = A.clone().lerp(B, t0), Q = A.clone().lerp(B, t1);
@@ -273,9 +373,9 @@ export class Avatar {
 
     // Kopf schaut leicht zum Ball
     M.head.position.copy(W(headP));
-    let yaw = 0;
-    if (st.ball) yaw = clamp(Math.atan2((st.ball.x - px) * d, Math.abs(st.ball.z - pz) + 2), -0.7, 0.7);
     M.head.rotation.set(a.mood === 'sad' ? 0.35 * a.moodK : 0, facing - yaw, 0);
+    this.handLWorld = M.handL.position;
+    }
 
     // Schläger
     const rl = Math.hypot(pose.d[0], pose.d[1], pose.d[2]) || 1;
@@ -289,12 +389,12 @@ export class Avatar {
     X.crossVectors(Y, Z).normalize();
     M.racket.position.copy(W(handR));
     M.racket.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, Z));
-    this.handLWorld = M.handL.position;
   }
 
   dispose() {
     this.group.traverse((o) => {
-      if (o.isMesh) { o.geometry.dispose(); if (o.material.map !== stringTex) o.material.dispose(); }
+      if (o.isMesh) { if (!o.geometry.userData.shared) o.geometry.dispose(); if (o.material.map !== stringTex) o.material.dispose(); }
+      if (o.isSkinnedMesh) o.skeleton.dispose();
     });
     this.group.removeFromParent();
   }

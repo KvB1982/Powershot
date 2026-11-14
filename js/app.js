@@ -4,6 +4,7 @@ import { Sound } from './audio.js';
 import { Game3D } from './game3d.js';
 import { Controls } from './controls.js';
 import { Match } from './match.js';
+import { loadFigure } from './figur.js';
 import * as D from './data.js';
 import * as TN from './tournament.js';
 import * as CA from './career.js';
@@ -21,7 +22,7 @@ const SET_KEY = 'powershot.einstellungen.v1';
 const touchDevice = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
 const settings = Object.assign({
   control: touchDevice ? 'touch' : 'klassik', assist: 'voll', difficulty: 'mittel', length: 'kurz',
-  sound: true, volume: 0.8, voice: true, quality: 'hoch',
+  sound: true, volume: 0.8, voice: true, quality: 'hoch', figures: 'echt',
 }, (() => { try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch (e) { return {}; } })());
 const saveSettings = () => { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) { /* egal */ } };
 
@@ -37,6 +38,7 @@ sound.volume = settings.volume;
 sound.enabled = settings.sound;
 const game = new Game3D($('#view'), sound);
 game.setQuality(settings.quality);
+game.realFigures = settings.figures === 'echt';
 const controls = new Controls($('#touch'), $('#stick'));
 const screen = $('#screen'), hudEl = $('#hud');
 
@@ -80,6 +82,11 @@ function optionRow(label, key, names) {
     `<button class="${settings[key] === k ? 'sel' : ''}" data-a="set" data-v="${key}:${k}">${names[k]}</button>`).join('')}</div>`;
 }
 const catTag = (def) => `<span class="tag ${def.cat === 'GS' ? 'gs' : def.cat === 'M' ? 'm' : 'f'}">${def.catName}</span>`;
+// Die 100 Spieler in Seiten zu je 20: Knöpfe "1–20", "21–40" …
+const pageOf = (id) => { const p = D.playerById(id); return p ? Math.floor((p.rank - 1) / 20) : 0; };
+const pagePlayers = (page) => D.PLAYERS.slice(page * 20, page * 20 + 20);
+const pageTabs = (act, page) => `<div class="row tabs">${[0, 1, 2, 3, 4].map((i) =>
+  `<button class="${i === page ? 'sel' : ''}" data-a="${act}" data-v="${i}">Platz ${i * 20 + 1}–${i * 20 + 20}</button>`).join('')}</div>`;
 const getPlayer = (id) => (id === 'me' ? CA.mePlayer(career) : D.playerById(id));
 const back = (to = 'home') => `<button class="ghost" data-a="${to}">‹ Zurück</button>`;
 
@@ -129,6 +136,7 @@ actions.settings = (v) => {
       ${optionRow('Lautstärke', 'volume', { 0.4: 'Leise', 0.8: 'Normal', 1.2: 'Laut' })}
       ${optionRow('Schiedsrichter spricht', 'voice', { true: 'Ja', false: 'Nein' })}
       ${optionRow('Grafik', 'quality', { hoch: 'Schön', niedrig: 'Schnell (ältere Geräte)' })}
+      ${optionRow('Spielerfiguren', 'figures', { echt: 'Realistisch', einfach: 'Einfach' })}
     </div>
     <p class="dim">Auf „Leicht“ bleiben deine Bälle immer im Feld, und du schlägst auch ohne Eingabe zurück.
     Auf „Schwer“ und „Profi“ kannst du ins Aus und ins Netz schlagen.</p>`);
@@ -144,6 +152,7 @@ actions.set = (v) => {
   sound.setVolume(settings.volume);
   sound.setEnabled(settings.sound);
   game.setQuality(settings.quality);
+  game.realFigures = settings.figures === 'echt';
   if (key === 'quality') game.loadVenue(D.tournamentById(menuVenue));
   if (key === 'control' && match) { controls.setMode(settings.control); match.cfg.controlMode = settings.control; }
   if (key === 'assist' && match) match.cfg.assist = settings.assist;
@@ -175,30 +184,33 @@ actions.help = (v) => { if (v) helpBack = v; show(`<div class="bar">${back(helpB
 // ---------------------------------------------------------------
 // Freies Spiel
 // ---------------------------------------------------------------
-const free = { me: 'zverev', opp: 'zufall', venue: 'ao' };
+const free = { me: 'zverev', opp: 'zufall', venue: 'ao', page: 0, oppPage: 0 };
 actions.free = () => {
   if (free.me === 'me' && !career) free.me = 'zverev';
-  const list = [...D.TOP_PLAYERS];
+  const list = pagePlayers(free.page);
   if (career) list.unshift(CA.mePlayer(career));
+  const chosen = getPlayer(free.me), chosenOpp = free.opp === 'zufall' ? null : getPlayer(free.opp);
   show(`
     <div class="bar">${back()}<h2>Freies Spiel</h2><button class="primary" data-a="freeStart">Match starten ›</button></div>
     <div class="panel"><h3 style="margin-top:0">Stadion</h3><div class="row">
       ${D.TOURNAMENTS.map((t) => `<button class="${free.venue === t.id ? 'sel' : ''}" data-a="freeVenue" data-v="${t.id}">${t.name}<br><small class="dim">${D.SURFACE_NAMES[t.surface]}</small></button>`).join('')}
     </div></div>
-    <div class="panel"><h3 style="margin-top:0">Dein Spieler</h3><div class="grid">${list.map((p) => playerCard(p, 'freeMe', free.me === p.id)).join('')}</div></div>
-    <div class="panel"><h3 style="margin-top:0">Gegner</h3><div class="grid small">
+    <div class="panel"><h3 style="margin-top:0">Dein Spieler: ${esc(chosen.name)}</h3>${pageTabs('freePage', free.page)}<div class="grid">${list.map((p) => playerCard(p, 'freeMe', free.me === p.id)).join('')}</div></div>
+    <div class="panel"><h3 style="margin-top:0">Gegner: ${chosenOpp ? esc(chosenOpp.name) : 'Zufall'}</h3>${pageTabs('freeOppPage', free.oppPage)}<div class="grid small">
       <button class="${free.opp === 'zufall' ? 'sel' : ''}" data-a="freeOpp" data-v="zufall">🎲 Zufall</button>
-      ${D.TOP_PLAYERS.map((p) => `<button class="${free.opp === p.id ? 'sel' : ''}" data-a="freeOpp" data-v="${p.id}">${flag(p.country)} ${esc(p.short)} <small class="dim">${D.overall(p.stats)}</small></button>`).join('')}
+      ${pagePlayers(free.oppPage).map((p) => `<button class="${free.opp === p.id ? 'sel' : ''}" data-a="freeOpp" data-v="${p.id}">${flag(p.country)} ${esc(p.short)} <small class="dim">${D.overall(p.stats)}</small></button>`).join('')}
     </div></div>
     <div class="row"><button class="primary grow" data-a="freeStart">Match starten ›</button><button data-a="settings" data-v="free">Einstellungen</button></div>`);
 };
+actions.freePage = (v) => { free.page = +v; keepScroll(actions.free); };
+actions.freeOppPage = (v) => { free.oppPage = +v; keepScroll(actions.free); };
 actions.freeMe = (v) => { free.me = v; keepScroll(actions.free); };
 actions.freeOpp = (v) => { free.opp = v; keepScroll(actions.free); };
 actions.freeVenue = (v) => { free.venue = v; menuVenue = v; game.loadVenue(D.tournamentById(v)); keepScroll(actions.free); };
 function keepScroll(fn) { const y = screen.scrollTop; fn(); screen.scrollTop = y; }
 actions.freeStart = () => {
   const me = getPlayer(free.me);
-  const opp = free.opp === 'zufall' ? pick(D.TOP_PLAYERS.filter((p) => p.id !== free.me)) : getPlayer(free.opp);
+  const opp = free.opp === 'zufall' ? pick(pagePlayers(free.oppPage).filter((p) => p.id !== free.me)) : getPlayer(free.opp);
   startMatch({ me, opp, def: D.tournamentById(free.venue), title: 'Freies Spiel', onEnd: () => actions.free() });
 };
 
@@ -219,7 +231,7 @@ actions.train = (v) => {
   const [mode, c] = v.split(':');
   const inCareer = c === 'c' && career;
   const me = inCareer ? CA.mePlayer(career) : getPlayer(free.me === 'me' && !career ? 'zverev' : free.me);
-  const trainer = { ...D.playerById('f60'), name: 'Trainer', short: 'Trainer' };
+  const trainer = { ...D.PLAYERS[59], name: 'Trainer', short: 'Trainer' };
   startMatch({
     me, opp: trainer, def: D.tournamentById(inCareer ? CA.nextTournament(career).id : free.venue), mode, title: 'Training',
     onEnd: (res) => {
@@ -242,16 +254,17 @@ function showInfo(title, text, next) {
 // ---------------------------------------------------------------
 // Einzelnes Turnier
 // ---------------------------------------------------------------
-const tour = { def: 'wim', me: 'alcaraz' };
+const tour = { def: 'wim', me: 'alcaraz', page: 0 };
 actions.tourMenu = () => {
   show(`
     <div class="bar">${back()}<h2>Turnier</h2><button class="primary" data-a="tourStart">Turnier starten ›</button></div>
     <div class="panel"><h3 style="margin-top:0">Turnier</h3><div class="row">
       ${D.TOURNAMENTS.map((t) => `<button class="${tour.def === t.id ? 'sel' : ''}" data-a="tourDef" data-v="${t.id}">${t.name}<br>${catTag(t)}</button>`).join('')}
     </div></div>
-    <div class="panel"><h3 style="margin-top:0">Dein Spieler</h3><div class="grid">${D.TOP_PLAYERS.map((p) => playerCard(p, 'tourMe', tour.me === p.id)).join('')}</div></div>`);
+    <div class="panel"><h3 style="margin-top:0">Dein Spieler: ${esc(getPlayer(tour.me).name)}</h3>${pageTabs('tourPage', tour.page)}<div class="grid">${pagePlayers(tour.page).map((p) => playerCard(p, 'tourMe', tour.me === p.id)).join('')}</div></div>`);
 };
 actions.tourDef = (v) => { tour.def = v; menuVenue = v; game.loadVenue(D.tournamentById(v)); keepScroll(actions.tourMenu); };
+actions.tourPage = (v) => { tour.page = +v; keepScroll(actions.tourMenu); };
 actions.tourMe = (v) => { tour.me = v; keepScroll(actions.tourMenu); };
 actions.tourStart = () => {
   const def = D.tournamentById(tour.def);
@@ -646,6 +659,8 @@ function step(n = 60) {
   }
 }
 window.__powershot = { game, controls, settings, step, get match() { return match; }, get career() { return career; }, actions };
+// Das Spielermodell laden (höchstens 8 Sekunden warten – sonst geht es mit den einfachen Figuren los)
+await Promise.race([loadFigure(), new Promise((r) => setTimeout(r, 8000))]);
 $('#loading').remove();
 actions.home();
 requestAnimationFrame(loop);
