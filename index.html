@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0b1020">
+  <title>Powershot Tennis</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="touch"></div>
+  <div id="stick"><div></div></div>
+
+  <div id="hud" hidden>
+    <div id="scoreboard"></div>
+    <button id="pauseBtn" aria-label="Pause">II</button>
+    <div id="speed"></div>
+    <div id="msg"><div id="msgHead"></div><div id="msgSub"></div></div>
+    <div id="toast"></div>
+    <div id="power"><div id="powerFill"></div><div id="powerLimit"></div></div>
+    <div id="trainBox"></div>
+    <div id="hint"></div>
+  </div>
+
+  <div id="screen"></div>
+  <div id="loading">Powershot wird geladen …</div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
