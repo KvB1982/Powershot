@@ -50,6 +50,12 @@ const quiet = console.warn; console.warn = () => {};
 const THREE = await import(pathToFileURL(path.join(ROOT, 'node_modules/three/build/three.module.js')).href);
 const { FBXLoader } = await import(pathToFileURL(path.join(ROOT, 'node_modules/three/examples/jsm/loaders/FBXLoader.js')).href);
 
+const GRIFF_SCHRAEG = 0.5;      // wie schräg der Griff in der Hand liegt (0 = quer wie ein Hammer)
+
+// Neigung der Schlagfläche im Treffpunkt in Grad (+ = offen, zeigt nach oben; − = geschlossen), je nach Schlagart:
+// Topspin leicht geschlossen, Slice und Volley offen, Aufschlag und Schmetterball nach unten.
+const NEIGUNG = { sv: -8, sm: -18, fh_ts: -6, fh_at: -4, fh_sl: 15, bh_ts: -6, bh_df: -2, bh_at: -6, bh_sl: 15, bh_vo: 10, fh_vo: 10 };
+
 const JOINTS = ['pelvis', 'neck_01', 'head', 'upperarm_r', 'upperarm_l', 'lowerarm_r', 'lowerarm_l', 'hand_r', 'hand_l',
   'thigh_r', 'thigh_l', 'calf_r', 'calf_l', 'foot_r', 'foot_l', 'ball_r', 'ball_l',
   'middle_01_r', 'middle_01_l', 'index_01_r', 'pinky_01_r'];
@@ -99,8 +105,12 @@ function derive(f) {
   o.hipR = f.thigh_r; o.hipL = f.thigh_l; o.kneeR = f.calf_r; o.kneeL = f.calf_l; o.footR = f.foot_r; o.footL = f.foot_l;
   o.toeR = f.ball_r; o.toeL = f.ball_l;
   // Schläger: liegt quer in der Hand, vom kleinen Finger zum Zeigefinger; die Fläche schaut wie die Handfläche
-  o.d = norm(sub(f.index_01_r, f.pinky_01_r));
-  o.n = norm(cross(o.d, sub(f.middle_01_r, f.hand_r)));
+  // Der Griff läuft schräg durch die Hand: vom Handballen (Kleinfinger-Seite) zum Zeigefinger-Knöchel. Deshalb zeigt der
+  // Schläger nicht genau entlang der Knöchel, sondern ein Stück in Richtung der Finger – so steht er im Treffpunkt fast in
+  // Verlängerung des Unterarms (Aufschlag) bzw. schräg dazu (Grundschläge), wie bei einem echten Griff.
+  const finger = norm(sub(f.middle_01_r, f.hand_r));
+  o.d = norm(add(norm(sub(f.index_01_r, f.pinky_01_r)), finger, GRIFF_SCHRAEG));
+  o.n = norm(cross(o.d, finger));
   o.hf = f.hf; o.hu = f.hu;
   return o;
 }
@@ -140,7 +150,7 @@ function convert(name, cfg) {
   // Hand gedreht ist. Wir drehen die Fläche um den Griff so, dass sie im Treffpunkt zum Netz zeigt – und zwar in
   // jedem Bild um denselben Winkel (der Griff ändert sich während des Schlags ja nicht).
   if (!cfg.ganz) {
-    const o = D[best], fwd = [Math.cos(yaw), Math.sin(yaw), name === 'sv' || name === 'sm' ? -0.15 : 0];
+    const o = D[best], fwd = [Math.cos(yaw), Math.sin(yaw), Math.tan((NEIGUNG[name] || 0) * Math.PI / 180)];
     const k = fwd[0] * o.d[0] + fwd[1] * o.d[1] + fwd[2] * o.d[2];
     const want = norm([fwd[0] - k * o.d[0], fwd[1] - k * o.d[1], fwd[2] - k * o.d[2]]);
     const cr = cross(o.n, want);

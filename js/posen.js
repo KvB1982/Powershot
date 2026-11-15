@@ -70,6 +70,9 @@ const P = {
   sm_hit:     { r: [0.24, 0.18, 2.16], d: [0.22, 0.02, 0.98], l: [0.16, -0.22, 1.20], tw: 0.3, cr: 0.0, ln: 0.06, st: 0.5, jp: 0.10 },
   sm_follow:  { r: [0.44, -0.24, 0.90], d: [0.40, -0.55, -0.70], l: [0.12, -0.30, 1.05], tw: 0.95, cr: 0.12, ln: 0.12, st: -0.3 },
 
+  // ---------------- Gehen (Seitenwechsel): aufrecht, Schläger locker in der Hand ----------------
+  walk:       { r: [0.02, 0.25, 0.83], d: [0.55, 0.05, -0.83], l: [0.0, -0.25, 0.85], tw: 0, cr: -0.02, ln: -0.03 },
+
   // ---------------- Stimmung nach dem Punkt ----------------
   // Jubel: kurz die Faust ballen (die freie Hand vor der Brust), Schläger unten, leicht in die Knie
   cheer:      { r: [0.22, 0.30, 0.82], d: [0.45, 0.15, -0.88], l: [0.30, -0.14, 1.36], tw: 0.25, cr: 0.11, ln: 0.05 },

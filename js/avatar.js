@@ -358,12 +358,28 @@ export class Avatar {
     this.pos.x = st.x; this.pos.z = st.z;
 
     // Laufen
+    // Schrittlänge und Takt passen zum Tempo: Der Fuß, der am Boden ist, bleibt dort stehen, während der Körper
+    // darüber hinweggeht. Gehen = kurze Schritte, Sprint = lange Schritte.
     const sp = Math.hypot(st.vx || 0, st.vz || 0);
-    if (sp > 0.4) {
-      a.dir = [-(st.vz) * d / sp, (st.vx) * d * hand / sp];
-      a.step += sp * dt * 2.5;
+    const moving = sp > 0.3;
+    const stepLen = 0.5 + 0.18 * sp;
+    a.walkK = clamp((a.walkK || 0) + (st.walk ? dt : -dt) / 0.35, 0, 1);
+    const walkK = smooth(a.walkK);
+    // Beim Gehen dreht sich der ganze Körper in Laufrichtung (sonst schaut die Figur immer zum Netz)
+    const faceTo = st.walk && moving ? Math.atan2(st.vx * d, -st.vz * d) : 0;
+    let turn = faceTo - (a.face || 0);
+    turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+    a.face = (a.face || 0) + turn * Math.min(1, dt * 6);
+    const cf = Math.cos(a.face), sf = Math.sin(a.face);
+    if (moving) {
+      // Laufrichtung aus Sicht der Figur: [vor, seite]
+      const wx = st.vx * d / sp, wz = -st.vz * d / sp;                 // Welt: rechts / vor (ohne Körperdrehung)
+      a.dir = [wz * cf + wx * sf, (wx * cf - wz * sf) * hand];
+      a.step += Math.PI * sp / stepLen * dt;
     }
+    a.amp = (a.amp || 0) + ((moving ? stepLen / 2 : 0) - (a.amp || 0)) * Math.min(1, dt * 10);
     a.run += (clamp(sp / 3.2, 0, 1) - a.run) * Math.min(1, dt * 10);
+    a.legK = (a.legK || 0) + (smooth((sp - 0.6) / 1.4) - (a.legK || 0)) * Math.min(1, dt * 8);
 
     // Stimmung nach dem Punkt. Der Jubel dauert nur einen Moment: Faust ballen, zweimal kurz pumpen, weiter.
     a.mood = st.mood || a.mood;
@@ -372,13 +388,18 @@ export class Avatar {
     a.moodK += ((moodOn ? 1 : 0) - a.moodK) * Math.min(1, dt * (moodOn ? 9 : 5));
     if (!st.mood && a.moodK < 0.01) a.mood = null;
 
-    const pose = this.currentPose(dt, st);
+    let pose = this.currentPose(dt, st);
+    if (walkK > 0.001) {
+      // Gehen: aufrecht, die Arme schwingen gegengleich zu den Beinen
+      const wp = namedPose('walk'), sw = Math.sin(a.step) * Math.min(1, a.amp * 3);
+      pose = mixPose(pose, { ...wp, r: [wp.r[0] - sw * 0.10, wp.r[1], wp.r[2]], l: [wp.l[0] + sw * 0.16, wp.l[1], wp.l[2]] }, walkK);
+    }
     const run = a.run, still = 1 - run;
     const bob = Math.sin(a.time * 4) * 0.012 * still;
     const hipH = 0.90 - pose.cr + pose.jp + bob + run * Math.abs(Math.sin(a.step)) * 0.035;
     const dm = this.dim;
     const shH = hipH + dm.shUp;
-    const lean = 0.05 + 0.07 * run + pose.ln;
+    const lean = (0.05 + 0.07 * run) * (1 - 0.7 * walkK) + pose.ln;
 
     // Schultern und Hüfte drehen sich mit dem Schlag (die Hüfte etwa halb so weit)
     const twist = pose.tw, hipTw = pose.tw * 0.45;
@@ -391,10 +412,10 @@ export class Avatar {
     let hipL = [-dm.hipW * Math.sin(hipTw), -dm.hipW * Math.cos(hipTw), hipH];
 
     // Füße: Schrittstellung beim Schlag (st), Schritte beim Laufen, Abheben beim Sprung
-    const stance = 0.17 + 0.25 * Math.max(0, pose.cr);
+    const stance = (0.17 + 0.25 * Math.max(0, pose.cr)) * (1 - 0.45 * walkK);
     const stepR = -pose.st * 0.14 * still, stepL = pose.st * 0.20 * still, air = pose.jp * 0.85;
-    const swingLeg = Math.sin(a.step) * 0.4 * run;
-    const lift = Math.cos(a.step) * 0.24 * run;
+    const swingLeg = Math.sin(a.step) * a.amp;
+    const lift = Math.cos(a.step) * (0.07 + 0.17 * run) * Math.min(1, a.amp * 4);
     let footR = [stepR + a.dir[0] * swingLeg, stance + a.dir[1] * swingLeg, 0.07 + dm.ankle + air + Math.max(0, lift)];
     let footL = [stepL - a.dir[0] * swingLeg, -stance - a.dir[1] * swingLeg, 0.07 + dm.ankle + air + Math.max(0, -lift)];
     let kneeR = ik(hipR, footR, dm.thigh, dm.shin, [1, 0.15, 0.2]);
@@ -446,7 +467,7 @@ export class Avatar {
     const idle = this.real ? mocapClip('ready') : null;
     const idleOn = idle && !a.swing && a.pre === null && (st.serveK === undefined || st.serveK === null);
     a.iw = clamp((a.iw || 0) + (idleOn ? dt : -dt) / 0.25, 0, 1);
-    const iw = idle ? smooth(a.iw) * still * (1 - smooth(a.prep)) * (1 - smooth(a.moodK)) : 0;
+    const iw = idle ? smooth(a.iw) * still * (1 - smooth(a.prep)) * (1 - smooth(a.moodK)) * (1 - walkK) : 0;
     if (iw > 0.001) a.idf = mocapLoop(idle, a.time);
     let footYawR = 0, footYawL = 0, footNodR = 0, footNodL = 0, headF = null, headU = null;
     const look = st.ball ? clamp(Math.atan2((st.ball.x - this.pos.x) * d, Math.abs(st.ball.z - this.pos.z) + 2), -0.7, 0.7) * hand : 0;
@@ -454,17 +475,22 @@ export class Avatar {
     if (iw > 0.001 && a.idf) layers.push([a.idf, iw, false]);
     if (mw > 0.001) layers.push([a.mf, mw, true]);
     for (const [m, w, head] of layers) {
-      const L = (p, q) => mix3(p, q, w), K = (x, y) => x + (y - x) * w;
-      hipMid = L(hipMid, m.hip); neck = L(neck, m.neck); headP = L(headP, [m.head[0], m.head[1], m.head[2] + 0.08]);
+      // Läuft der Spieler, kommen die Beine weiter aus der Laufbewegung – nur Oberkörper, Arme und Schläger folgen der Aufnahme.
+      // (Sonst würde die Figur mit den Beinen der Aufnahme über den Platz rutschen.)
+      const wl = w * (1 - a.legK);
+      const hipNew = mix3(hipMid, m.hip, wl);
+      const up = (q) => [hipNew[0] + q[0] - m.hip[0], hipNew[1] + q[1] - m.hip[1], hipNew[2] + q[2] - m.hip[2]];
+      const L = (p, q) => mix3(p, up(q), w), B = (p, q) => mix3(p, q, wl), K = (x, y) => x + (y - x) * wl;
+      hipMid = hipNew; neck = L(neck, m.neck); headP = L(headP, [m.head[0], m.head[1], m.head[2] + 0.08]);
       shR = L(shR, m.shR); shL = L(shL, m.shL); elR = L(elR, m.elR); elL = L(elL, m.elL); handR = L(handR, m.handR); handL = L(handL, m.handL);
-      hipR = L(hipR, m.hipR); hipL = L(hipL, m.hipL); kneeR = L(kneeR, m.kneeR); kneeL = L(kneeL, m.kneeL); footR = L(footR, m.footR); footL = L(footL, m.footL);
+      hipR = B(hipR, m.hipR); hipL = B(hipL, m.hipL); kneeR = B(kneeR, m.kneeR); kneeL = B(kneeL, m.kneeL); footR = B(footR, m.footR); footL = B(footL, m.footL);
       footYawR = K(footYawR, Math.atan2(m.toeR[1] - m.footR[1], m.toeR[0] - m.footR[0]));
       footYawL = K(footYawL, Math.atan2(m.toeL[1] - m.footL[1], m.toeL[0] - m.footL[0]));
       // Fuß auf den Zehenspitzen oder flach? Kopf: schaut dem Ball nach wie in der Aufnahme
       const nod = (f, t) => Math.atan2(f[2] - t[2], Math.hypot(t[0] - f[0], t[1] - f[1])) - FOOT_REST;
       footNodR = K(footNodR, nod(m.footR, m.toeR)); footNodL = K(footNodL, nod(m.footL, m.toeL));
       // (beim Warten schaut der Kopf weiter zum Ball, beim Schlag wie in der Aufnahme)
-      if (head) { headF = L(headF || [Math.cos(look), Math.sin(look), 0], m.hf); headU = L(headU || [0, 0, 1], m.hu); }
+      if (head) { headF = mix3(headF || [Math.cos(look), Math.sin(look), 0], m.hf, w); headU = mix3(headU || [0, 0, 1], m.hu, w); }
       // Beidhändige Spieler, für die es nur eine einhändige Aufnahme gibt: die zweite Hand bleibt bis kurz nach dem Treffen am Griff
       if (false) {
         const g = 1 - smooth((a.mT - 0.10) / 0.22);
@@ -482,8 +508,8 @@ export class Avatar {
 
     // --- In die Welt umrechnen und die Körperteile hinsetzen ---
     const px = this.pos.x, pz = this.pos.z;
-    const W = (p) => new THREE.Vector3(px + p[1] * hand * d, p[2], pz - p[0] * d);
-    const D = (p) => new THREE.Vector3(p[1] * hand * d, p[2], -p[0] * d);
+    const W = (p) => { const s = p[1] * hand; return new THREE.Vector3(px + d * (p[0] * sf + s * cf), p[2], pz + d * (s * sf - p[0] * cf)); };
+    const D = (p) => { const s = p[1] * hand; return new THREE.Vector3(d * (p[0] * sf + s * cf), p[2], d * (s * sf - p[0] * cf)); };
     const M = this.m;
     let yaw = 0;
     if (st.ball) yaw = clamp(Math.atan2((st.ball.x - px) * d, Math.abs(st.ball.z - pz) + 2), -0.7, 0.7);

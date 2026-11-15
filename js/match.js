@@ -10,8 +10,8 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const NOFX = new Proxy({}, { get: () => () => {} });
 const REACH = 1.4;          // so weit reicht man mit dem Schläger (Meter)
 export const TOSS_TIME = 1.4;      // Dauer der Aufschlagbewegung vom Stand bis zum Treffpunkt
-const WALK_SPEED = 2.7;            // Gehen beim Seitenwechsel (m/s)
-const CHANGEOVER_TIME = 5.2;       // Dauer des Seitenwechsels (s)
+const WALK_SPEED = 2.0;            // Gehen beim Seitenwechsel (m/s) – zügiges Gehen, kein Laufen
+const CHANGEOVER_TIME = 6.4;       // Dauer des Seitenwechsels (s)
 export const TOSS_FLIGHT = 0.85;   // so lange fliegt der Ball frei, bevor er getroffen wird (davor ist er in der Hand)
 
 export class Match {

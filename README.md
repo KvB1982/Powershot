@@ -98,6 +98,14 @@ Die Auswahl steht in `js/avatar.js` (`pickStroke`), die Zuordnung der Dateien in
 Ob ein Spieler die Rückhand ein- oder beidhändig spielt, steht in `js/data.js` (Liste `EINHAND`).
 Wechselt der Schlag mitten in der Bewegung (Topspin ausgeholt, dann doch Slice), wird weich übergeblendet.
 
+**Schläger:** In den Aufnahmen hält der Spieler keinen echten Schläger. Die Richtung des Schlägers wird deshalb aus der Hand berechnet
+(der Griff liegt schräg in der Hand, `GRIFF_SCHRAEG` in `tools/mocap.mjs`), und die Schlagfläche wird im Treffpunkt je nach Schlagart
+ausgerichtet (`NEIGUNG`): Topspin leicht geschlossen, Slice und Volley offen, Aufschlag und Schmetterball leicht nach unten.
+Davor und danach dreht sie sich mit der Hand mit.
+
+**Laufen:** Bewegt sich der Spieler, kommen die Beine aus der Laufbewegung des Spiels (Schrittlänge und Takt passen zum Tempo),
+Oberkörper, Arme und Schläger aus der Aufnahme. Beim Seitenwechsel gehen die Spieler aufrecht und drehen sich in Laufrichtung.
+
 Übernommen werden die Positionen aller großen Gelenke, die Richtung von Kopf, Füßen und Schläger. Nicht übernommen werden
 die Finger (die Figuren haben keine beweglichen Finger) und – außer beim Aufschlag – das Laufen während des Schlags:
 das gibt das Spiel vor.

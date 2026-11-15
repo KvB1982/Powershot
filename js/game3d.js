@@ -245,6 +245,7 @@ export class Game3D {
       if (!av) continue;
       const tossing = (m.state === 'toss' || m.state === 'serveReady') && m.server === i && m.mode !== 'ballmaschine';
       const st = { x: p.x, z: p.z, vx: p.vx, vz: p.vz, prep: p.prep, stroke: p.stroke, mood: m.state === 'pointOver' ? p.mood : null, ball: b };
+      st.walk = m.state === 'changeover';       // beim Seitenwechsel wird aufrecht gegangen
       if (tossing) {
         // Aufschlag: der Ballwurf steuert die Bewegung
         st.stroke = 'sv';
