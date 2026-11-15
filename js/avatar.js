@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { figureReady, makeFigure, REST, BONES } from './figur.js';
 import { mocapClip, mocapFrame, mocapLoop } from './mocap.js';
-import { pose as namedPose, mixPose, strokePose, prepPose, strokeName, strokeStart, strokeEnd } from './posen.js';
+import { pose as namedPose, mixPose, strokePose, prepPose, strokeName, strokeFamily, strokeStart, strokeEnd } from './posen.js';
 
 // Maße des Skeletts: einmal für die einfache Figur aus Kapseln, einmal für das realistische Modell
 const DIM_SIMPLE = { upper: 0.30, fore: 0.28, reach: 0.57, thigh: 0.45, shin: 0.45, shW: 0.2, hipW: 0.1, shUp: 0.55, neckUp: 0.06, headUp: 0.21, ankle: 0 };
@@ -81,8 +81,8 @@ function getRestInverses() {
 }
 
 const PRE_SWING = 0.22;      // so viele Sekunden vor dem Treffpunkt beginnt der Schwung nach vorn
-const HIGH_BALL = 1.35;      // ab dieser Ballhöhe: Schlag für hohe Bälle
-const LOW_BALL = 0.72;       // darunter: Schlag für tiefe Bälle
+const HIGH_BALL = 1.25;      // ab dieser Ballhöhe wird eher angegriffen
+const LOW_BALL = 0.75;       // darunter wird eher verteidigt
 const SERVE_LEAD = 1.4;      // Dauer der Aufschlagbewegung, wenn das Match nichts anderes sagt
 const FOOT_REST = 0.46;      // Neigung des Fußes im normalen Stand (Zehen tiefer als der Knöchel)
 const FADE = 0.10;           // Überblenden, wenn die Bewegung wechselt
@@ -150,6 +150,8 @@ export class Avatar {
       src: '', last: null, from: null, fade: 1,   // Überblenden zwischen Bewegungen
       mood: null, moodK: 0,
       mw: 0, mf: null,                   // aufgezeichnete Bewegung: Gewicht (0…1) und letztes Bild
+      mx: 1, mFrom: null,                // Überblenden von einer Aufnahme in die nächste
+      rnd: Math.random(), rnd2: Math.random(),   // Zufall für die Wahl der Schlag-Variante (je Ball neu)
     };
     this.build(look);
     this.update(0, { x: this.pos.x, z: this.pos.z, vx: 0, vz: 0, prep: 0, stroke: 'fh' });
@@ -247,7 +249,10 @@ export class Avatar {
   // Schlagbewegung starten (im Moment des Treffens): kind = 'fh' | 'bh' | 'sv', type = Art des Schlags
   swing(kind, contactY = 0.95, type = 'drive') {
     const a = this.a;
-    const name = this.pickStroke(kind, type, contactY);
+    // Passt der Schwung, der schon läuft, zur Schlagart? Dann bleibt es bei dieser Variante.
+    const base = strokeName(kind, type);
+    const name = a.pre !== null && strokeFamily(a.art) === base ? a.art : this.pickStroke(kind, type, contactY, this.sit || {});
+    a.rnd = Math.random(); a.rnd2 = Math.random();
     // Lief der Schwung schon (pre), geht er nahtlos weiter – sonst holt er das letzte Stück schnell auf
     a.t = a.pre !== null && a.art === name ? Math.max(a.pre, -0.3) : -0.05;
     a.swing = name;
@@ -256,25 +261,28 @@ export class Avatar {
     a.mood = null;
   }
 
-  // Welche Bewegung passt zu Schlagart und Ballhöhe? Für hohe und tiefe Bälle gibt es eigene Aufnahmen.
-  pickStroke(kind, type, y) {
-    const name = strokeName(kind, type);
+  // Welche Bewegung passt zur Spielsituation?
+  //   Vorhand:  Topspin (Standard) · Angriffsschlag bei hohen Bällen oder wenn der Spieler im Feld steht
+  //   Rückhand: beidhändig (Standard) · Angriffsschlag bei hohen/kurzen Bällen · Abwehrschlag aus den Knien bei tiefen Bällen
+  //             oder in Bedrängnis. Einhändige Spieler schlagen immer die einhändige Rückhand.
+  //   Dazu etwas Zufall, damit nicht jeder Schlag gleich aussieht. Slice, Volley und Schmetterball ergeben sich aus dem Schlag.
+  pickStroke(kind, type, y, sit) {
+    const a = this.a, name = strokeName(kind, type);
+    const attack = y > HIGH_BALL || sit.inside, defend = y < LOW_BALL || sit.defend;
     if (name === 'fh_ts') {
-      if (y > HIGH_BALL && this.clipFor('fh_hi')) return 'fh_hi';
-      if (y < LOW_BALL && this.clipFor('fh_lo')) return 'fh_lo';
-    }
-    if (name === 'bh_ts' && this.bh === 2) {
-      if (y > HIGH_BALL && this.clipFor('bh_hi')) return 'bh_hi';
-      if (y < LOW_BALL && this.clipFor('bh_lo')) return 'bh_lo';
+      if (this.clipFor('fh_at') && a.rnd < (attack && !defend ? 0.75 : 0.12)) return 'fh_at';
+    } else if (name === 'bh_ts' && this.bh === 2) {
+      if (this.clipFor('bh_df') && defend && a.rnd < 0.8) return 'bh_df';
+      if (this.clipFor('bh_at') && a.rnd2 < (attack && !defend ? 0.75 : 0.1)) return 'bh_at';
+      if (this.clipFor('bh_df') && a.rnd < 0.1) return 'bh_df';
     }
     return name;
   }
 
-  // Gibt es für diese Bewegung eine Aufnahme? Die Rückhand hängt davon ab, ob der Spieler ein- oder beidhändig spielt.
+  // Gibt es für diese Bewegung eine Aufnahme? Einhändige Spieler bekommen für jede Rückhand die einhändige Aufnahme.
   clipFor(name) {
     if (!this.real) return null;
-    if (name === 'bh_ts') return mocapClip(this.bh === 1 ? 'bh1_ts' : 'bh2_ts') || mocapClip('bh1_ts');
-    if (name === 'bh_lo') return mocapClip('bh2_lo');
+    if (this.bh === 1 && strokeFamily(name) === 'bh_ts') return mocapClip('bh_sl');
     return mocapClip(name);
   }
 
@@ -306,7 +314,8 @@ export class Avatar {
       if (st.stroke && st.stroke !== 'sv') {
         const type = st.planY > 2.0 ? 'smash' : st.volley ? 'volley' : (st.hint || 'drive');
         // (nicht mehr wechseln, wenn der Schwung schon läuft – sonst springt die Figur)
-        if (a.pre === null) a.art = this.pickStroke(st.stroke, type, st.planY ?? 0.95);
+        this.sit = { inside: st.inside, defend: st.defend };
+        if (a.pre === null) a.art = this.pickStroke(st.stroke, type, st.planY ?? 0.95, this.sit);
       } else if (a.art === 'sv') a.art = 'fh_ts';
       const known = st.tHit !== undefined && st.tHit !== null;
       // Aufgezeichnete Schläge holen länger aus – sie beginnen entsprechend früher
@@ -401,7 +410,16 @@ export class Avatar {
     const clip = mName ? this.clipFor(mName) : null;
     const mOn = clip && mT >= clip.t0 && mT <= clip.tEnd - 0.3;
     if (mOn) {
-      const m = a.mf = mocapFrame(clip, mT);
+      let m = mocapFrame(clip, mT);
+      if (clip.ik) {
+        // Gespiegelte Aufnahme: Die Schlaghand folgt dem Griff, der Ellbogen wird neu berechnet; die andere Hand bleibt frei
+        m.handR = limitReach(m.shR, m.handR, dm.reach);
+        m.elR = ik(m.shR, m.handR, dm.upper, dm.fore, ARM_BEND);
+        m.handL = add3(m.shL, [0.22, -0.12, -0.32]);
+        m.elL = ik(m.shL, m.handL, dm.upper, dm.fore, mirror(ARM_BEND));
+      }
+      // Wechselt die Aufnahme mitten in der Bewegung (z. B. Topspin ausgeholt, dann doch Slice), wird weich übergeblendet
+      if (a.mClip && a.mClip !== clip && a.mw > 0.05 && a.mf) { a.mFrom = a.mf; a.mx = 0; }
       a.mClip = clip; a.mName = mName; a.mT = mT;
       // Die Aufnahme trifft den Ball immer auf derselben Höhe – die Hand geht rund um den Treffpunkt zur echten Ballhöhe
       if (mName !== 'sv' && mName !== 'sm') {
@@ -414,6 +432,13 @@ export class Avatar {
           if (clip.two) { const bl = sub(m.elL, m.shL); m.handL = limitReach(m.shL, [m.handL[0], m.handL[1], m.handL[2] + dy], dm.reach); m.elL = ik(m.shL, m.handL, dm.upper, dm.fore, bl); }
         }
       }
+      if (a.mx < 1 && a.mFrom) {
+        a.mx = Math.min(1, a.mx + dt / 0.16);
+        const u = smooth(a.mx), from = a.mFrom, out = {};
+        for (const k in m) out[k] = from[k] ? mix3(from[k], m[k], u) : m[k];
+        m = out;
+      }
+      a.mf = m;
     }
     a.mw = clamp(a.mw + (mOn ? dt / 0.14 : -dt / 0.3), 0, 1);
     const mw = a.mf ? smooth(a.mw) * (1 - smooth(a.moodK)) : 0;

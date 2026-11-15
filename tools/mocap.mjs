@@ -23,18 +23,23 @@ const FPS = 60;
 const CLIPS = {
   // Aufschlag: beginnt im aufrechten Stand. anker 'treff' = die Figur steht fest (nichts rutscht),
   // ausgerichtet am Treffpunkt – beim Aufschlag läuft der Spieler im Spiel ja nicht.
-  sv:     { file: 'Serving_in_Tennis', vor: 1.5, nach: 1.0, anker: 'treff' },
-  sm:     { file: 'Jumping_Smash_to_the_Right', vor: 1.0, nach: 0.9 },             // Schmetterball im Sprung
-  fh_ts:  { file: 'Swinging_Upward_from_Bottom_Left', vor: 1.0, nach: 1.0 },       // Vorhand Topspin (von unten nach oben)
-  fh_lo:  { file: 'One_Handed_Swing_to_the_Right', vor: 1.0, nach: 1.0 },          // Vorhand bei tiefen Bällen
-  fh_hi:  { file: 'Big_One_Handed_Swing_to_the_Right', vor: 1.0, nach: 1.0, yaw: 45 },      // Vorhand bei hohen Bällen
-  bh1_ts: { file: 'Swinging_a_Backhand_to_the_Right', vor: 1.0, nach: 1.0 },       // Rückhand einhändig
-  bh2_ts: { file: 'Two_Handed_Upswing_2', vor: 1.0, nach: 1.0 },                   // Rückhand beidhändig
-  bh2_lo: { file: 'Two_Handed_Upswing', vor: 1.0, nach: 1.0 },                     // Rückhand beidhändig bei tiefen Bällen
-  bh_hi:  { file: 'Swinging_Two_Handed_to_the_Left', vor: 1.0, nach: 1.0 },        // hohe Rückhand beidhändig, im Sprung
-  // Warten auf den Ball: läuft als Schleife. 'ganz' = die ganze Aufnahme, Blickrichtung aus der Brust statt aus dem Schlag.
-  ready:  { file: 'Getting_Ready_in_Place_for_Tennis', ganz: true },
-  // 'Defending_a_Right_Side_Attack_in_Tennis' enthält keinen Schlag (nur eine langsame Abwehrhaltung) und wird nicht benutzt.
+  sv:    { file: 'Serving_in_Tennis', vor: 1.5, nach: 1.0, anker: 'treff' },
+  sm:    { file: 'Jumping_Smash_to_the_Right', vor: 1.0, nach: 0.9 },                 // Schmetterball im Sprung
+  fh_ts: { file: 'Swinging_Upward_from_Bottom_Left', vor: 1.0, nach: 1.0 },           // Vorhand Topspin (Standard, eher tiefer Treffpunkt)
+  fh_at: { file: 'Big_One_Handed_Swing_to_the_Right', vor: 1.0, nach: 1.0, yaw: 45 }, // Vorhand Angriffsschlag
+  fh_sl: { file: 'One_Handed_Swing_to_the_Right', vor: 1.0, nach: 1.0 },              // Vorhand Slice
+  bh_ts: { file: 'Two_Handed_Upswing_2', vor: 1.0, nach: 1.0 },                       // Rückhand beidhändig (Standard)
+  bh_df: { file: 'Two_Handed_Upswing', vor: 1.0, nach: 1.0 },                         // Rückhand beidhändig, defensiv, tief in den Knien
+  bh_at: { file: 'Swinging_Two_Handed_to_the_Left', vor: 1.0, nach: 1.0 },            // Rückhand Angriffsschlag
+  bh_sl: { file: 'Swinging_a_Backhand_to_the_Right', vor: 1.0, nach: 1.0 },           // Rückhand Slice (einhändig)
+  // Volley: In der Aufnahme sind beide Hände am Schläger, der Schlägerkopf ist links vom Körper – also die Rückhandseite.
+  // Der Vorhand-Volley ist dieselbe Aufnahme gespiegelt. (Falls es genau andersherum sein soll: 'spiegeln' tauschen.)
+  // treff = Zeitpunkt des Treffens in der Datei (der Volley ist zu langsam, um ihn automatisch zu finden),
+  // brust = Blickrichtung aus der Brust zu Beginn statt aus dem Schlag.
+  bh_vo: { file: 'Defending_a_Right_Side_Attack_in_Tennis', vor: 0.8, nach: 0.7, treff: 4.75, brust: true },
+  fh_vo: { file: 'Defending_a_Right_Side_Attack_in_Tennis', vor: 0.8, nach: 0.7, treff: 4.75, brust: true, spiegeln: true },
+  // Warten auf den Ball: läuft als Schleife. 'ganz' = die ganze Aufnahme.
+  ready: { file: 'Getting_Ready_in_Place_for_Tennis', ganz: true },
 };
 
 // three.js läuft auch ohne Browser, braucht aber ein paar Platzhalter
@@ -103,10 +108,11 @@ function derive(f) {
 const DIRS = ['d', 'n', 'hf', 'hu'];      // Richtungen: Schläger, Schlagfläche, Kopf vorn, Kopf oben
 const KEYS = ['hip', 'neck', 'head', 'shR', 'shL', 'elR', 'elL', 'handR', 'handL', 'hipR', 'hipL', 'kneeR', 'kneeL', 'footR', 'footL', 'toeR', 'toeL'];
 
+const CACHE = {};
 function convert(name, cfg) {
   const file = path.join(DIR, cfg.file + '.FBX');
   if (!fs.existsSync(file)) { console.log(`  ${name}: Datei fehlt (${cfg.file}.FBX)`); return null; }
-  const { frames, duration } = read(file);
+  const { frames, duration } = (CACHE[file] = CACHE[file] || read(file));
   const D = frames.map(derive);
   const tip = D.map((o) => add(o.handR, o.d, 0.55));
   // Treffpunkt = schnellste Schlägerspitze
@@ -120,11 +126,12 @@ function convert(name, cfg) {
   // Blickrichtung: wohin fliegt die Schlägerspitze im Treffpunkt (nur waagerecht)?
   const vel = sub(tip[Math.min(D.length - 1, best + 2)], tip[Math.max(0, best - 2)]);
   let yaw = Math.atan2(vel[1], vel[0]);
-  if (cfg.ganz) {
+  if (cfg.treff !== undefined) best = Math.round(cfg.treff * FPS);
+  if (cfg.ganz || cfg.brust) {
     let fx = 0, fy = 0;
-    for (const o of D) { const sx = o.shR[0] - o.shL[0], sy = o.shR[1] - o.shL[1]; fx += sy; fy += -sx; }
+    for (const o of (cfg.ganz ? D : D.slice(0, 20))) { const sx = o.shR[0] - o.shL[0], sy = o.shR[1] - o.shL[1]; fx += sy; fy += -sx; }
     yaw = Math.atan2(fy, fx);
-    best = 0;
+    if (cfg.ganz) best = 0;
   }
   yaw += (cfg.yaw || 0) * Math.PI / 180;
   const c = Math.cos(-yaw), s = Math.sin(-yaw);
@@ -171,11 +178,18 @@ function convert(name, cfg) {
     for (let k = Math.max(0, i - W); k <= Math.min(D.length - 1, i + W); k++) { cx += D[k].hip[0]; cy += D[k].hip[1]; cnt++; }
     const center = fix || [cx / cnt, cy / cnt, 0];
     const o = D[i], row = [];
-    for (const k of KEYS) row.push(...rot(sub(o[k], center)));
-    for (const k of DIRS) row.push(...rot(o[k]));
+    if (cfg.spiegeln) {
+      const mir = (p) => [p[0], -p[1], p[2]];
+      const other = (k) => (k.endsWith('R') ? k.slice(0, -1) + 'L' : k.endsWith('L') ? k.slice(0, -1) + 'R' : k);
+      for (const k of KEYS) row.push(...mir(rot(sub(o[k === 'handR' || k === 'handL' ? k : other(k)], center))));
+      for (const k of DIRS) row.push(...mir(rot(o[k])));
+    } else {
+      for (const k of KEYS) row.push(...rot(sub(o[k], center)));
+      for (const k of DIRS) row.push(...rot(o[k]));
+    }
     out.push(row.map((x) => Math.round(x * 1000) / 1000));
   }
-  return { t0: (i0 - best) / FPS, fps: FPS, hitY: Math.round(D[best].handR[2] * 1000) / 1000, two: hands < 0.2 ? 1 : 0, fest: fix ? 1 : 0, loop: cfg.ganz ? 1 : 0,
+  return { t0: (i0 - best) / FPS, fps: FPS, hitY: Math.round(tip[best][2] * 1000) / 1000, two: hands < 0.2 ? 1 : 0, fest: fix ? 1 : 0, loop: cfg.ganz ? 1 : 0, ik: cfg.spiegeln ? 1 : 0,
     datei: cfg.file, yaw: Math.round(yaw * 10000) / 10000, hit: best / FPS, frames: out };
 }
 

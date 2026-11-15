@@ -12,7 +12,7 @@ weil der Browser JavaScript-Module nur über `http` lädt) und beim Start eine I
 (die 3D-Bibliothek three.js wird von jsDelivr geladen).
 
 ```bash
-python -m http.server 8765
+python tools/server.py
 ```
 
 Dann im Browser `http://localhost:8765` öffnen.
@@ -79,22 +79,24 @@ dreht die Bewegung zum Netz und schreibt `mocap/bewegungen.json`. Mit `--info` z
 
 Im Moment eingebaut (zwei „Tennis Animation Packs“, elf Aufnahmen):
 
-| Bewegung | Aufnahme |
-|---|---|
-| Aufschlag (vom aufrechten Stand bis zur Landung) | Serving_in_Tennis |
-| Schmetterball im Sprung | Jumping_Smash_to_the_Right |
-| Vorhand Topspin | Swinging_Upward_from_Bottom_Left |
-| Vorhand bei tiefen Bällen | One_Handed_Swing_to_the_Right |
-| Vorhand bei hohen Bällen | Big_One_Handed_Swing_to_the_Right |
-| Rückhand einhändig | Swinging_a_Backhand_to_the_Right |
-| Rückhand beidhändig | Two_Handed_Upswing_2 |
-| Rückhand beidhändig bei tiefen Bällen | Two_Handed_Upswing |
-| Rückhand beidhändig bei hohen Bällen | Swinging_Two_Handed_to_the_Left |
-| Warten auf den Ball (Schleife) | Getting_Ready_in_Place_for_Tennis |
+| Bewegung | Aufnahme | Wann |
+|---|---|---|
+| Aufschlag | Serving_in_Tennis | immer |
+| Schmetterball | Jumping_Smash_to_the_Right | Ball über 2 m |
+| Vorhand Topspin | Swinging_Upward_from_Bottom_Left | Standard |
+| Vorhand Angriff | Big_One_Handed_Swing_to_the_Right | hoher Ball oder Spieler steht im Feld (meist), sonst selten |
+| Vorhand Slice | One_Handed_Swing_to_the_Right | Slice und Stoppball |
+| Rückhand beidhändig | Two_Handed_Upswing_2 | Standard |
+| Rückhand Abwehr (tief, aus den Knien) | Two_Handed_Upswing | tiefer Ball oder in Bedrängnis (meist), sonst selten |
+| Rückhand Angriff | Swinging_Two_Handed_to_the_Left | hoher Ball oder Spieler steht im Feld (meist), sonst selten |
+| Rückhand Slice (einhändig) | Swinging_a_Backhand_to_the_Right | Slice und Stoppball; einhändige Spieler schlagen so jede Rückhand |
+| Rückhand-Volley | Defending_a_Right_Side_Attack_in_Tennis | Volley |
+| Vorhand-Volley | dieselbe Aufnahme gespiegelt | Volley |
+| Warten auf den Ball (Schleife) | Getting_Ready_in_Place_for_Tennis | solange die Figur steht |
 
-Nicht benutzt wird „Defending_a_Right_Side_Attack“: Die Aufnahme enthält keinen Schlag.
-Slice, Stoppball und Volley kommen weiter aus `js/posen.js`, dafür gibt es keine Aufnahmen.
+Die Auswahl steht in `js/avatar.js` (`pickStroke`), die Zuordnung der Dateien in `tools/mocap.mjs`.
 Ob ein Spieler die Rückhand ein- oder beidhändig spielt, steht in `js/data.js` (Liste `EINHAND`).
+Wechselt der Schlag mitten in der Bewegung (Topspin ausgeholt, dann doch Slice), wird weich übergeblendet.
 
 Übernommen werden die Positionen aller großen Gelenke, die Richtung von Kopf, Füßen und Schläger. Nicht übernommen werden
 die Finger (die Figuren haben keine beweglichen Finger) und – außer beim Aufschlag – das Laufen während des Schlags:

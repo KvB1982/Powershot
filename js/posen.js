@@ -103,7 +103,10 @@ const PREPS = {
 
 // Die hohe Rückhand gibt es nur als Aufnahme (mocap); ohne Aufnahme sieht sie aus wie die normale
 // Schläge für hohe und tiefe Bälle gibt es nur als Aufnahme; ohne Aufnahme sehen sie aus wie der normale Schlag
-for (const [neu, alt] of [['bh_hi', 'bh_ts'], ['bh_lo', 'bh_ts'], ['fh_hi', 'fh_ts'], ['fh_lo', 'fh_ts']]) { STROKES[neu] = STROKES[alt]; PREPS[neu] = PREPS[alt]; }
+for (const [neu, alt] of [['fh_at', 'fh_ts'], ['bh_at', 'bh_ts'], ['bh_df', 'bh_ts']]) { STROKES[neu] = STROKES[alt]; PREPS[neu] = PREPS[alt]; }
+
+// Zu welcher Grundart gehört eine Variante? (Angriffs- und Abwehrschlag sind Varianten des Topspins)
+export const strokeFamily = (name) => (name === 'fh_at' ? 'fh_ts' : name === 'bh_at' || name === 'bh_df' ? 'bh_ts' : name);
 
 export const strokeStart = (name) => STROKES[name][0][0];
 export const strokeEnd = (name) => STROKES[name][STROKES[name].length - 1][0];

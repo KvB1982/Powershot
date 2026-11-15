@@ -255,6 +255,10 @@ export class Game3D {
         st.tHit = p.plan.t - m.sinceHit;
         st.planY = p.plan.y;
         st.volley = p.plan.b === 0;
+        // Spielsituation für die Wahl des Schlags: steht der Spieler im Feld (Angriff) oder kommt er kaum an den Ball (Abwehr)?
+        st.inside = Math.abs(p.plan.sz) < C.L - 1.5;
+        st.defend = p.plan.lack > 0.12;
+        if (!p.isHuman && p.plan.lack > 0.45) st.hint = 'slice';      // in großer Not spielt der Computer meist Slice
         if (p.isHuman && m.controls) { const raw = m.controls.peek(); if (raw && raw.type) st.hint = raw.type; }
       }
       av.update(dt, st);
