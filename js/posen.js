@@ -71,7 +71,8 @@ const P = {
   sm_follow:  { r: [0.44, -0.24, 0.90], d: [0.40, -0.55, -0.70], l: [0.12, -0.30, 1.05], tw: 0.95, cr: 0.12, ln: 0.12, st: -0.3 },
 
   // ---------------- Stimmung nach dem Punkt ----------------
-  cheer:      { r: [0.05, 0.30, 2.0], d: [0, 0.25, 1], l: [0.10, -0.30, 1.45], tw: 0, cr: 0.0 },
+  // Jubel: kurz die Faust ballen (die freie Hand vor der Brust), Schläger unten, leicht in die Knie
+  cheer:      { r: [0.22, 0.30, 0.82], d: [0.45, 0.15, -0.88], l: [0.30, -0.14, 1.36], tw: 0.25, cr: 0.11, ln: 0.05 },
   sad:        { r: [0.10, 0.25, 0.75], d: [0.2, 0.1, -1], l: [0.05, -0.25, 0.80], tw: 0, cr: 0.09 },
 };
 
@@ -101,8 +102,8 @@ const PREPS = {
 };
 
 // Die hohe Rückhand gibt es nur als Aufnahme (mocap); ohne Aufnahme sieht sie aus wie die normale
-STROKES.bh_hi = STROKES.bh_ts;
-PREPS.bh_hi = PREPS.bh_ts;
+// Schläge für hohe und tiefe Bälle gibt es nur als Aufnahme; ohne Aufnahme sehen sie aus wie der normale Schlag
+for (const [neu, alt] of [['bh_hi', 'bh_ts'], ['bh_lo', 'bh_ts'], ['fh_hi', 'fh_ts'], ['fh_lo', 'fh_ts']]) { STROKES[neu] = STROKES[alt]; PREPS[neu] = PREPS[alt]; }
 
 export const strokeStart = (name) => STROKES[name][0][0];
 export const strokeEnd = (name) => STROKES[name][STROKES[name].length - 1][0];

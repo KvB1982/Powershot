@@ -77,10 +77,28 @@ Das Werkzeug liest 60-mal pro Sekunde die Gelenkpositionen aus, findet den Treff
 dreht die Bewegung zum Netz und schreibt `mocap/bewegungen.json`. Mit `--info` zeigt es nur, was in den Dateien steckt.
 `js/mocap.js` lädt diese Datei, `js/avatar.js` setzt die Gelenke auf das Skelett der Figur.
 
-Im Moment eingebaut: Aufschlag (in voller Länge, vom aufrechten Stand bis zur Landung), Rückhand (einhändig) und hohe Rückhand (beidhändig, im Sprung).
-Spieler mit beidhändiger Rückhand benutzen die einhändige Aufnahme und behalten die zweite Hand bis kurz nach dem Treffen am Griff,
-bis es eine eigene beidhändige Aufnahme gibt (dann in `tools/mocap.mjs` als `bh2_ts` eintragen).
-Vorhand, Slice, Volley und Schmetterball kommen weiter aus `js/posen.js`.
+Im Moment eingebaut (zwei „Tennis Animation Packs“, elf Aufnahmen):
+
+| Bewegung | Aufnahme |
+|---|---|
+| Aufschlag (vom aufrechten Stand bis zur Landung) | Serving_in_Tennis |
+| Schmetterball im Sprung | Jumping_Smash_to_the_Right |
+| Vorhand Topspin | Swinging_Upward_from_Bottom_Left |
+| Vorhand bei tiefen Bällen | One_Handed_Swing_to_the_Right |
+| Vorhand bei hohen Bällen | Big_One_Handed_Swing_to_the_Right |
+| Rückhand einhändig | Swinging_a_Backhand_to_the_Right |
+| Rückhand beidhändig | Two_Handed_Upswing_2 |
+| Rückhand beidhändig bei tiefen Bällen | Two_Handed_Upswing |
+| Rückhand beidhändig bei hohen Bällen | Swinging_Two_Handed_to_the_Left |
+| Warten auf den Ball (Schleife) | Getting_Ready_in_Place_for_Tennis |
+
+Nicht benutzt wird „Defending_a_Right_Side_Attack“: Die Aufnahme enthält keinen Schlag.
+Slice, Stoppball und Volley kommen weiter aus `js/posen.js`, dafür gibt es keine Aufnahmen.
+Ob ein Spieler die Rückhand ein- oder beidhändig spielt, steht in `js/data.js` (Liste `EINHAND`).
+
+Übernommen werden die Positionen aller großen Gelenke, die Richtung von Kopf, Füßen und Schläger. Nicht übernommen werden
+die Finger (die Figuren haben keine beweglichen Finger) und – außer beim Aufschlag – das Laufen während des Schlags:
+das gibt das Spiel vor.
 
 ## Sound
 

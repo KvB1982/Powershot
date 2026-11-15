@@ -17,6 +17,17 @@ export async function loadMocap(url = 'mocap/bewegungen.json') {
 }
 
 export const mocapClip = (name) => (data && data.clips[name]) || null;
+// Eine Aufnahme als Schleife abspielen (Warten auf den Ball): Das Ende blendet weich in den Anfang über.
+export function mocapLoop(clip, time) {
+  const len = clip.tEnd - clip.t0, over = 0.5;
+  const t = time % (len - over);
+  const f = mocapFrame(clip, clip.t0 + t);
+  if (t >= over) return f;
+  const g = mocapFrame(clip, clip.t0 + len - over + t), u = t / over, out = {};
+  for (const k of data.keys) out[k] = [g[k][0] + (f[k][0] - g[k][0]) * u, g[k][1] + (f[k][1] - g[k][1]) * u, g[k][2] + (f[k][2] - g[k][2]) * u];
+  return out;
+}
+
 export const mocapNames = () => (data ? Object.keys(data.clips) : []);
 
 // Alle Gelenke zur Zeit t (0 = Treffpunkt). Ergebnis: { hip:[vor,seite,hoch], shR:…, d:…, n:… }

@@ -10,6 +10,8 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const NOFX = new Proxy({}, { get: () => () => {} });
 const REACH = 1.4;          // so weit reicht man mit dem Schläger (Meter)
 export const TOSS_TIME = 1.4;      // Dauer der Aufschlagbewegung vom Stand bis zum Treffpunkt
+const WALK_SPEED = 2.7;            // Gehen beim Seitenwechsel (m/s)
+const CHANGEOVER_TIME = 5.2;       // Dauer des Seitenwechsels (s)
 export const TOSS_FLIGHT = 0.85;   // so lange fliegt der Ball frei, bevor er getroffen wird (davor ist er in der Hand)
 
 export class Match {
@@ -66,6 +68,16 @@ export class Match {
 
     if (st === 'intro') {
       if (this.timer <= 0) this.next();
+    } else if (st === 'changeover') {
+      // Seitenwechsel: beide gehen zur Bank neben dem Schiedsrichterstuhl
+      for (const p of this.P) {
+        const tx = -(C.NET_W + 0.7), tz = p.dz * 4;
+        const dx = tx - p.x, dzz = tz - p.z, dist = Math.hypot(dx, dzz);
+        const v = Math.min(WALK_SPEED, dist * 4);
+        p.vx = dist > 0.05 ? dx / dist * v : 0; p.vz = dist > 0.05 ? dzz / dist * v : 0;
+        p.x += p.vx * dt; p.z += p.vz * dt;
+      }
+      if (this.timer <= 0) this.setupServe();
     } else if (st === 'serveReady') {
       this.updateServeReady();
     } else if (st === 'toss') {
@@ -123,7 +135,24 @@ export class Match {
       this.fx.matchOver(this.score);
       return;
     }
+    if (this.changeoverDue()) {
+      this.state = 'changeover';
+      this.timer = CHANGEOVER_TIME;
+      for (const p of this.P) { p.mood = null; p.plan = null; p.prep = 0; }
+      this.ball.live = false;
+      this.fx.message('Seitenwechsel', 'info');
+      return;
+    }
     this.setupServe();
+  }
+
+  // Seitenwechsel gibt es wie im echten Tennis nach jedem ungeraden Spiel eines Satzes (1., 3., 5. …).
+  // (Die Seiten selbst werden im Spiel nicht getauscht – du spielst immer unten.)
+  changeoverDue() {
+    const lp = this.lastPoint, sc = this.score;
+    if (!lp || !lp.events.includes('game') || this.cfg.changeover === false) return false;
+    const set = lp.events.includes('set') ? sc.sets[sc.sets.length - 1] : sc.games;
+    return !!set && (set[0] + set[1]) % 2 === 1;
   }
 
   // ---------------------------------------------------------------

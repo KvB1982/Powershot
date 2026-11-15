@@ -24,10 +24,17 @@ const CLIPS = {
   // Aufschlag: beginnt im aufrechten Stand. anker 'treff' = die Figur steht fest (nichts rutscht),
   // ausgerichtet am Treffpunkt – beim Aufschlag läuft der Spieler im Spiel ja nicht.
   sv:     { file: 'Serving_in_Tennis', vor: 1.5, nach: 1.0, anker: 'treff' },
-  bh1_ts: { file: 'Swinging_a_Backhand_to_the_Right', vor: 0.9, nach: 0.8 },   // Rückhand einhändig, Hüfthöhe
-  bh_hi:  { file: 'Swinging_Two_Handed_to_the_Left', vor: 0.9, nach: 0.8 },    // hohe Rückhand beidhändig, im Sprung
-  // bh2_ts: beidhändige Rückhand auf Hüfthöhe – dafür fehlt noch eine Aufnahme.
-  // 'Defending_a_Right_Side_Attack_in_Tennis' enthält keinen Schlag, 'Getting_Ready_in_Place_for_Tennis' ist nur Warten.
+  sm:     { file: 'Jumping_Smash_to_the_Right', vor: 1.0, nach: 0.9 },             // Schmetterball im Sprung
+  fh_ts:  { file: 'Swinging_Upward_from_Bottom_Left', vor: 1.0, nach: 1.0 },       // Vorhand Topspin (von unten nach oben)
+  fh_lo:  { file: 'One_Handed_Swing_to_the_Right', vor: 1.0, nach: 1.0 },          // Vorhand bei tiefen Bällen
+  fh_hi:  { file: 'Big_One_Handed_Swing_to_the_Right', vor: 1.0, nach: 1.0, yaw: 45 },      // Vorhand bei hohen Bällen
+  bh1_ts: { file: 'Swinging_a_Backhand_to_the_Right', vor: 1.0, nach: 1.0 },       // Rückhand einhändig
+  bh2_ts: { file: 'Two_Handed_Upswing_2', vor: 1.0, nach: 1.0 },                   // Rückhand beidhändig
+  bh2_lo: { file: 'Two_Handed_Upswing', vor: 1.0, nach: 1.0 },                     // Rückhand beidhändig bei tiefen Bällen
+  bh_hi:  { file: 'Swinging_Two_Handed_to_the_Left', vor: 1.0, nach: 1.0 },        // hohe Rückhand beidhändig, im Sprung
+  // Warten auf den Ball: läuft als Schleife. 'ganz' = die ganze Aufnahme, Blickrichtung aus der Brust statt aus dem Schlag.
+  ready:  { file: 'Getting_Ready_in_Place_for_Tennis', ganz: true },
+  // 'Defending_a_Right_Side_Attack_in_Tennis' enthält keinen Schlag (nur eine langsame Abwehrhaltung) und wird nicht benutzt.
 };
 
 // three.js läuft auch ohne Browser, braucht aber ein paar Platzhalter
@@ -112,9 +119,28 @@ function convert(name, cfg) {
   }
   // Blickrichtung: wohin fliegt die Schlägerspitze im Treffpunkt (nur waagerecht)?
   const vel = sub(tip[Math.min(D.length - 1, best + 2)], tip[Math.max(0, best - 2)]);
-  let yaw = Math.atan2(vel[1], vel[0]) + (cfg.yaw || 0) * Math.PI / 180;
+  let yaw = Math.atan2(vel[1], vel[0]);
+  if (cfg.ganz) {
+    let fx = 0, fy = 0;
+    for (const o of D) { const sx = o.shR[0] - o.shL[0], sy = o.shR[1] - o.shL[1]; fx += sy; fy += -sx; }
+    yaw = Math.atan2(fy, fx);
+    best = 0;
+  }
+  yaw += (cfg.yaw || 0) * Math.PI / 180;
   const c = Math.cos(-yaw), s = Math.sin(-yaw);
   const rot = (p) => [p[0] * c - p[1] * s, p[0] * s + p[1] * c, p[2]];
+  // Schlagfläche: In der Aufnahme hält der Spieler keinen echten Schläger, deshalb ist unbekannt, wie der Griff in der
+  // Hand gedreht ist. Wir drehen die Fläche um den Griff so, dass sie im Treffpunkt zum Netz zeigt – und zwar in
+  // jedem Bild um denselben Winkel (der Griff ändert sich während des Schlags ja nicht).
+  if (!cfg.ganz) {
+    const o = D[best], fwd = [Math.cos(yaw), Math.sin(yaw), name === 'sv' || name === 'sm' ? -0.15 : 0];
+    const k = fwd[0] * o.d[0] + fwd[1] * o.d[1] + fwd[2] * o.d[2];
+    const want = norm([fwd[0] - k * o.d[0], fwd[1] - k * o.d[1], fwd[2] - k * o.d[2]]);
+    const cr = cross(o.n, want);
+    const phi = Math.atan2(cr[0] * o.d[0] + cr[1] * o.d[1] + cr[2] * o.d[2], o.n[0] * want[0] + o.n[1] * want[1] + o.n[2] * want[2]);
+    const cp = Math.cos(phi), sp = Math.sin(phi);
+    for (const q of D) { const c2 = cross(q.d, q.n); q.n = [q.n[0] * cp + c2[0] * sp, q.n[1] * cp + c2[1] * sp, q.n[2] * cp + c2[2] * sp]; }
+  }
   const hands = len(sub(D[best].handR, D[best].handL));
   const info = `${name.padEnd(6)} ${cfg.file.padEnd(42)} Dauer ${duration.toFixed(2)} s · Treffpunkt bei ${(best / FPS).toFixed(2)} s · Tempo ${bs.toFixed(1)} m/s · ` +
     `Spitze ${tip[best][2].toFixed(2)} m hoch (vor ${rot(sub(tip[best], D[best].hip))[0].toFixed(2)}, seite ${rot(sub(tip[best], D[best].hip))[1].toFixed(2)}) · Hand ${D[best].handR[2].toFixed(2)} m · Hände ${hands.toFixed(2)} m auseinander · Richtung ${(yaw * 180 / Math.PI).toFixed(0)}°`;
@@ -134,7 +160,7 @@ function convert(name, cfg) {
     }
   }
   // Ausschnitt um den Treffpunkt
-  const i0 = Math.max(0, best - Math.round(cfg.vor * FPS)), i1 = Math.min(D.length - 1, best + Math.round(cfg.nach * FPS));
+  const i0 = cfg.ganz ? 0 : Math.max(0, best - Math.round(cfg.vor * FPS)), i1 = cfg.ganz ? D.length - 1 : Math.min(D.length - 1, best + Math.round(cfg.nach * FPS));
   // Die Figur soll auf der Stelle bleiben: geglättete Position der Hüfte abziehen (das Laufen macht das Spiel).
   // Mit anker 'treff' bleibt stattdessen ein fester Punkt stehen: dort, wo die Hüfte im Treffpunkt ist.
   const W = Math.round(0.3 * FPS);
@@ -149,7 +175,8 @@ function convert(name, cfg) {
     for (const k of DIRS) row.push(...rot(o[k]));
     out.push(row.map((x) => Math.round(x * 1000) / 1000));
   }
-  return { t0: (i0 - best) / FPS, fps: FPS, hitY: Math.round(D[best].handR[2] * 1000) / 1000, two: hands < 0.2 ? 1 : 0, fest: fix ? 1 : 0, frames: out };
+  return { t0: (i0 - best) / FPS, fps: FPS, hitY: Math.round(D[best].handR[2] * 1000) / 1000, two: hands < 0.2 ? 1 : 0, fest: fix ? 1 : 0, loop: cfg.ganz ? 1 : 0,
+    datei: cfg.file, yaw: Math.round(yaw * 10000) / 10000, hit: best / FPS, frames: out };
 }
 
 console.log('Aufnahmen im Ordner mocap/:');
