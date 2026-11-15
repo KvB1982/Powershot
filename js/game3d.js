@@ -147,7 +147,7 @@ export class Game3D {
         if (info.serveNo === 2) call('message', '2. Aufschlag', 'info');
       },
       toss(side, k) { self.tossK[side] = k; },
-      swing(side, kind, y) { self.tossK[side] = 0; self.avatars[side].swing(kind, y); },
+      swing(side, kind, y, type) { self.tossK[side] = 0; self.avatars[side].swing(kind, y, type); },
       hit(h) {
         snd.hit(clamp((h.speed - 8) / 40, 0.2, 1), h.type === 'serve');
         if (h.type === 'serve') call('serveSpeed', Math.round(h.speed * 3.6), h.side);
@@ -243,12 +243,19 @@ export class Game3D {
       const p = m.P[i], av = this.avatars[i];
       if (!av) continue;
       const tossing = (m.state === 'toss' || m.state === 'serveReady') && m.server === i && m.mode !== 'ballmaschine';
-      let prep = p.prep, stroke = p.stroke;
+      const st = { x: p.x, z: p.z, vx: p.vx, vz: p.vz, prep: p.prep, stroke: p.stroke, mood: m.state === 'pointOver' ? p.mood : null, ball: b };
       if (tossing) {
-        stroke = 'sv';
-        prep = m.state === 'toss' ? Math.min(1, this.tossK[i] * 1.5) : (p.isHuman && m.controls && m.controls.charging ? 0.5 : 0.12);
+        // Aufschlag: der Ballwurf steuert die Bewegung
+        st.stroke = 'sv';
+        st.serveK = m.state === 'toss' ? this.tossK[i] : (p.isHuman && m.controls && m.controls.charging ? 0.12 : 0);
+      } else if (p.plan && m.state === 'rally') {
+        // Wann und wie hoch kommt der Ball? Danach richten sich Ausholen und Schwung.
+        st.tHit = p.plan.t - m.sinceHit;
+        st.planY = p.plan.y;
+        st.volley = p.plan.b === 0;
+        if (p.isHuman && m.controls) { const raw = m.controls.peek(); if (raw && raw.type) st.hint = raw.type; }
       }
-      av.update(dt, { x: p.x, z: p.z, vx: p.vx, vz: p.vz, prep, stroke, mood: m.state === 'pointOver' ? p.mood : null, ball: b });
+      av.update(dt, st);
     }
 
     // Ball

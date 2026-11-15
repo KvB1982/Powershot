@@ -1,4 +1,23 @@
-// Powershot – Sound. Alle Geräusche werden im Browser erzeugt (keine Sounddateien).
+// Powershot – Sound.
+// Schlag, Aufprall, Applaus und Stadion-Atmosphäre kommen aus den Aufnahmen im Ordner sounds/.
+// Solange die noch laden (oder falls sie fehlen), werden die Geräusche im Browser erzeugt.
+
+// Welche Datei wofür? Die Zeiten (Sekunden) sind die Stellen in der Aufnahme, die benutzt werden.
+const FILES = {
+  hit: 'sounds/soundreality-tennis-ball-hit-151257.mp3',
+  bounce: 'sounds/freesound_community-bouncing-ball-46683.mp3',
+  match: 'sounds/freesound_community-tennis-match-51533.mp3',
+  match2: 'sounds/freesound_community-43-tennis-57477.mp3',
+};
+const CLIPS = {
+  hit: [['hit', 0.02, 0.32]],
+  bounce: [['bounce', 0.425, 0.15], ['bounce', 5.88, 0.13], ['bounce', 1.68, 0.15]],
+  // Applaus: lang und laut / mittel / kurz
+  applauseBig: [['match', 121.8, 8.6], ['match', 287.6, 8.2]],
+  applauseMid: [['match', 193.6, 6.2], ['match2', 91.6, 6.2]],
+  applauseSmall: [['match', 21.6, 4.6], ['match', 157.6, 4.6], ['match', 89.6, 4.6]],
+};
+const AMBIENCE = ['match', 54.5, 67.5];      // ruhige Stelle im Stadion, läuft als Schleife
 
 export class Sound {
   constructor() {
@@ -6,6 +25,54 @@ export class Sound {
     this.enabled = true;
     this.voice = true;
     this.volume = 0.8;
+    this.samples = {};            // geladene Aufnahmen
+  }
+
+  // Die Aufnahmen laden (klein zuerst, die große Stadion-Aufnahme zum Schluss)
+  async loadSamples() {
+    for (const [name, url] of Object.entries(FILES)) {
+      try {
+        const data = await (await fetch(url)).arrayBuffer();
+        this.samples[name] = await new Promise((ok, err) => this.ctx.decodeAudioData(data, ok, err));
+        if (name === AMBIENCE[0]) this.startAmbience();
+      } catch (e) { console.warn('Sound fehlt:', url, e); }
+    }
+  }
+
+  // Ein Stück aus einer Aufnahme abspielen. Gibt false zurück, wenn sie (noch) nicht da ist.
+  clip(kind, { gain = 1, rate = 1, fadeIn = 0.005, fadeOut = 0.03, pick = null } = {}) {
+    const list = (CLIPS[kind] || []).filter((c) => this.samples[c[0]]);
+    if (!list.length) return false;
+    const [name, off, dur] = list[pick === null ? Math.floor(Math.random() * list.length) : Math.min(pick, list.length - 1)];
+    const t = this.ctx.currentTime, len = dur / rate;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.samples[name];
+    src.playbackRate.value = rate;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(gain, t + fadeIn);
+    g.gain.setValueAtTime(gain, t + Math.max(fadeIn, len - fadeOut));
+    g.gain.linearRampToValueAtTime(0.0001, t + len);
+    src.connect(g).connect(this.master);
+    src.start(t, off, dur);
+    return true;
+  }
+
+  // Echte Stadion-Atmosphäre als Schleife; ersetzt das erzeugte Gemurmel
+  startAmbience() {
+    const [name, a, b] = AMBIENCE;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.samples[name];
+    src.loop = true; src.loopStart = a; src.loopEnd = b;
+    const level = this.crowdGain.gain.value;
+    const g = this.ctx.createGain();
+    g.gain.value = 0;
+    src.connect(g).connect(this.master);
+    src.start(0, a);
+    this.crowdGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.3);
+    this.crowdGain = g;
+    this.crowdBoost = 9;          // die Aufnahme ist viel leiser als das erzeugte Rauschen
+    this.setCrowd(this.crowdLevel ?? level);
   }
 
   // Muss nach dem ersten Tippen/Klicken aufgerufen werden (Browser-Regel)
@@ -20,6 +87,7 @@ export class Sound {
     this.noise = this.makeNoise(2);
     this.clapBuf = this.makeApplause(3.5);
     this.startCrowd();
+    this.loadSamples();
   }
 
   setVolume(v) { this.volume = v; if (this.master) this.master.gain.value = this.enabled ? v : 0; }
@@ -70,7 +138,8 @@ export class Sound {
 
   setCrowd(level) {
     if (!this.ctx) return;
-    this.crowdGain.gain.setTargetAtTime(level, this.ctx.currentTime, 0.6);
+    this.crowdLevel = level;
+    this.crowdGain.gain.setTargetAtTime(level * (this.crowdBoost || 1), this.ctx.currentTime, 0.6);
   }
 
   burst({ freq = 1500, q = 1, dur = 0.08, gain = 0.5, type = 'bandpass', when = 0 }) {
@@ -103,6 +172,8 @@ export class Sound {
   hit(power = 0.6, serve = false) {
     if (!this.ctx) return;
     const p = Math.max(0.2, Math.min(1, power));
+    // Aufnahme: harte Schläge lauter und etwas tiefer, weiche leiser und heller
+    if (this.clip('hit', { gain: 0.5 + 1.1 * p, rate: (serve ? 0.86 : 1.12 - 0.2 * p) * (0.97 + Math.random() * 0.06) })) return;
     this.tone({ from: 260 + 200 * p, to: 90, dur: 0.09, gain: 0.5 * p + 0.2 });
     this.burst({ freq: 1900 + 900 * p, q: 0.9, dur: 0.05 + 0.03 * p, gain: 0.45 * p + 0.15 });
     this.burst({ freq: 5200, q: 2, dur: 0.03, gain: 0.18 * p });
@@ -113,6 +184,7 @@ export class Sound {
     if (!this.ctx) return;
     const g = Math.max(0.08, Math.min(0.5, speed / 45));
     const soft = surface === 'clay' || surface === 'grass';
+    if (this.clip('bounce', { gain: Math.min(1.6, 0.5 + g * 3) * (soft ? 0.7 : 1), rate: (soft ? 0.85 : 1) * (0.95 + Math.random() * 0.1) })) return;
     this.tone({ from: soft ? 150 : 210, to: 70, dur: 0.07, gain: g });
     this.burst({ freq: soft ? 500 : 900, q: 0.8, dur: 0.05, gain: g * 0.6, type: 'lowpass' });
   }
@@ -137,6 +209,9 @@ export class Sound {
   // Applaus. strength 0..1, bei cheer jubelt das Publikum zusätzlich
   applause(strength = 0.6, cheer = false) {
     if (!this.ctx) return;
+    // Echter Applaus aus der Aufnahme: je nach Stärke kurz, mittel oder lang
+    const kind = strength > 0.85 ? 'applauseBig' : strength > 0.55 ? 'applauseMid' : 'applauseSmall';
+    if (this.clip(kind, { gain: 1.6 + 1.6 * strength, fadeIn: 0.35, fadeOut: 1.6 })) return;
     const t = this.ctx.currentTime;
     const src = this.ctx.createBufferSource();
     src.buffer = this.clapBuf;

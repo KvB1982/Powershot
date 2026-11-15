@@ -524,7 +524,7 @@ export class Match {
     const shot = this.buildShot(p, intent, o);
     const kind = shot.type === 'smash' ? 'sv' : fh ? 'fh' : 'bh';
     this.launch(p, from, shot, false);
-    this.fx.swing(p.side, kind, from.y);
+    this.fx.swing(p.side, kind, from.y, shot.type);
     this.fx.hit({ side: p.side, speed: shot.speed, power: intent.power, type: shot.type });
   }
 

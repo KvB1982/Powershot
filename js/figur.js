@@ -1,5 +1,9 @@
-// Powershot – das realistische Spielermodell (assets/spieler.glb).
-// Das Modell kommt aus einem 3D-Generator und steht starr in der T-Pose. Hier wird es
+// Powershot – die realistischen Spielermodelle (assets/spieler_a.glb … spieler_f.glb).
+// Sechs Figuren mit verschiedenen Gesichtern, Frisuren und Kleidungsschnitten:
+//   a = kurze Haare, T-Shirt        b = längere Haare mit Stirnband, Polohemd
+//   c = Locken, ärmelloses Hemd     d = Bart, sehr kurze Haare, Schweißbänder
+//   e = Kappe, Hemd mit Kragen      f = Haarknoten, Hemd mit V-Ausschnitt
+// Die Modelle kommen aus einem 3D-Generator und stehen starr in der T-Pose. Hier wird es
 // "geriggt": Jeder Punkt der Oberfläche bekommt Gewichte, die sagen, welchen Knochen er folgt
 // (z. B. 70 % Oberarm, 30 % Unterarm am Ellbogen). Die Knochen bewegt dann avatar.js.
 // Außerdem färbt ein kleines Shader-Stück Hemd, Hose, Haut und Haare je Spieler um.
@@ -65,19 +69,35 @@ function rig(geo) {
   geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(wt, 4));
 }
 
-let model = null;      // { geo: { 1: Rechtshänder, -1: gespiegelt }, map, normalMap }
+export const MODELS = ['a', 'b', 'c', 'd', 'e', 'f'];
+const models = {};     // je Buchstabe: { geo: { 1: Rechtshänder, -1: gespiegelt }, map, normalMap }
 let loading = null;
 
-export const figureReady = () => !!model;
+export const figureReady = () => !!models.a;
 
-export function loadFigure(url = 'assets/spieler.glb') {
-  if (loading) return loading;
-  loading = new GLTFLoader().loadAsync(url).then((gltf) => {
+// Welches Modell passt zum Aussehen? (look.model, sonst nach Kappe / Stirnband)
+export function modelKey(look) {
+  const k = look.model || (look.head === 'cap' ? 'e' : look.head === 'band' ? 'b' : 'a');
+  return models[k] ? k : 'a';
+}
+
+export function loadFigure() {
+  if (!loading) loading = Promise.all(MODELS.map((k) => loadOne(k, `assets/spieler_${k}.glb`)));
+  return loading;
+}
+
+function loadOne(key, url) {
+  return new GLTFLoader().loadAsync(url).then((gltf) => {
     let src = null;
     gltf.scene.traverse((o) => { if (o.isMesh && !src) src = o; });
     const geo = src.geometry.clone();
     // Modell: x = vorne, y = Höhe (−0.5 … 0.5), z = rechts  →  Spiel: x = rechts, y = Höhe, z = hinten
     geo.applyMatrix4(new THREE.Matrix4().set(0, 0, SIZE, 0, 0, SIZE, 0, SIZE / 2, -SIZE, 0, 0, 0, 0, 0, 0, 1));
+    // Schaut die Figur in die richtige Richtung? Die Zehen müssen nach vorn (−z) zeigen – sonst umdrehen.
+    const pos = geo.attributes.position;
+    let front = 0, back = 0;
+    for (let i = 0; i < pos.count; i++) if (pos.getY(i) < 0.06) { front = Math.max(front, -pos.getZ(i)); back = Math.max(back, pos.getZ(i)); }
+    if (back > front) geo.rotateY(Math.PI);
     rig(geo);
     geo.userData.shared = true;
     // Für Linkshänder wird die Figur gespiegelt; damit die Vorderseiten vorne bleiben, drehen wir die Dreiecke um
@@ -85,16 +105,16 @@ export function loadFigure(url = 'assets/spieler.glb') {
     const ix = flip.index.array;
     for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; }
     flip.userData.shared = true;
-    model = { geo: { 1: geo, '-1': flip }, map: src.material.map, normalMap: src.material.normalMap };
-    return model;
-  }).catch((e) => { console.warn('Spielermodell konnte nicht geladen werden:', e); model = null; return null; });
-  return loading;
+    models[key] = { geo: { 1: geo, '-1': flip }, map: src.material.map, normalMap: src.material.normalMap };
+  }).catch((e) => { console.warn('Spielermodell konnte nicht geladen werden:', url, e); });
 }
 
 // Farben der Vorlage (im Bild: hellgraue Kleidung, mittlerer Hautton)
 const REF_SKIN = new THREE.Color(0xad8068);
 
-function material(look, hand) {
+// Muster der Kleidung (look.pattern): 0 = einfarbig, 1 = Bruststreifen, 2 = farbige Ärmel,
+// 3 = Seitenstreifen, 4 = Schulterpartie in zweiter Farbe. Die zweite Farbe ist look.trim.
+function material(model, look, hand) {
   const mat = new THREE.MeshStandardMaterial({ map: model.map, normalMap: model.normalMap, roughness: 0.78, metalness: 0 });
   if (hand < 0) mat.normalScale.set(-1, 1);
   const skin = new THREE.Color(look.skin ?? 0xe2b48c);
@@ -102,6 +122,8 @@ function material(look, hand) {
     uShirt: { value: new THREE.Color(look.shirt ?? 0xffffff) },
     uShorts: { value: new THREE.Color(look.shorts ?? 0xffffff) },
     uHair: { value: new THREE.Color(look.hair ?? 0x2b1d14) },
+    uTrim: { value: new THREE.Color(look.trim ?? look.shorts ?? 0xffffff) },
+    uPattern: { value: look.pattern || 0 },
     uSkin: { value: new THREE.Vector3(skin.r / REF_SKIN.r, skin.g / REF_SKIN.g, skin.b / REF_SKIN.b).clampScalar(0.25, 1.7) },
   };
   mat.onBeforeCompile = (sh) => {
@@ -110,7 +132,7 @@ function material(look, hand) {
       .replace('#include <common>', '#include <common>\nvarying vec3 vRest;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRest = position;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRest;\nuniform vec3 uShirt, uShorts, uHair, uSkin;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRest;\nuniform vec3 uShirt, uShorts, uHair, uSkin, uTrim;\nuniform int uPattern;')
       .replace('#include <map_fragment>', `#include <map_fragment>
         {
           vec3 c = diffuseColor.rgb;
@@ -119,7 +141,13 @@ function material(look, hand) {
           float h = vRest.y;
           // Kleidung: helle, farblose Stellen zwischen Socken und Hals
           float cloth = (1.0 - smoothstep(0.10, 0.24, sat)) * smoothstep(0.22, 0.42, mx) * smoothstep(0.40, 0.46, h) * (1.0 - step(1.54, h));
-          vec3 tint = mix(uShorts, uShirt, smoothstep(0.90, 0.95, h));
+          float shirt = smoothstep(0.90, 0.95, h), ax = abs(vRest.x);
+          float trim = 0.0;
+          if (uPattern == 1) trim = shirt * step(1.17, h) * (1.0 - step(1.26, h)) * (1.0 - step(0.21, ax));
+          else if (uPattern == 2) trim = shirt * step(0.215, ax) + (1.0 - shirt) * step(0.155, ax);
+          else if (uPattern == 3) trim = shirt * step(0.125, ax) * (1.0 - step(1.30, h)) + (1.0 - shirt) * step(0.155, ax);
+          else if (uPattern == 4) trim = shirt * smoothstep(1.24, 1.28, h);
+          vec3 tint = mix(mix(uShorts, uShirt, shirt), uTrim, trim);
           // Haare: sehr dunkle Stellen am Kopf
           float hair = (1.0 - smoothstep(0.02, 0.09, mx)) * step(1.52, h);
           float skin = smoothstep(0.16, 0.30, sat) * (1.0 - hair);
@@ -134,7 +162,8 @@ function material(look, hand) {
 
 // Eine neue Figur: SkinnedMesh + Knochen (die Knochen stellt avatar.js jedes Bild neu ein)
 export function makeFigure(look, hand, inverses) {
-  const mesh = new THREE.SkinnedMesh(model.geo[hand < 0 ? -1 : 1], material(look, hand));
+  const model = models[modelKey(look)];
+  const mesh = new THREE.SkinnedMesh(model.geo[hand < 0 ? -1 : 1], material(model, look, hand));
   const bones = BONES.map((name) => {
     const b = new THREE.Bone();
     b.name = name;

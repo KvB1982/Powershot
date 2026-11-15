@@ -159,6 +159,17 @@ function other(line) {
 }
 
 export const PLAYERS = [...STARS.map(star), ...REST.split('\n').map(other)].sort((a, b) => a.rank - b.rank);
+
+// Figur und Kleidung: Wer eine Kappe trägt, bekommt das Modell mit Kappe (e), Stirnband = b,
+// alle anderen eines von a, c, d, f. Dazu ein Muster (0–4) und eine zweite Farbe für die Kleidung.
+const OHNE = ['a', 'c', 'd', 'f'];
+const dark = (c) => ((c >> 16) & 255) + ((c >> 8) & 255) + (c & 255) < 300;
+PLAYERS.forEach((p, i) => {
+  const L = p.look;
+  L.model = L.head === 'cap' ? 'e' : L.head === 'band' ? 'b' : OHNE[(i * 3 + 1) % 4];
+  L.pattern = (i * 3 + 2) % 5;
+  L.trim = L.shirt === L.shorts ? (dark(L.shirt) ? 0xffffff : 0x1a2a4a) : (i % 2 ? L.shorts : (dark(L.shirt) ? 0xf2f2f2 : 0x1a2a4a));
+});
 export const TOP_PLAYERS = PLAYERS.slice(0, 20);
 export const playerById = (id) => PLAYERS.find((p) => p.id === id);
 export const overall = (st) => Math.round((st.s + st.p + st.t + st.c + st.v) / 5);

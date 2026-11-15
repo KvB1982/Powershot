@@ -1,10 +1,11 @@
 // Powershot – die 3D-Spielerfigur.
-// Die Figur ist ein Skelett aus Gelenken. Für jede Pose steht in POSES, wo die Hände
-// sind und wohin der Schläger zeigt. Ellbogen und Knie werden ausgerechnet (ik).
+// Die Figur ist ein Skelett aus Gelenken. Die Posen und Schlagbewegungen stehen in posen.js
+// (wo sind die Hände, wie sind die Schultern gedreht …). Ellbogen und Knie werden hier ausgerechnet (ik).
 // Angaben als [vor, seite, hoch] in Metern aus Sicht der Figur (seite: + = Schlaghand).
 
 import * as THREE from 'three';
 import { figureReady, makeFigure, REST, BONES } from './figur.js';
+import { pose as namedPose, mixPose, strokePose, prepPose, strokeName, strokeStart, strokeEnd } from './posen.js';
 
 // Maße des Skeletts: einmal für die einfache Figur aus Kapseln, einmal für das realistische Modell
 const DIM_SIMPLE = { upper: 0.30, fore: 0.28, reach: 0.57, thigh: 0.45, shin: 0.45, shW: 0.2, hipW: 0.1, shUp: 0.55, neckUp: 0.06, headUp: 0.21, ankle: 0 };
@@ -37,7 +38,7 @@ const mirror = (p) => [p[0], -p[1], p[2]];
 // Ruhe-Pose des Modells und für jede Pose im Spiel – so passt beides genau zusammen.
 function boneFrames(J) {
   const F = {};
-  F.pelvis = upright(J.hip);
+  F.pelvis = upright(J.hip, J.hipYaw || 0);
   F.chest = frame(J.hip, sub(J.neck, J.hip), sub(J.shR, J.shL));
   F.head = upright(J.neck, J.yaw || 0, J.nod || 0);
   for (const [s, m] of [['R', 1], ['L', -1]]) {
@@ -73,26 +74,12 @@ function getRestInverses() {
   return restInverses;
 }
 
-const POSES = {
-  ready:     { r: [0.34, 0.10, 0.98], d: [0.35, -0.75, 0.55], l: [0.36, -0.14, 1.04] },
-  fh_back:   { r: [-0.30, 0.52, 1.12], d: [-0.75, 0.45, 0.48], l: [0.30, -0.22, 1.18] },
-  fh_hit:    { r: [0.46, 0.50, 0.95], d: [0.28, 0.92, 0.22], l: [0.12, -0.38, 1.10] },
-  fh_follow: { r: [0.26, -0.30, 1.62], d: [-0.35, -0.6, 0.72], l: [0.10, -0.36, 1.02] },
-  bh_back:   { r: [-0.26, -0.36, 1.08], d: [-0.72, -0.6, 0.33], l: [-0.14, -0.42, 1.10] },
-  bh_hit:    { r: [0.44, -0.28, 0.95], d: [0.28, -0.92, 0.22], l: [0.36, -0.36, 0.98] },
-  bh_follow: { r: [0.22, 0.50, 1.55], d: [0.2, 0.7, 0.7], l: [-0.10, -0.38, 1.02] },
-  sv_back:   { r: [-0.22, 0.26, 1.62], d: [-0.5, 0.1, 0.85], l: [0.22, -0.18, 2.10] },
-  sv_hit:    { r: [0.14, 0.18, 2.18], d: [0.12, 0, 1], l: [0.14, -0.32, 1.15] },
-  sv_follow: { r: [0.42, -0.24, 0.78], d: [0.5, -0.5, -0.7], l: [0.10, -0.36, 1.02] },
-  cheer:     { r: [0.05, 0.30, 2.0], d: [0, 0.25, 1], l: [0.10, -0.30, 1.45] },
-  sad:       { r: [0.10, 0.25, 0.75], d: [0.2, 0.1, -1], l: [0.05, -0.25, 0.80] },
-};
-const T_HIT = 0.06, T_FOLLOW = 0.26, T_END = 0.6;   // Zeiten einer Schlagbewegung (Sekunden)
+const PRE_SWING = 0.22;      // so viele Sekunden vor dem Treffpunkt beginnt der Schwung nach vorn
+const FADE = 0.10;           // Überblenden, wenn die Bewegung wechselt
 const UP = new THREE.Vector3(0, 1, 0);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const smooth = (s) => { s = clamp(s, 0, 1); return s * s * (3 - 2 * s); };
 const mix3 = (a, b, s) => [a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s, a[2] + (b[2] - a[2]) * s];
-const mixPose = (a, b, s) => ({ r: mix3(a.r, b.r, s), d: mix3(a.d, b.d, s), l: mix3(a.l, b.l, s) });
 const dist3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
 // Zwei Knochen (Längen l1, l2) von a nach b: Wo ist das Gelenk dazwischen?
@@ -143,7 +130,14 @@ export class Avatar {
     this.hand = hand;
     this.group = new THREE.Group();
     this.pos = { x: 0, z: side === 0 ? 12 : -12 };
-    this.a = { run: 0, step: 0, dir: [1, 0], prep: 0, art: 'fh', swing: null, t: 0, contactY: 0.95, mood: null, moodK: 0, time: Math.random() * 5 };
+    this.a = {
+      run: 0, step: 0, dir: [1, 0], time: Math.random() * 5,
+      prep: 0, art: 'fh_ts',            // Ausholen: wie weit (0…1) und für welchen Schlag
+      swing: null, t: 0, contactY: 0.95, // laufender Schlag und seine Zeit (0 = Treffpunkt)
+      pre: null,                         // Schwung nach vorn, bevor der Ball da ist
+      src: '', last: null, from: null, fade: 1,   // Überblenden zwischen Bewegungen
+      mood: null, moodK: 0,
+    };
     this.build(look);
     this.update(0, { x: this.pos.x, z: this.pos.z, vx: 0, vz: 0, prep: 0, stroke: 'fh' });
   }
@@ -237,32 +231,64 @@ export class Avatar {
     rk.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   }
 
-  // Schlagbewegung starten: kind = 'fh' | 'bh' | 'sv'
-  swing(kind, contactY = 0.95) {
-    this.a.swing = kind;
-    this.a.t = 0;
-    this.a.contactY = contactY;
-    this.a.mood = null;
-  }
-
-  currentPose() {
+  // Schlagbewegung starten (im Moment des Treffens): kind = 'fh' | 'bh' | 'sv', type = Art des Schlags
+  swing(kind, contactY = 0.95, type = 'drive') {
     const a = this.a;
-    let pose;
-    if (a.swing) {
-      const k = a.swing, t = a.t;
-      const hit = { ...POSES[k + '_hit'] };
-      if (k !== 'sv') hit.r = [hit.r[0], hit.r[1], clamp(a.contactY, 0.45, 1.7)];
-      if (t < T_HIT) pose = mixPose(POSES[k + '_back'], hit, smooth(t / T_HIT));
-      else if (t < T_FOLLOW) pose = mixPose(hit, POSES[k + '_follow'], smooth((t - T_HIT) / (T_FOLLOW - T_HIT)));
-      else pose = mixPose(POSES[k + '_follow'], POSES.ready, smooth((t - T_FOLLOW) / (T_END - T_FOLLOW)));
-    } else {
-      pose = mixPose(POSES.ready, POSES[a.art + '_back'], smooth(a.prep));
-    }
-    if (a.moodK > 0.001 && a.mood) pose = mixPose(pose, POSES[a.mood], smooth(a.moodK));
-    return pose;
+    const name = strokeName(kind, type);
+    // Lief der Schwung schon (pre), geht er nahtlos weiter – sonst holt er das letzte Stück schnell auf
+    a.t = a.pre !== null && a.art === name ? Math.max(a.pre, -0.05) : -0.05;
+    a.swing = name;
+    a.contactY = contactY;
+    a.pre = null;
+    a.mood = null;
   }
 
-  // st: { x, z, vx, vz, prep, stroke, mood, ball:{x,z} }
+  // Welche Pose gilt gerade? Gibt auch zurück, aus welcher Bewegung sie stammt (für das Überblenden).
+  currentPose(dt, st) {
+    const a = this.a;
+    let p, src;
+    if (a.swing) {
+      a.t += dt;
+      p = strokePose(a.swing, a.t, a.contactY);
+      src = 'schlag';
+      if (a.t >= strokeEnd(a.swing)) { a.swing = null; a.prep = 0; a.pre = null; }
+    } else if (st.serveK !== undefined && st.serveK !== null) {
+      // Aufschlag: der Ballwurf (0…1) steuert die Bewegung, kurz vor dem Treffen beginnt der Schlag
+      const k = st.serveK;
+      a.art = 'sv';
+      if (k > 0.9) { a.pre = strokeStart('sv') + (k - 0.9) / 0.1 * (-0.03 - strokeStart('sv')); p = strokePose('sv', a.pre); }
+      else { a.pre = null; p = prepPose('sv', k); }
+      src = 'schlag';
+    } else {
+      // Ausholen. Wenn bekannt ist, wann der Ball da ist (tHit), richtet sich alles danach.
+      if (st.stroke && st.stroke !== 'sv') {
+        const type = st.planY > 2.0 ? 'smash' : st.volley ? 'volley' : (st.hint || 'drive');
+        a.art = strokeName(st.stroke, type);
+      } else if (a.art === 'sv') a.art = 'fh_ts';
+      const known = st.tHit !== undefined && st.tHit !== null;
+      const want = known ? clamp(1 - (st.tHit - PRE_SWING) / 0.55, 0, 1) : (st.prep || 0);
+      a.prep += (want - a.prep) * Math.min(1, dt * 14);
+      if (known && st.tHit < PRE_SWING && a.prep > 0.6) {
+        a.pre = Math.min(-0.02, Math.max(a.pre ?? strokeStart(a.art), -st.tHit, strokeStart(a.art)));
+        p = strokePose(a.art, a.pre, st.planY ?? 0.95);
+      } else {
+        a.pre = null;
+        p = prepPose(a.art, a.prep, st.planY ?? 0.95);
+      }
+      src = a.art;
+    }
+    // Überblenden, wenn die Bewegung gewechselt hat (z. B. vom Topspin-Ausholen zum Slice)
+    if (src !== a.src) { a.from = a.last; a.fade = a.from ? 0 : 1; a.src = src; }
+    if (a.fade < 1) {
+      a.fade = Math.min(1, a.fade + dt / FADE);
+      p = mixPose(a.from, p, smooth(a.fade));
+    }
+    a.last = p;
+    if (a.moodK > 0.001 && a.mood) p = mixPose(p, namedPose(a.mood), smooth(a.moodK));
+    return p;
+  }
+
+  // st: { x, z, vx, vz, prep, stroke, tHit, planY, volley, hint, serveK, mood, ball:{x,z} }
   update(dt, st) {
     const a = this.a, d = this.d, hand = this.hand;
     a.time += dt;
@@ -276,41 +302,35 @@ export class Avatar {
     }
     a.run += (clamp(sp / 3.2, 0, 1) - a.run) * Math.min(1, dt * 10);
 
-    // Schlag / Ausholen / Stimmung
-    if (a.swing) {
-      a.t += dt;
-      if (a.t >= T_END) { a.swing = null; a.prep = 0; }
-    } else {
-      if (st.stroke) a.art = st.stroke;
-      a.prep += ((st.prep || 0) - a.prep) * Math.min(1, dt * 12);
-    }
     a.mood = st.mood || a.mood;
     a.moodK += ((st.mood ? 1 : 0) - a.moodK) * Math.min(1, dt * 5);
     if (!st.mood && a.moodK < 0.01) a.mood = null;
 
-    const pose = this.currentPose();
-    const run = a.run;
-    const bob = Math.sin(a.time * 4) * 0.012 * (1 - run);
-    const crouch = 0.05 + 0.06 * (a.art !== 'sv' ? a.prep : 0) + (a.mood === 'sad' ? 0.04 * a.moodK : 0);
-    const hipH = 0.90 - crouch + bob + run * Math.abs(Math.sin(a.step)) * 0.035;
+    const pose = this.currentPose(dt, st);
+    const run = a.run, still = 1 - run;
+    const bob = Math.sin(a.time * 4) * 0.012 * still;
+    const hipH = 0.90 - pose.cr + pose.jp + bob + run * Math.abs(Math.sin(a.step)) * 0.035;
     const dm = this.dim;
     const shH = hipH + dm.shUp;
-    const lean = 0.05 + 0.07 * run;
+    const lean = 0.05 + 0.07 * run + pose.ln;
 
-    let twist = clamp(pose.r[0] / 0.85, -0.6, 0.6);
-    if (pose.r[1] < -0.15) twist = -twist * 0.5;
+    // Schultern und Hüfte drehen sich mit dem Schlag (die Hüfte etwa halb so weit)
+    const twist = pose.tw, hipTw = pose.tw * 0.45;
     const shR = [lean + dm.shW * Math.sin(twist), dm.shW * Math.cos(twist), shH];
     const shL = [lean - dm.shW * Math.sin(twist), -dm.shW * Math.cos(twist), shH];
     const neck = [lean, 0, shH + dm.neckUp];
     const headP = [lean + 0.03, 0, shH + dm.headUp - (a.mood === 'sad' ? 0.03 * a.moodK : 0)];
     const hipMid = [0, 0, hipH];
-    const hipR = [0, dm.hipW, hipH], hipL = [0, -dm.hipW, hipH];
+    const hipR = [dm.hipW * Math.sin(hipTw), dm.hipW * Math.cos(hipTw), hipH];
+    const hipL = [-dm.hipW * Math.sin(hipTw), -dm.hipW * Math.cos(hipTw), hipH];
 
-    const stance = 0.17 + 0.06 * a.prep;
+    // Füße: Schrittstellung beim Schlag (st), Schritte beim Laufen, Abheben beim Sprung
+    const stance = 0.17 + 0.25 * Math.max(0, pose.cr);
+    const stepR = -pose.st * 0.14 * still, stepL = pose.st * 0.20 * still, air = pose.jp * 0.85;
     const swingLeg = Math.sin(a.step) * 0.4 * run;
     const lift = Math.cos(a.step) * 0.24 * run;
-    const footR = [a.dir[0] * swingLeg, stance + a.dir[1] * swingLeg, 0.07 + dm.ankle + Math.max(0, lift)];
-    const footL = [-a.dir[0] * swingLeg, -stance - a.dir[1] * swingLeg, 0.07 + dm.ankle + Math.max(0, -lift)];
+    const footR = [stepR + a.dir[0] * swingLeg, stance + a.dir[1] * swingLeg, 0.07 + dm.ankle + air + Math.max(0, lift)];
+    const footL = [stepL - a.dir[0] * swingLeg, -stance - a.dir[1] * swingLeg, 0.07 + dm.ankle + air + Math.max(0, -lift)];
     const kneeR = ik(hipR, footR, dm.thigh, dm.shin, [1, 0.15, 0.2]);
     const kneeL = ik(hipL, footL, dm.thigh, dm.shin, [1, -0.15, 0.2]);
 
@@ -331,7 +351,7 @@ export class Avatar {
       // Realistisches Modell: nur die Knochen einstellen, die Oberfläche folgt von allein
       const F = boneFrames({
         hip: hipMid, neck, shR, shL, elR, elL, handR, handL, armBendR, armBendL, hipR, hipL, kneeR, kneeL, footR, footL,
-        yaw: yaw * hand, nod: a.mood === 'sad' ? 0.35 * a.moodK : 0,
+        hipYaw: -hipTw, yaw: yaw * hand, nod: a.mood === 'sad' ? 0.35 * a.moodK : 0,
       });
       for (let i = 0; i < BONES.length; i++) {
         const fr = F[BONES[i]], b = this.bones[i];

@@ -38,13 +38,29 @@ wie die echte: Jedes Turnier ersetzt die Punkte desselben Turniers aus dem Vorja
 Alle 100 Spieler tragen die echten Namen, Plätze und Punkte der Weltrangliste vom 9. November 2026.
 Die Fähigkeitswerte und das Aussehen sind frei geschätzt (Platz 1 bis 20 von Hand, der Rest nach Platz und Spielertyp berechnet).
 
-## Die Spielerfigur
+## Die Spielerfiguren
 
-Die Figur in `assets/spieler.glb` wurde mit 3D AI Studio erzeugt (ein neutraler Spieler in T-Pose, rund 9.000 Dreiecke).
-Der Generator liefert nur ein starres Modell ohne Skelett und ohne Animationen. Das Skelett kommt deshalb aus dem Spiel selbst:
-`js/figur.js` verteilt die Oberfläche auf 13 Knochen, `js/avatar.js` bewegt diese Knochen mit denselben Posen
-(Vorhand, Rückhand, Aufschlag, Laufen, Jubel), die auch die einfache Figur benutzt. Hemd, Hose, Haut und Haare werden
-je Spieler umgefärbt, Linkshänder werden gespiegelt. Unter „Einstellungen → Spielerfiguren“ kann man auf die einfache Figur zurückschalten.
+Sechs Figuren (`assets/spieler_a.glb` bis `spieler_f.glb`) wurden mit 3D AI Studio erzeugt: neutrale, erfundene
+Gesichter mit verschiedenen Frisuren und Kleidungsschnitten (T-Shirt, Polo, ärmellos, Kappe, Stirnband, Bart, Haarknoten),
+je rund 9.000 Dreiecke. Der Generator liefert nur starre Modelle in T-Pose, ohne Skelett und ohne Animationen.
+Das Skelett kommt deshalb aus dem Spiel selbst:
+
+- `js/figur.js` lädt die Modelle, verteilt die Oberfläche auf 13 Knochen und färbt Hemd, Hose, Haut und Haare je Spieler um.
+  Dazu gibt es fünf Kleidungsmuster (einfarbig, Bruststreifen, farbige Ärmel, Seitenstreifen, Schulterpartie). Linkshänder werden gespiegelt.
+- `js/posen.js` enthält alle Posen und Schlagbewegungen als Zahlen: Vorhand und Rückhand jeweils als Topspin (mit Schleife:
+  ausholen, Schläger fallen lassen, treffen, durchschwingen) und als Slice (von oben nach unten), Volley, Aufschlag
+  (Ball hochwerfen, Pokal-Pose, Schläger hinter den Rücken, strecken, durchschwingen) und Schmetterball.
+  Wer eine Bewegung ändern will, ändert dort die Zahlen.
+- `js/avatar.js` rechnet daraus das Skelett aus (Ellbogen, Knie, Drehung von Schultern und Hüfte, Schrittstellung, Sprung).
+  Der Schwung beginnt schon bevor der Ball da ist, damit der Schläger genau im Treffpunkt ankommt.
+
+Unter „Einstellungen → Spielerfiguren“ kann man auf die einfache Figur zurückschalten.
+
+## Sound
+
+Schlag, Aufprall, Applaus und Stadion-Atmosphäre kommen aus den Aufnahmen im Ordner `sounds/` (Dateien von Pixabay / Freesound-Community).
+In `js/audio.js` steht oben, welche Stelle welcher Aufnahme wofür benutzt wird – die Zeiten kann man dort anpassen.
+Solange die Aufnahmen laden, erzeugt der Browser die Geräusche selbst. Der Schiedsrichter spricht über die Sprachausgabe des Geräts.
 
 ## Steuerung
 
@@ -89,11 +105,12 @@ Einstellbar unter „Einstellungen“. Auf Geräten mit Touchscreen ist „Touch
 | `js/rules.js` | Zählweise: Punkte, Spiele, Sätze, Tiebreak, Aufschlagwechsel |
 | `js/match.js` | Das laufende Match: Aufschlag, Ballwechsel, Regeln, Computergegner, Training |
 | `js/controls.js` | Die drei Steuerungsarten |
-| `js/avatar.js` | Skelett der Spielerfigur mit Posen und Bewegungen |
+| `js/avatar.js` | Skelett der Spielerfigur |
+| `js/posen.js` | Posen und Schlagbewegungen |
 | `js/figur.js` | Lädt das realistische Spielermodell, verbindet es mit dem Skelett, färbt es um |
 | `js/stadium.js` | Stadion: Platz, Netz, Tribünen, Zuschauer, Licht |
 | `js/game3d.js` | Kamera, Ball, Markierungen, Verbindung von Match, Figuren und Sound |
-| `js/audio.js` | Sound (wird im Browser erzeugt, keine Sounddateien) |
+| `js/audio.js` | Sound (Aufnahmen aus `sounds/`, Rest wird im Browser erzeugt) |
 | `js/tournament.js` | Turnierbaum und ATP-Finals-Format |
 | `js/career.js` | Karriere: Rangliste, Geld, Ausrüstung, Fähigkeiten, Speichern |
 | `js/app.js` | Menüs und Abläufe |

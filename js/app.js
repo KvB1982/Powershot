@@ -357,7 +357,7 @@ const SKINS = [0xf3cfb0, 0xe2b48c, 0xc99872, 0x9a6a48, 0x7a4a30];
 const HAIRS = [0x1a1410, 0x3a2a1c, 0x6a4a2c, 0xb8935a, 0xc8642a, 0xd8d8d8];
 const SHIRTS = [0xe84a3a, 0x2e6fd8, 0xffffff, 0x1fb87a, 0xf2e85c, 0x9a3ad8, 0xff7a2a, 0x1a1a1a];
 const COUNTRIES = ['GER', 'AUT', 'SUI', 'ITA', 'ESP', 'FRA', 'GBR', 'USA', 'AUS', 'NOR', 'SWE', 'NED', 'POL', 'CZE', 'CRO', 'SRB', 'GRE', 'ARG', 'BRA', 'CAN', 'JPN'];
-const draft = { name: '', country: 'GER', hand: 1, skin: SKINS[0], hair: HAIRS[1], shirt: SHIRTS[1], shorts: 0xffffff, head: 'cap' };
+const draft = { name: '', country: 'GER', hand: 1, skin: SKINS[0], hair: HAIRS[1], shirt: SHIRTS[1], shorts: 0xffffff, head: 'cap', model: 'e', pattern: 0, trim: 0x1a2a4a };
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 let careerTab = 'start';
 
@@ -383,7 +383,9 @@ function renderCreate() {
       <label>Haarfarbe</label>${sw('hair', HAIRS)}
       <label>Trikot</label>${sw('shirt', SHIRTS)}
       <label>Hose</label>${sw('shorts', [0xffffff, 0x1a1a1a, 0x24406a, 0xc82a2a])}
-      <label>Auf dem Kopf</label><div class="row">${[['cap', 'Kappe'], ['band', 'Stirnband'], ['none', 'Nichts']].map(([k, n]) => `<button class="${draft.head === k ? 'sel' : ''}" data-a="draft" data-v="head:${k}">${n}</button>`).join('')}</div>
+      <label>Figur</label><div class="row">${[['a', 'Kurze Haare'], ['b', 'Stirnband'], ['c', 'Locken, ärmellos'], ['d', 'Bart'], ['e', 'Kappe'], ['f', 'Haarknoten']].map(([k, n]) => `<button class="${draft.model === k ? 'sel' : ''}" data-a="draft" data-v="model:${k}">${n}</button>`).join('')}</div>
+      <label>Muster der Kleidung</label><div class="row">${['Einfarbig', 'Bruststreifen', 'Farbige Ärmel', 'Seitenstreifen', 'Schulterpartie'].map((n, k) => `<button class="${draft.pattern === k ? 'sel' : ''}" data-a="draft" data-v="pattern:${k}">${n}</button>`).join('')}</div>
+      <label>Zweite Farbe</label>${sw('trim', [0xffffff, 0x1a1a1a, 0x1a2a4a, 0xe84a3a, 0xf2e85c, 0x1fb87a])}
     </div>
     <p class="dim">Du startest auf Platz 101 der Weltrangliste mit 50.000 $ und 10 Fähigkeitspunkten.</p>
     <button class="primary" data-a="createCareer">Karriere starten ›</button>`);
@@ -392,14 +394,15 @@ actions.draft = (v) => {
   const [k, raw] = v.split(':');
   const inp = $('#cname');
   if (inp) draft.name = inp.value;
-  draft[k] = (k === 'country' || k === 'head') ? raw : Number(raw);
+  draft[k] = (k === 'country' || k === 'head' || k === 'model') ? raw : Number(raw);
+  draft.head = draft.model === 'e' ? 'cap' : draft.model === 'b' ? 'band' : 'none';   // für die einfache Figur
   keepScroll(renderCreate);
 };
 actions.createCareer = () => {
   const name = ($('#cname').value || '').trim() || 'Mein Spieler';
   career = CA.newCareer({
     name, country: draft.country, hand: draft.hand,
-    look: { skin: draft.skin, hair: draft.hair, shirt: draft.shirt, shorts: draft.shorts, head: draft.head, shoes: 0xffffff, racket: 0x202020 },
+    look: { skin: draft.skin, hair: draft.hair, shirt: draft.shirt, shorts: draft.shorts, head: draft.head, model: draft.model, pattern: draft.pattern, trim: draft.trim, shoes: 0xffffff, racket: 0x202020 },
   });
   CA.saveCareer(career);
   careerTab = 'start';
