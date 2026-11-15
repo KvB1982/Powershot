@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { Stadium } from './stadium.js';
 import { Avatar } from './avatar.js';
+import { TOSS_TIME, TOSS_FLIGHT } from './match.js';
 import { COURT as C } from './physics.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -247,7 +248,8 @@ export class Game3D {
       if (tossing) {
         // Aufschlag: der Ballwurf steuert die Bewegung
         st.stroke = 'sv';
-        st.serveK = m.state === 'toss' ? this.tossK[i] : (p.isHuman && m.controls && m.controls.charging ? 0.12 : 0);
+        st.serveK = m.state === 'toss' ? this.tossK[i] : 0;
+        st.serveT = TOSS_TIME;
       } else if (p.plan && m.state === 'rally') {
         // Wann und wie hoch kommt der Ball? Danach richten sich Ausholen und Schwung.
         st.tHit = p.plan.t - m.sinceHit;
@@ -259,10 +261,13 @@ export class Game3D {
     }
 
     // Ball
-    const holding = m.state === 'serveReady';
+    // Beim Aufschlag liegt der Ball in der Hand, bis er hochgeworfen wird
+    const release = TOSS_TIME - TOSS_FLIGHT;
+    const holding = m.state === 'serveReady' || (m.state === 'toss' && m.tossT < release + 0.12);
     if (holding && this.avatars[m.server]) {
       const h = this.avatars[m.server].handLWorld;
-      this.ball.position.set(h.x, h.y + 0.07, h.z);
+      const u = m.state === 'toss' ? clamp((m.tossT - release) / 0.12, 0, 1) : 0;     // kurzer Übergang Hand → Flug
+      this.ball.position.set(h.x + (b.x - h.x) * u, h.y + 0.07 + (b.y - h.y - 0.07) * u, h.z + (b.z - h.z) * u);
     } else {
       this.ball.position.set(b.x, b.y, b.z);
     }

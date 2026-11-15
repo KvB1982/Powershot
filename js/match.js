@@ -9,7 +9,8 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const NOFX = new Proxy({}, { get: () => () => {} });
 const REACH = 1.4;          // so weit reicht man mit dem Schläger (Meter)
-const TOSS_TIME = 0.8;      // Dauer des Ballwurfs beim Aufschlag
+export const TOSS_TIME = 1.4;      // Dauer der Aufschlagbewegung vom Stand bis zum Treffpunkt
+export const TOSS_FLIGHT = 0.85;   // so lange fliegt der Ball frei, bevor er getroffen wird (davor ist er in der Hand)
 
 export class Match {
   // cfg: { players:[a,b], human:0|null, surface, difficulty, sets, games,
@@ -172,7 +173,10 @@ export class Match {
 
   // Wo ist der Ball beim Hochwerfen? t = Sekunden seit Beginn
   tossPos(p, t) {
-    const up = t < 0.6 ? 1.25 + 1.9 * Math.sin((Math.PI / 2) * (t / 0.6)) : 3.15 - 0.4 * ((t - 0.6) / (TOSS_TIME - 0.6)) ** 2;
+    // Erst hebt die Hand den Ball an, dann fliegt er frei: hoch bis etwa 3,2 m und zurück auf 2,75 m
+    const tr = TOSS_TIME - TOSS_FLIGHT, s = t - tr;
+    const lift = clamp((t - 0.15) / (tr - 0.15), 0, 1);
+    const up = s < 0 ? 0.8 + 0.86 * lift * lift : 1.66 + 5.45 * s - 4.905 * s * s;
     const k = clamp(t / TOSS_TIME, 0, 1);
     return { x: p.x - p.hand * p.dz * 0.22 * (1 - k), y: up, z: p.z - p.dz * (0.3 + 0.1 * k) };
   }

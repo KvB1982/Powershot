@@ -42,6 +42,11 @@ function boneFrames(J) {
   F.pelvis = upright(J.hip, J.hipYaw || 0);
   F.chest = frame(J.hip, sub(J.neck, J.hip), sub(J.shR, J.shL));
   F.head = upright(J.neck, J.yaw || 0, J.nod || 0);
+  if (J.headF) {
+    // Kopf-Richtung aus einer Aufnahme: vorn (headF) und oben (headU)
+    const ey = norm(J.headU), ex = norm(cross(ey, J.headF));
+    F.head = { o: J.neck, ex, ey, ez: cross(ex, ey) };
+  }
   for (const [s, m] of [['R', 1], ['L', -1]]) {
     const sh = J['sh' + s], el = J['el' + s], hd = J['hand' + s];
     const n = cross(J['armBend' + s], norm(sub(hd, sh)));
@@ -51,7 +56,7 @@ function boneFrames(J) {
     const k = cross(J['kneeBend' + s] || [KNEE_BEND[0], KNEE_BEND[1] * m, KNEE_BEND[2]], norm(sub(ft, hip)));
     F['thigh' + s] = frame(hip, sub(kn, hip), k);
     F['shin' + s] = frame(kn, sub(ft, kn), k);
-    F['foot' + s] = upright(ft, J['footYaw' + s] || 0);
+    F['foot' + s] = upright(ft, J['footYaw' + s] || 0, J['footNod' + s] || 0);
   }
   return F;
 }
@@ -77,7 +82,8 @@ function getRestInverses() {
 
 const PRE_SWING = 0.22;      // so viele Sekunden vor dem Treffpunkt beginnt der Schwung nach vorn
 const HIGH_BALL = 1.35;      // ab dieser Ballhöhe: hohe Rückhand
-const SERVE_LEAD = 1.0;      // so viele Sekunden der Aufschlag-Aufnahme laufen während des Ballwurfs
+const SERVE_LEAD = 1.4;      // Dauer der Aufschlagbewegung, wenn das Match nichts anderes sagt
+const FOOT_REST = 0.46;      // Neigung des Fußes im normalen Stand (Zehen tiefer als der Knöchel)
 const FADE = 0.10;           // Überblenden, wenn die Bewegung wechselt
 const UP = new THREE.Vector3(0, 1, 0);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -129,6 +135,7 @@ export class Avatar {
   constructor(look, side, hand = 1, real = true) {
     this.real = real && figureReady();
     this.dim = this.real ? DIM_REAL : DIM_SIMPLE;
+    this.bh = look.bh === 1 ? 1 : 2;      // Rückhand: 1 = einhändig, 2 = beidhändig
     this.side = side;
     this.d = side === 0 ? 1 : -1;
     this.hand = hand;
@@ -240,13 +247,20 @@ export class Avatar {
   swing(kind, contactY = 0.95, type = 'drive') {
     const a = this.a;
     let name = strokeName(kind, type);
-    if (name === 'bh_ts' && contactY > HIGH_BALL && mocapClip('bh_hi')) name = 'bh_hi';
+    if (name === 'bh_ts' && contactY > HIGH_BALL && this.bh === 2 && this.clipFor('bh_hi')) name = 'bh_hi';
     // Lief der Schwung schon (pre), geht er nahtlos weiter – sonst holt er das letzte Stück schnell auf
     a.t = a.pre !== null && a.art === name ? Math.max(a.pre, -0.3) : -0.05;
     a.swing = name;
     a.contactY = contactY;
     a.pre = null;
     a.mood = null;
+  }
+
+  // Gibt es für diese Bewegung eine Aufnahme? Die Rückhand hängt davon ab, ob der Spieler ein- oder beidhändig spielt.
+  clipFor(name) {
+    if (!this.real) return null;
+    if (name === 'bh_ts') return mocapClip(this.bh === 1 ? 'bh1_ts' : 'bh2_ts') || mocapClip('bh1_ts');
+    return mocapClip(name);
   }
 
   // Welche Pose gilt gerade? Gibt auch zurück, aus welcher Bewegung sie stammt (für das Überblenden).
@@ -257,16 +271,16 @@ export class Avatar {
       a.t += dt * (a.t < -0.02 ? 3 : 1);      // war der Schwung zu spät dran, holt er schnell auf
       p = strokePose(a.swing, a.t, a.contactY);
       src = 'schlag';
-      const clip = mocapClip(a.swing);
+      const clip = this.clipFor(a.swing);
       if (a.t >= (clip ? clip.tEnd : strokeEnd(a.swing))) { a.swing = null; a.prep = 0; a.pre = null; }
     } else if (st.serveK !== undefined && st.serveK !== null) {
       // Aufschlag: der Ballwurf (0…1) steuert die Bewegung, kurz vor dem Treffen beginnt der Schlag
       const k = st.serveK;
       a.art = 'sv';
-      const clip = mocapClip('sv');
+      const clip = this.clipFor('sv');
       if (clip) {
         // Aufgezeichneter Aufschlag: der Ballwurf spult die Aufnahme bis zum Treffpunkt vor
-        const T = Math.min(-clip.t0, SERVE_LEAD);
+        const T = Math.min(-clip.t0, st.serveT || SERVE_LEAD);
         a.pre = -T + k * T;
         p = k > 0.9 ? strokePose('sv', Math.max(a.pre, strokeStart('sv'))) : prepPose('sv', k);
       } else if (k > 0.9) { a.pre = strokeStart('sv') + (k - 0.9) / 0.1 * (-0.03 - strokeStart('sv')); p = strokePose('sv', a.pre); }
@@ -277,11 +291,11 @@ export class Avatar {
       if (st.stroke && st.stroke !== 'sv') {
         const type = st.planY > 2.0 ? 'smash' : st.volley ? 'volley' : (st.hint || 'drive');
         a.art = strokeName(st.stroke, type);
-        if (a.art === 'bh_ts' && st.planY > HIGH_BALL && mocapClip('bh_hi')) a.art = 'bh_hi';
+        if (a.art === 'bh_ts' && st.planY > HIGH_BALL && this.bh === 2 && this.clipFor('bh_hi')) a.art = 'bh_hi';
       } else if (a.art === 'sv') a.art = 'fh_ts';
       const known = st.tHit !== undefined && st.tHit !== null;
       // Aufgezeichnete Schläge holen länger aus – sie beginnen entsprechend früher
-      const clip = mocapClip(a.art);
+      const clip = this.clipFor(a.art);
       const lead = clip ? Math.min(-clip.t0, 0.85) : PRE_SWING;
       const want = known ? clamp(1 - (st.tHit - PRE_SWING) / 0.55, 0, 1) : (st.prep || 0);
       a.prep += (want - a.prep) * Math.min(1, dt * 14);
@@ -359,10 +373,11 @@ export class Avatar {
 
     // --- Aufgezeichnete Bewegung: Gibt es für diesen Schlag eine Aufnahme, ersetzen ihre Gelenke die berechneten ---
     const mName = a.swing || (a.pre !== null ? a.art : null), mT = a.swing ? a.t : a.pre;
-    const clip = this.real && mName ? mocapClip(mName) : null;
-    const mOn = clip && mT >= clip.t0 && mT <= clip.tEnd - 0.14;
+    const clip = mName ? this.clipFor(mName) : null;
+    const mOn = clip && mT >= clip.t0 && mT <= clip.tEnd - 0.3;
     if (mOn) {
       const m = a.mf = mocapFrame(clip, mT);
+      a.mClip = clip; a.mName = mName; a.mT = mT;
       // Die Aufnahme trifft den Ball immer auf derselben Höhe – die Hand geht rund um den Treffpunkt zur echten Ballhöhe
       if (mName !== 'sv' && mName !== 'sm') {
         const ballY = a.swing ? a.contactY : (st.planY ?? clip.hitY);
@@ -375,9 +390,9 @@ export class Avatar {
         }
       }
     }
-    a.mw = clamp(a.mw + (mOn ? dt : -dt) / 0.14, 0, 1);
+    a.mw = clamp(a.mw + (mOn ? dt / 0.14 : -dt / 0.3), 0, 1);
     const mw = a.mf ? smooth(a.mw) * (1 - smooth(a.moodK)) : 0;
-    let footYawR = 0, footYawL = 0;
+    let footYawR = 0, footYawL = 0, footNodR = 0, footNodL = 0, headF = null, headU = null;
     if (mw > 0.001) {
       const m = a.mf, L = (p, q) => mix3(p, q, mw);
       hipMid = L(hipMid, m.hip); neck = L(neck, m.neck); headP = L(headP, [m.head[0], m.head[1], m.head[2] + 0.08]);
@@ -385,6 +400,20 @@ export class Avatar {
       hipR = L(hipR, m.hipR); hipL = L(hipL, m.hipL); kneeR = L(kneeR, m.kneeR); kneeL = L(kneeL, m.kneeL); footR = L(footR, m.footR); footL = L(footL, m.footL);
       footYawR = Math.atan2(m.toeR[1] - m.footR[1], m.toeR[0] - m.footR[0]) * mw;
       footYawL = Math.atan2(m.toeL[1] - m.footL[1], m.toeL[0] - m.footL[0]) * mw;
+      // Fuß auf den Zehenspitzen oder flach? Kopf: schaut dem Ball nach wie in der Aufnahme
+      const nod = (f, t) => Math.atan2(f[2] - t[2], Math.hypot(t[0] - f[0], t[1] - f[1])) - FOOT_REST;
+      footNodR = nod(m.footR, m.toeR) * mw; footNodL = nod(m.footL, m.toeL) * mw;
+      const look = st.ball ? clamp(Math.atan2((st.ball.x - this.pos.x) * d, Math.abs(st.ball.z - this.pos.z) + 2), -0.7, 0.7) * hand : 0;
+      headF = L([Math.cos(look), Math.sin(look), 0], m.hf); headU = L([0, 0, 1], m.hu);
+      // Beidhändige Spieler, für die es nur eine einhändige Aufnahme gibt: die zweite Hand bleibt bis kurz nach dem Treffen am Griff
+      if (this.bh === 2 && a.mClip && !a.mClip.two && a.mName === 'bh_ts') {
+        const g = 1 - smooth((a.mT - 0.10) / 0.22);
+        if (g > 0) {
+          const grip = limitReach(shL, add3(handR, m.d, 0.11), dm.reach);
+          handL = mix3(handL, grip, g * mw);
+          elL = ik(shL, handL, dm.upper, dm.fore, sub(elL, shL));
+        }
+      }
     }
     // Die Ebene, in der sich Arm und Bein beugen, ergibt sich aus Ellbogen und Knie
     const armBendR = add3(sub(elR, shR), ARM_BEND, 0.02), armBendL = add3(sub(elL, shL), mirror(ARM_BEND), 0.02);
@@ -402,7 +431,7 @@ export class Avatar {
       // Realistisches Modell: nur die Knochen einstellen, die Oberfläche folgt von allein
       const F = boneFrames({
         hip: hipMid, neck, shR, shL, elR, elL, handR, handL, armBendR, armBendL, hipR, hipL, kneeR, kneeL, footR, footL,
-        kneeBendR, kneeBendL, footYawR, footYawL,
+        kneeBendR, kneeBendL, footYawR, footYawL, footNodR, footNodL, headF, headU,
         hipYaw, yaw: yaw * hand, nod: a.mood === 'sad' ? 0.35 * a.moodK : 0,
       });
       for (let i = 0; i < BONES.length; i++) {

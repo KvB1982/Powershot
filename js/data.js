@@ -164,8 +164,10 @@ export const PLAYERS = [...STARS.map(star), ...REST.split('\n').map(other)].sort
 // alle anderen eines von a, c, d, f. Dazu ein Muster (0–4) und eine zweite Farbe für die Kleidung.
 const OHNE = ['a', 'c', 'd', 'f'];
 const dark = (c) => ((c >> 16) & 255) + ((c >> 8) & 255) + (c & 255) < 300;
+const EINHAND = ['tsitsipas', 'musetti', 'shapovalov', 'altmaier', 'kovacevic'];   // Rückhand mit einer Hand
 PLAYERS.forEach((p, i) => {
   const L = p.look;
+  L.bh = EINHAND.includes(p.id) ? 1 : 2;
   L.model = L.head === 'cap' ? 'e' : L.head === 'band' ? 'b' : OHNE[(i * 3 + 1) % 4];
   L.pattern = (i * 3 + 2) % 5;
   L.trim = L.shirt === L.shorts ? (dark(L.shirt) ? 0xffffff : 0x1a2a4a) : (i % 2 ? L.shorts : (dark(L.shirt) ? 0xf2f2f2 : 0x1a2a4a));

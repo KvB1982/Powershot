@@ -77,7 +77,9 @@ Das Werkzeug liest 60-mal pro Sekunde die Gelenkpositionen aus, findet den Treff
 dreht die Bewegung zum Netz und schreibt `mocap/bewegungen.json`. Mit `--info` zeigt es nur, was in den Dateien steckt.
 `js/mocap.js` lädt diese Datei, `js/avatar.js` setzt die Gelenke auf das Skelett der Figur.
 
-Im Moment eingebaut: Aufschlag, Rückhand (einhändig) und hohe Rückhand (beidhändig, im Sprung).
+Im Moment eingebaut: Aufschlag (in voller Länge, vom aufrechten Stand bis zur Landung), Rückhand (einhändig) und hohe Rückhand (beidhändig, im Sprung).
+Spieler mit beidhändiger Rückhand benutzen die einhändige Aufnahme und behalten die zweite Hand bis kurz nach dem Treffen am Griff,
+bis es eine eigene beidhändige Aufnahme gibt (dann in `tools/mocap.mjs` als `bh2_ts` eintragen).
 Vorhand, Slice, Volley und Schmetterball kommen weiter aus `js/posen.js`.
 
 ## Sound
