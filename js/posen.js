@@ -100,6 +100,10 @@ const PREPS = {
   sv:    [[0, 'sv_ready'], [0.30, 'sv_down'], [0.66, 'sv_trophy'], [0.90, 'sv_drop']],
 };
 
+// Die hohe Rückhand gibt es nur als Aufnahme (mocap); ohne Aufnahme sieht sie aus wie die normale
+STROKES.bh_hi = STROKES.bh_ts;
+PREPS.bh_hi = PREPS.bh_ts;
+
 export const strokeStart = (name) => STROKES[name][0][0];
 export const strokeEnd = (name) => STROKES[name][STROKES[name].length - 1][0];
 

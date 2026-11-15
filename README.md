@@ -56,6 +56,30 @@ Das Skelett kommt deshalb aus dem Spiel selbst:
 
 Unter „Einstellungen → Spielerfiguren“ kann man auf die einfache Figur zurückschalten.
 
+## Aufgezeichnete Bewegungen (Motion Capture)
+
+Für einige Schläge kann das Spiel echte, aufgezeichnete Bewegungen benutzen. Die Aufnahmen sind gekauft
+(„Tennis Animation Pack“ von Ailive auf fab.com, FBX mit Unreal-Skelett) und dürfen nicht weitergegeben werden.
+Sie liegen deshalb nur lokal im Ordner `mocap/`, der nicht in dieses Repository hochgeladen wird.
+Ohne den Ordner läuft das Spiel ganz normal mit den Bewegungen aus `js/posen.js`.
+
+So kommen neue Aufnahmen ins Spiel:
+
+1. Die FBX-Dateien in den Ordner `mocap/` legen.
+2. Einmal `npm install` ausführen (holt three.js für das Werkzeug).
+3. In `tools/mocap.mjs` oben eintragen, welche Datei welcher Schlag ist, dann:
+
+```bash
+node tools/mocap.mjs
+```
+
+Das Werkzeug liest 60-mal pro Sekunde die Gelenkpositionen aus, findet den Treffpunkt (schnellste Schlägerspitze),
+dreht die Bewegung zum Netz und schreibt `mocap/bewegungen.json`. Mit `--info` zeigt es nur, was in den Dateien steckt.
+`js/mocap.js` lädt diese Datei, `js/avatar.js` setzt die Gelenke auf das Skelett der Figur.
+
+Im Moment eingebaut: Aufschlag, Rückhand (einhändig) und hohe Rückhand (beidhändig, im Sprung).
+Vorhand, Slice, Volley und Schmetterball kommen weiter aus `js/posen.js`.
+
 ## Sound
 
 Schlag, Aufprall, Applaus und Stadion-Atmosphäre kommen aus den Aufnahmen im Ordner `sounds/` (Dateien von Pixabay / Freesound-Community).
@@ -107,6 +131,7 @@ Einstellbar unter „Einstellungen“. Auf Geräten mit Touchscreen ist „Touch
 | `js/controls.js` | Die drei Steuerungsarten |
 | `js/avatar.js` | Skelett der Spielerfigur |
 | `js/posen.js` | Posen und Schlagbewegungen |
+| `js/mocap.js` | Lädt aufgezeichnete Bewegungen, falls vorhanden |
 | `js/figur.js` | Lädt das realistische Spielermodell, verbindet es mit dem Skelett, färbt es um |
 | `js/stadium.js` | Stadion: Platz, Netz, Tribünen, Zuschauer, Licht |
 | `js/game3d.js` | Kamera, Ball, Markierungen, Verbindung von Match, Figuren und Sound |

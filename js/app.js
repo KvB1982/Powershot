@@ -5,6 +5,7 @@ import { Game3D } from './game3d.js';
 import { Controls } from './controls.js';
 import { Match } from './match.js';
 import { loadFigure } from './figur.js';
+import { loadMocap } from './mocap.js';
 import * as D from './data.js';
 import * as TN from './tournament.js';
 import * as CA from './career.js';
@@ -663,7 +664,7 @@ function step(n = 60) {
 }
 window.__powershot = { game, controls, settings, step, get match() { return match; }, get career() { return career; }, actions };
 // Das Spielermodell laden (höchstens 8 Sekunden warten – sonst geht es mit den einfachen Figuren los)
-await Promise.race([loadFigure(), new Promise((r) => setTimeout(r, 8000))]);
+await Promise.race([Promise.all([loadFigure(), loadMocap()]), new Promise((r) => setTimeout(r, 8000))]);
 $('#loading').remove();
 actions.home();
 requestAnimationFrame(loop);
