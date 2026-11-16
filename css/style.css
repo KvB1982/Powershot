@@ -134,6 +134,14 @@ label { display: block; font-size: 13px; color: var(--dim); margin: 12px 0 6px; 
 #powerFill { height: 100%; width: 0; background: var(--good); }
 #powerFill.over { background: var(--bad); }
 #powerLimit { position: absolute; top: 0; bottom: 0; right: 0; background: rgba(255, 80, 60, 0.3); border-left: 2px solid #ff6b5a; }
+/* Auswahl der Aufschlagart: vier Knöpfe unten in der Mitte, nur vor dem eigenen Aufschlag sichtbar */
+#aufschlagWahl { position: absolute; left: 50%; bottom: max(58px, calc(env(safe-area-inset-bottom) + 34px)); transform: translateX(-50%);
+  display: none; gap: 6px; pointer-events: auto; }
+#aufschlagWahl.on { display: flex; }
+#aufschlagWahl button { min-height: 0; padding: 7px 12px; font-size: 14px; font-weight: 800; background: var(--bg); border: 2px solid var(--line);
+  border-radius: 10px; color: #fff; white-space: nowrap; }
+#aufschlagWahl button.an { background: var(--accent); color: #141a05; border-color: var(--accent); }
+#aufschlagWahl button small { font-weight: 600; opacity: 0.7; margin-right: 4px; }
 #trainBox { position: absolute; left: 50%; top: max(12px, env(safe-area-inset-top)); transform: translateX(-50%); background: var(--bg);
   border: 1px solid var(--line); border-radius: 12px; padding: 8px 16px; font-weight: 800; font-size: 18px; display: none; text-align: center; }
 #trainBox.on { display: block; }
@@ -248,6 +256,8 @@ tr.cut td { text-align: center; font-size: 11px; font-weight: 700; color: var(--
   #pauseBtn { width: 44px; height: 44px; min-height: 0; }
   #speed { top: 62px; font-size: 14px; }
   #hint { font-size: 11px; }
+  #aufschlagWahl { bottom: max(44px, calc(env(safe-area-inset-bottom) + 26px)); }
+  #aufschlagWahl button { padding: 5px 9px; font-size: 12px; }
   #toast { font-size: 15px; top: 20%; }
   #msgHead { font-size: 30px; }
   #msgSub { font-size: 15px; }

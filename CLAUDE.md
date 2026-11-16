@@ -17,6 +17,7 @@ python tools/server.py          # http://localhost:8765, ohne Zwischenspeicher
 node tools/sim.mjs 0 1 mittel hard 3    # Computer gegen Computer, ohne Grafik
 node tools/logic.mjs            # Turnier, Karriere und Saison (ATP Race) durchrechnen
 node tools/rookie.mjs           # Neuling gegen Profi auf jeder Schwierigkeit
+node tools/ballflug.mjs hard     # Flugbahn und Absprung jeder Schlag- und Aufschlagart messen und prüfen (auch clay, grass, indoor)
 node tools/mocap.mjs            # Aufnahmen aus mocap/*.FBX in mocap/bewegungen.json umrechnen (--info zeigt nur an)
 ```
 
@@ -32,7 +33,8 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 | Datei | Inhalt |
 |---|---|
 | `js/data.js` | Top 100 (Stand 9.11.2026, Werte geschätzt), Turniere, Shop, Schwierigkeit, `EINHAND` |
-| `js/physics.js`, `js/rules.js` | Ballflug, Zählweise – ohne three.js, in node testbar |
+| `js/physics.js`, `js/rules.js` | Ballflug (Luftwiderstand, Magnus-Kraft, Reibung beim Aufprall), Zählweise – ohne three.js, in node testbar |
+| `js/schlaege.js` | Tabelle aller Schlagarten (`SCHLAEGE`) und Aufschlagarten (`AUFSCHLAEGE`): Tempo, Drall in U/min (`top`, `seite`, `drall`), Höhe über dem Netz – ohne three.js |
 | `js/match.js` | Zustände: intro → serveReady → toss → rally → pointOver → (changeover) → over; Computergegner |
 | `js/controls.js` | Steuerung: `klassik` (Maus), `touch` (iPad), `profi` (Tastatur), `controller` (Switch-Controller; Schwung-Zahlen `SWING_…` oben in der Datei) |
 | `js/figur.js` | Sechs Spielermodelle (`assets/spieler_a…f.glb`), Skinning auf 13 Knochen, Umfärben im Shader |
@@ -71,6 +73,15 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 - `3d models/` – eine 41-MB-Vorlage des Nutzers.
 - Die E-Mail-Adresse des Nutzers (deshalb die noreply-Adresse für Commits).
 
+## Schlagarten und Drall
+
+- Der Drall eines Balls ist `{ top, seite, drall }` in Umdrehungen pro Minute: `top` + = Topspin, − = Slice; `seite` + = Kurve nach rechts
+  (in Flugrichtung); `drall` + = springt beim Aufprall nach rechts weg (Kick). Die Tabelle gilt für Rechtshänder, `match.js` spiegelt für Linkshänder.
+- Eine Steuerung gibt beim Schlag `type` an (`drive`, `flach`, `topspin`, `slice`, `drop`, `lob`), beim Aufschlag `art`
+  (`gerade`, `slice`, `kick`, `unten`; ohne Angabe: erster gerade, zweiter Kick). Zusätzlich darf sie in `schlag` eigene Zahlen mitgeben,
+  die über die Tabelle gelegt werden, z. B. `{ type: 'drive', schlag: { top: 3400, tempo: [28, 28] } }` – gedacht für die Apple Watch.
+- Stoppball und Aufschlag von unten haben kein festes Tempo, sondern `bogen` (Höhe über dem Netz); `solveBogen` sucht das Tempo dazu.
+
 ## Bekannte Grenzen
 
 - Die Spielermodelle kommen aus 3D AI Studio (nur starre T-Pose-Modelle); das Skelett rechnet das Spiel selbst. Keine Finger.
@@ -78,4 +89,5 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 - Die Seiten werden nicht getauscht; beim Seitenwechsel gehen die Spieler nur zur Bank.
 - Laufen ist ein gebauter Schrittzyklus, keine Aufnahme. Slice-Topspin-Unterschiede bei einhändigen Spielern fehlen.
 - Spielstärke und Ballwechsel-Länge sind nur grob eingestellt.
+- Drall: Der Schlag des Gegners nimmt den Drall des ankommenden Balls nicht auf. Die Figur hat für die neuen Schlagarten und den Aufschlag von unten keine eigenen Bewegungen (Topspin- bzw. Vorhand-Slice-Bewegung).
 - Punkte: echte ATP-Werte je Runde (Regeln 2026), aber kleinere Felder (Grand Slam 32, Masters 16) und keine ATP-500/250-Turniere.

@@ -9,6 +9,12 @@
 //   peek(serve)   -> aktuelle Eingabe (für die Ziel-Anzeige) oder null
 //   consume()     -> Eingabe für den Schlag abholen (oder null, wenn nichts gedrückt wurde)
 //   takeServe()   -> Eingabe für den Aufschlag, sobald sie abgeschickt wurde
+//
+// Aufschlagart: 'gerade', 'slice', 'kick' oder 'unten' (siehe js/schlaege.js). Sie steht in "art" der Aufschlag-Eingabe.
+// Fehlt sie, nimmt das Match den Standard: erster Aufschlag gerade, zweiter Kick.
+// Eine Steuerung darf außerdem in "schlag" eigene Zahlen mitgeben, z. B. { top: 3400, seite: -500, tempo: 31 }.
+
+import { AUFSCHLAG_ARTEN } from './schlaege.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const POWER_MAX = 1.4;
@@ -60,6 +66,7 @@ export class Controls {
     this.pad = { connected: false, name: '', x: 0, f: 0, btn: {}, motion: false };
     this.schwung = { aktiv: false, t0: 0, peak: 0, hoch: 0, ende: -9 };
     this.padAt = -9;              // wann der letzte Controller-Schlag ausgelöst wurde
+    this.aufschlagArt = null;     // gewählte Aufschlagart (null = Standard: erster gerade, zweiter Kick)
     this.onHint = null;           // wird von app.js gesetzt: kurzer Hinweis-Text auf dem Bildschirm
     // Zum Fehlersuchen: Wie viele Meldungen kommen vom Controller/Schläger an, wie viele Schwünge von der Uhr?
     this.diag = { pakete: 0, uhr: 0, letzter: '–' };
@@ -88,6 +95,7 @@ export class Controls {
     const keepAim = this.mode === 'klassik' && ctx === 'rally' ? 0 : 0;
     this.ctx = ctx;
     this.reset();
+    if (ctx === 'serve') this.aufschlagArt = null;      // vor jedem Aufschlag gilt wieder der Standard
     this.aim = keepAim;
   }
 
@@ -116,14 +124,18 @@ export class Controls {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(k)) e.preventDefault();
     if (this.keys[k] === down) return;
     this.keys[k] = down;
+    // Tasten 1 bis 4 wählen die Aufschlagart: 1 = gerade, 2 = Slice, 3 = Kick, 4 = von unten
+    if (down && this.ctx === 'serve' && '1234'.includes(k)) this.aufschlagArt = AUFSCHLAG_ARTEN[+k - 1];
     if (this.mode !== 'profi') return;
-    const shot = { ' ': 'drive', j: 'drive', k: 'slice', l: 'lob', i: 'drop' }[k];
+    const shot = { ' ': 'drive', j: 'drive', k: 'slice', l: 'lob', i: 'drop', u: 'flach', o: 'topspin' }[k];
     if (!shot) return;
     if (down) {
-      this.charging = true; this.power = 0; this.type = shot; this.committed = null;
+      this.charging = true; this.power = 0; this.type = shot; this.committed = null; this.taste = k;
     } else if (this.charging && this.type === shot) {
       this.charging = false;
-      this.committed = { type: shot, power: this.power };
+      // Beim Aufschlag wählt die Taste die Art: J = gerade, K = Slice, L = Kick, I = von unten (Leertaste = Standard)
+      const art = { j: 'gerade', k: 'slice', l: 'kick', i: 'unten' }[this.taste] || this.aufschlagArt;
+      this.committed = { type: shot, power: this.power, art };
       if (this.ctx === 'serve') this.serveOut = this.profiRaw(this.committed);
     }
   }
@@ -132,7 +144,7 @@ export class Controls {
     const K = this.keys;
     const lr = (K.ArrowRight || K.d ? 1 : 0) - (K.ArrowLeft || K.a ? 1 : 0);
     const ud = (K.ArrowUp || K.w ? 1 : 0) - (K.ArrowDown || K.s ? 1 : 0);
-    if (this.ctx === 'serve') return { type: 'serve', aim: lr * 0.85, power: c.power, committed: true };
+    if (this.ctx === 'serve') return { type: 'serve', art: c.art, aim: lr * 0.85, power: c.power, committed: true };
     return { type: c.type, aimMode: 'abs', aim: lr * 0.88, depth: 0.78 + ud * 0.16, power: clamp(c.power, 0.2, 1), committed: true };
   }
 
@@ -173,11 +185,12 @@ export class Controls {
     }
     if (!this.enabled || this.mode !== 'controller') return;
     // Tasten wie auf der Switch: A = Topspin, B = Slice, X = Lob, Y = Stoppball
-    // (Mit einer Taste darf man immer aufschlagen und schmettern – dafür steht das "true" am Ende.)
-    if (neu.a && !alt.a) this.commitPad('drive', 0.75, true);
-    if (neu.b && !alt.b) this.commitPad('slice', 0.6, true);
-    if (neu.x && !alt.x) this.commitPad('lob', 0.6, true);
-    if (neu.y && !alt.y) this.commitPad('drop', 0.4, true);
+    // (Mit einer Taste darf man immer aufschlagen und schmettern – dafür steht das "true" in der Mitte.)
+    // Beim Aufschlag wählen die Tasten die Art: A = Standard, B = Slice, X = Kick, Y = von unten.
+    if (neu.a && !alt.a) this.commitPad('drive', 0.75, true, this.aufschlagArt);
+    if (neu.b && !alt.b) this.commitPad('slice', 0.6, true, 'slice');
+    if (neu.x && !alt.x) this.commitPad('lob', 0.6, true, 'kick');
+    if (neu.y && !alt.y) this.commitPad('drop', 0.4, true, 'unten');
     // Sobald die Uhr einmal einen Schwung gemeldet hat, zählt nur noch sie –
     // sonst würde das iPhone in der Hosentasche auch Schläge auslösen.
     if (s.schwung) this.uhrAktiv = true;
@@ -218,13 +231,14 @@ export class Controls {
     }
     // Von oben nach unten geschwungen = Slice, sonst Topspin
     const type = hochAnteil < -0.35 ? 'slice' : 'drive';
-    this.commitPad(type, 0.3 + 0.7 * kraft, senkrecht);
+    this.commitPad(type, 0.3 + 0.7 * kraft, senkrecht, this.aufschlagArt);
     this.padAt = this.time - alter;
   }
 
   // vonOben: true, wenn der Schwung senkrecht war (oder eine Taste gedrückt wurde)
-  commitPad(type, power, vonOben) {
-    this.committed = { type, power, vonOben };
+  // art: Aufschlagart ('gerade', 'slice', 'kick', 'unten') oder null für den Standard
+  commitPad(type, power, vonOben, art = null) {
+    this.committed = { type, power, vonOben, art };
     this.padAt = this.time;
     if (this.ctx === 'serve') this.serveOut = this.padRaw(this.committed, 0);
   }
@@ -240,7 +254,7 @@ export class Controls {
   padRaw(c, spaet = 0) {
     // Richtung: Wer einen Stick hat und ihn drückt, zielt damit. Sonst entscheidet das Timing.
     const ud = this.pad.f;
-    if (this.ctx === 'serve') return { type: 'serve', aim: this.pad.x * 0.85, power: Math.min(1.05, c.power + 0.1), committed: true };
+    if (this.ctx === 'serve') return { type: 'serve', art: c.art, aim: this.pad.x * 0.85, power: Math.min(1.05, c.power + 0.1), committed: true };
     const lr = this.pad.x || this.timingZiel(spaet);
     return { type: c.type, aimMode: 'abs', aim: lr * 0.88, depth: 0.78 + ud * 0.16, power: clamp(c.power, 0.2, 1), committed: true, vonOben: !!c.vonOben };
   }
@@ -332,7 +346,7 @@ export class Controls {
     const c = this.committed;
     const power = c ? c.power : this.power;
     const idle = !c && !this.charging;       // noch nichts gedrückt: nur die Richtung zeigen
-    if (this.ctx === 'serve') return { type: 'serve', aim: this.aim, power, committed, idle };
+    if (this.ctx === 'serve') return { type: 'serve', art: this.aufschlagArt, aim: this.aim, power, committed, idle };
     return { type: c ? c.type : this.type, aimMode: 'angle', aim: this.aim, power, committed, idle };
   }
 
@@ -345,14 +359,14 @@ export class Controls {
     if (len < 18) {
       if (!final) return null;
       const tapAim = clamp((s.x0 - s.w * 0.71) / (s.w * 0.2), -1, 1) * 0.7;
-      if (serve) return { type: 'serve', aim: tapAim, power: 0.55, committed: true };
+      if (serve) return { type: 'serve', art: this.aufschlagArt, aim: tapAim, power: 0.55, committed: true };
       const double = this.time - this.lastTap <= DOUBLE;
       this.lastTap = this.time;
       if (double) return { type: 'lob', aimMode: 'abs', aim: tapAim, power: 0.6, committed: true };
       return { type: 'drive', aimMode: 'abs', aim: tapAim, depth: 0.7, power: 0.5, committed: true };
     }
     const power = clamp((len - 40) / 200, 0.15, 1.15);
-    if (serve) return { type: 'serve', aim, power, committed: final };
+    if (serve) return { type: 'serve', art: this.aufschlagArt, aim, power, committed: final };
     if (dy > 18 && Math.abs(dy) > Math.abs(dx) * 0.6) {
       return { type: 'drop', aimMode: 'abs', aim, power: 0.4, committed: final };
     }

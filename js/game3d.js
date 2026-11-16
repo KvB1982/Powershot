@@ -151,7 +151,7 @@ export class Game3D {
       swing(side, kind, y, type) { self.tossK[side] = 0; self.avatars[side].swing(kind, y, type); },
       hit(h) {
         snd.hit(clamp((h.speed - 8) / 40, 0.2, 1), h.type === 'serve');
-        if (h.type === 'serve') call('serveSpeed', Math.round(h.speed * 3.6), h.side);
+        if (h.type === 'serve') call('serveSpeed', Math.round(h.speed * 3.6), h.side, h.art);
         snd.setCrowd(0.02);
       },
       bounce(b) {
@@ -245,7 +245,9 @@ export class Game3D {
     for (let i = 0; i < 2; i++) {
       const p = m.P[i], av = this.avatars[i];
       if (!av) continue;
-      const tossing = (m.state === 'toss' || m.state === 'serveReady') && m.server === i && m.mode !== 'ballmaschine';
+      const amAufschlag = (m.state === 'toss' || m.state === 'serveReady') && m.server === i && m.mode !== 'ballmaschine';
+      const vonUnten = amAufschlag && m.state === 'toss' && m.serveUnten;
+      const tossing = amAufschlag && !vonUnten;
       const st = { x: p.x, z: p.z, vx: p.vx, vz: p.vz, prep: p.prep, stroke: p.stroke, mood: m.state === 'pointOver' ? p.mood : null, ball: b };
       st.walk = m.state === 'changeover';       // beim Seitenwechsel wird aufrecht gegangen
       if (tossing) {
@@ -253,6 +255,10 @@ export class Game3D {
         st.stroke = 'sv';
         st.serveK = m.state === 'toss' ? this.tossK[i] : 0;
         st.serveT = TOSS_TIME;
+      } else if (vonUnten) {
+        // Aufschlag von unten: ausholen wie zu einem Vorhand-Slice, der Ball fällt aus der Hand
+        st.stroke = 'fh'; st.prep = 1; st.hint = 'slice';
+        st.tHit = m.tossDauer - m.tossT; st.planY = 0.75; st.volley = false;
       } else if (p.plan && m.state === 'rally') {
         // Wann und wie hoch kommt der Ball? Danach richten sich Ausholen und Schwung.
         st.tHit = p.plan.t - m.sinceHit;
@@ -270,7 +276,7 @@ export class Game3D {
     // Ball
     // Beim Aufschlag liegt der Ball in der Hand, bis er hochgeworfen wird
     const release = TOSS_TIME - TOSS_FLIGHT;
-    const holding = m.state === 'serveReady' || (m.state === 'toss' && m.tossT < release + 0.12);
+    const holding = m.state === 'serveReady' || (m.state === 'toss' && !m.serveUnten && m.tossT < release + 0.12);
     if (holding && this.avatars[m.server]) {
       const h = this.avatars[m.server].handLWorld;
       const u = m.state === 'toss' ? clamp((m.tossT - release) / 0.12, 0, 1) : 0;     // kurzer Übergang Hand → Flug
