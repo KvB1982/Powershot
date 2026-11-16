@@ -1,6 +1,8 @@
-// Powershot – Daten: Spieler, Turniere, Ausrüstung, Schwierigkeit
+// Powershot – Daten: Spieler, Turniere, Schwierigkeit (Ausrüstung: ausruestung.js, kleine Turniere: kleinetour.js)
 // Die Namen, Plätze und Punkte sind die echte Weltrangliste vom 9. November 2026.
 // Die Fähigkeitswerte und das Aussehen sind frei geschätzt (nur fürs Spiel).
+
+import { KLEINE_TURNIERE, LIGA, NACHWUCHS } from './kleinetour.js';
 
 // Die besten Spieler mit von Hand eingestellten Werten.
 // Werte: s = Aufschlag, p = Kraft, t = Tempo, c = Präzision, v = Volley
@@ -222,7 +224,8 @@ PLAYERS.forEach((p, i) => {
   L.trim = L.shirt === L.shorts ? (dark(L.shirt) ? 0xffffff : 0x1a2a4a) : (i % 2 ? L.shorts : (dark(L.shirt) ? 0xf2f2f2 : 0x1a2a4a));
 });
 export const TOP_PLAYERS = PLAYERS.slice(0, 20);
-export const playerById = (id) => PLAYERS.find((p) => p.id === id);
+// Sucht einen Spieler: zuerst bei den echten Top 100, dann bei den erfundenen Nachwuchsspielern der kleinen Tour
+export const playerById = (id) => PLAYERS.find((p) => p.id === id) || NACHWUCHS.find((p) => p.id === id);
 export const overall = (st) => Math.round((st.s + st.p + st.t + st.c + st.v) / 5);
 
 export const STAT_NAMES = { s: 'Aufschlag', p: 'Kraft', t: 'Tempo', c: 'Präzision', v: 'Volley' };
@@ -264,34 +267,13 @@ export const TOURNAMENTS = [
   T('par', 'Paris Masters', 'Paris', 'November', 'M', 'indoor', { court: 0x2a3a6a, outer: 0x1a1a22, wall: 0x101014, seats: 0x2a2a34, sky: 0x06060a, night: true }),
   T('fin', 'ATP Finals', 'Turin', 'November', 'F', 'indoor', { court: 0x1f5fb8, outer: 0x0f1a3a, wall: 0x0a0a14, seats: 0x1a1a2a, sky: 0x04040a, night: true }),
 ];
-export const tournamentById = (id) => TOURNAMENTS.find((t) => t.id === id);
+// Sucht ein Turnier: zuerst bei den großen, dann bei den kleinen (ITF, Challenger, ATP 250/500) und dem Liga-Spiel
+export const tournamentById = (id) => TOURNAMENTS.find((t) => t.id === id) || KLEINE_TURNIERE.find((t) => t.id === id) || (id === LIGA.id ? LIGA : undefined);
 export const FINALS_POINTS = { RR: 200, SF: 400, F: 500 };
 export const FINALS_MONEY = { RR: 400000, SF: 1100000, F: 2200000 };
 
 export const SURFACE_NAMES = { hard: 'Hartplatz', clay: 'Sand', grass: 'Rasen', indoor: 'Halle' };
 export const ROUND_NAMES = { R32: '1. Runde', R16: 'Achtelfinale', QF: 'Viertelfinale', SF: 'Halbfinale', F: 'Finale', W: 'Sieg', RR: 'Gruppenphase' };
-
-// ---------------------------------------------------------------
-// Ausrüstung (erfundene Marken). bonus = Pluspunkte auf die Fähigkeiten
-// ---------------------------------------------------------------
-export const SHOP = [
-  { id: 'r1', cat: 'Schläger', name: 'Blitz 100', price: 150000, bonus: { p: 2, c: 1 }, color: 0xe84a3a },
-  { id: 'r2', cat: 'Schläger', name: 'Tornado Tour', price: 600000, bonus: { p: 4, c: 2 }, color: 0x2e6fd8 },
-  { id: 'r3', cat: 'Schläger', name: 'Präzisa Pro', price: 600000, bonus: { p: 2, c: 4 }, color: 0xf2e85c },
-  { id: 'r4', cat: 'Schläger', name: 'Donner X Elite', price: 2500000, bonus: { p: 6, c: 5, s: 2 }, color: 0xff7a2a },
-  { id: 's1', cat: 'Saiten', name: 'Kontroll-Saite', price: 80000, bonus: { c: 2 }, },
-  { id: 's2', cat: 'Saiten', name: 'Power-Saite', price: 80000, bonus: { p: 1, s: 1 } },
-  { id: 's3', cat: 'Saiten', name: 'Spin-Saite Pro', price: 450000, bonus: { c: 3, s: 2 } },
-  { id: 's4', cat: 'Saiten', name: 'Darm-Saite Tour', price: 1600000, bonus: { c: 4, s: 3, v: 2 } },
-  { id: 'h1', cat: 'Schuhe', name: 'Sprint Light', price: 120000, bonus: { t: 2 }, color: 0xff4a4a },
-  { id: 'h2', cat: 'Schuhe', name: 'Court Racer', price: 500000, bonus: { t: 4 }, color: 0x2af0a0 },
-  { id: 'h3', cat: 'Schuhe', name: 'Gepard Pro', price: 2000000, bonus: { t: 7 }, color: 0xf0d02a },
-  { id: 'z1', cat: 'Zubehör', name: 'Griffband Tacky', price: 40000, bonus: { v: 2 } },
-  { id: 'z2', cat: 'Zubehör', name: 'Schweißband-Set', price: 200000, bonus: { v: 2, c: 1 } },
-  { id: 'z3', cat: 'Zubehör', name: 'Dämpfer & Profi-Griff', price: 900000, bonus: { v: 4, s: 2 } },
-];
-export const SHOP_CATS = ['Schläger', 'Saiten', 'Schuhe', 'Zubehör'];
-export const shopById = (id) => SHOP.find((s) => s.id === id);
 
 // ---------------------------------------------------------------
 // Schwierigkeit: ai = Faktoren für den Gegner, me = Hilfen für dich

@@ -12,6 +12,8 @@ import { loadMocap } from './mocap.js';
 import * as D from './data.js';
 import * as TN from './tournament.js';
 import * as CA from './career.js';
+import * as AU from './ausruestung.js';
+import * as KT from './kleinetour.js';
 import * as SE from './season.js';
 import { bracketHtml, timelineHtml, raceHtml, pointsHtml } from './saisonansicht.js';
 
@@ -115,7 +117,8 @@ function optionRow(label, key, names) {
   return `<label>${label}</label><div class="row">${Object.keys(names).map((k) =>
     `<button class="${settings[key] === k ? 'sel' : ''}" data-a="set" data-v="${key}:${k}">${names[k]}</button>`).join('')}</div>`;
 }
-const catTag = (def) => `<span class="tag ${def.cat === 'GS' ? 'gs' : def.cat === 'M' ? 'm' : 'f'}">${def.catName}</span>`;
+const CAT_KLASSE = { GS: 'gs', M: 'm', F: 'f', A500: 'a500', A250: 'a250', CH: 'ch', ITF: 'itf', LIGA: 'itf' };
+const catTag = (def) => `<span class="tag ${CAT_KLASSE[def.cat] || 'f'}">${def.catName}</span>`;
 // Die 100 Spieler in Seiten zu je 20: Knöpfe "1–20", "21–40" …
 const pageOf = (id) => { const p = D.playerById(id); return p ? Math.floor((p.rank - 1) / 20) : 0; };
 const pagePlayers = (page) => D.PLAYERS.slice(page * 20, page * 20 + 20);
@@ -471,15 +474,15 @@ function renderTournament() {
     const pay = T.humanId ? TN.payout(T, T.humanId) : null;
     top = `<div class="panel center"><h2 class="gold">🏆 ${esc(T.players[T.champion].name)}</h2>
       <p>gewinnt ${def.name}${T.champion === T.humanId ? ' – das bist du! Glückwunsch!' : '.'}</p>
-      ${pay && pay.label ? `<p class="dim">Dein Ergebnis: ${D.ROUND_NAMES[pay.label]}</p>` : ''}
+      ${pay && pay.label && def.cat !== 'LIGA' ? `<p class="dim">Dein Ergebnis: ${D.ROUND_NAMES[pay.label]}</p>` : ''}
       <button class="primary" data-a="tourDone">Weiter</button></div>`;
   } else if (m) {
     const oppId = m.a === T.humanId ? m.b : m.a;
     const opp = getPlayer(oppId), me = getPlayer(T.humanId);
-    top = `<div class="panel"><div class="center dim">${D.ROUND_NAMES[label]}${m.group != null ? ' · Gruppe ' + 'AB'[m.group] : ''}</div>
+    top = `<div class="panel"><div class="center dim">${def.cat === 'LIGA' ? 'Liga-Spiel' : D.ROUND_NAMES[label]}${m.group != null ? ' · Gruppe ' + 'AB'[m.group] : ''}</div>
       <div class="vs"><div><div class="who">${flag(me.country)} ${esc(me.short)}</div><div class="dim">Stärke ${D.overall(me.stats)}</div></div>
       <div class="x">gegen</div>
-      <div><div class="who">${flag(opp.country)} ${esc(opp.short)}</div><div class="dim">Nr. ${T.players[oppId].seed} der Setzliste · Stärke ${D.overall(opp.stats)}</div></div></div>
+      <div><div class="who">${flag(opp.country)} ${esc(opp.short)}</div><div class="dim">${def.cat === 'LIGA' ? 'Spieler des anderen Vereins' : 'Nr. ' + T.players[oppId].seed + ' der Setzliste'} · Stärke ${D.overall(opp.stats)}</div></div></div>
       <div class="center"><button class="primary" data-a="tourPlay">Match spielen ›</button></div></div>`;
   } else {
     top = `<div class="panel center"><p>${T.humanId ? 'Du bist ausgeschieden.' : 'Du spielst dieses Turnier nicht mit.'}</p>
@@ -502,12 +505,13 @@ actions.tourPlay = () => {
   const oppId = m.a === T.humanId ? m.b : m.a;
   const roundIdx = T.rounds.length;
   startMatch({
-    me: getPlayer(T.humanId), opp: getPlayer(oppId), def, title: `${def.name} · ${D.ROUND_NAMES[TN.currentLabel(T)]}`,
+    me: getPlayer(T.humanId), opp: getPlayer(oppId), def, title: def.cat === 'LIGA' ? def.name : `${def.name} · ${D.ROUND_NAMES[TN.currentLabel(T)]}`,
     onEnd: (res) => {
       TN.playRound(T, { winner: res.won ? T.humanId : oppId, score: res.score, setDiff: res.setDiff });
       if (ctxT.season) SE.saveSeason(season);
       if (ctxT.career) {
-        const ups = CA.addXp(career, res.won ? 60 + 25 * roundIdx : 25);
+        // Müde werden, Saiten abnutzen, Erfahrung sammeln
+        const ups = CA.matchGespielt(career, res.won, roundIdx);
         CA.saveCareer(career);
         if (ups) return showInfo('Level ' + career.level + '!', 'Du hast 3 neue Fähigkeitspunkte bekommen. Verteile sie im Karriere-Menü unter „Fähigkeiten“.', 'tourShow');
       }
@@ -520,16 +524,31 @@ actions.tourSim = () => { TN.simulateRest(ctxT.T); if (ctxT.career) CA.saveCaree
 actions.tourDone = () => {
   if (ctxT.season) return seasonTournamentDone();
   if (!ctxT.career) return actions.home();
-  const s = CA.finishTournament(career);
-  const lines = [
-    s.label ? `Dein Ergebnis: <b>${D.ROUND_NAMES[s.label]}</b>` : 'Du hast nicht teilgenommen.',
-    `Ranglistenpunkte: <b>${s.points}</b> · Preisgeld: <b class="gold">${money(s.money)}</b>`,
-    `Du stehst jetzt auf <b>Platz ${s.rank}</b> der Weltrangliste.`,
-  ];
-  if (s.seasonOver) lines.push(`<b>Die Saison ist zu Ende!</b> Weiter geht es mit der Saison ${career.season}.`);
-  if (s.money > 0) sound.coin();
-  showInfo(s.name, lines.join('<br>'), 'career');
+  wocheZeigen(CA.finishTournament(career));
 };
+
+// Die Abrechnung nach einer Woche: Was kam rein, was ging raus?
+function wocheZeigen(s) {
+  const r = s.rechnung, zeilen = [];
+  const z = (name, betrag) => { if (betrag) zeilen.push(`<tr><td>${name}</td><td class="num ${betrag > 0 ? 'plus' : 'minus'}">${betrag > 0 ? '+' : '−'} ${money(Math.abs(betrag))}</td></tr>`); };
+  z(s.cat === 'stunden' ? 'Lohn als Tennislehrer' : s.cat === 'LIGA' ? 'Geld vom Verein' : 'Preisgeld', s.money);
+  for (const g of r.sponsoren) z('Sponsor: ' + esc(g.name), g.geld);
+  z('Flug', -r.flug); z('Hotel', -r.hotel); z('Essen und Taxi', -r.essen);
+  z('Trainer und Physio', -r.team); z('Schläger neu bespannen', -r.bespannen); z('Weiße Leih-Kleidung', -r.leihe);
+  const lines = [];
+  if (s.cat === 'LIGA') lines.push(s.label === 'W' ? '<b>Gewonnen!</b> Dein Verein freut sich.' : 'Verloren – aber das Antrittsgeld gibt es trotzdem.');
+  else if (s.label) lines.push(`Dein Ergebnis: <b>${D.ROUND_NAMES[s.label]}</b> · Ranglistenpunkte: <b>${s.points}</b>`);
+  else lines.push(s.cat === 'pause' ? 'Du hast dich ausgeruht und bist wieder ganz frisch.' : 'Du hast eine Woche lang Kindern Tennis beigebracht.');
+  if (s.grossSieger) lines.push(`<span class="dim">${esc(s.grossName)} hat ${esc(s.grossSieger)} gewonnen.</span>`);
+  if (r.wildcard) lines.push('<span class="dim">Du hast eine Wildcard eingesetzt.</span>');
+  if (r.teamWeg) lines.push('<b>Dein Geld hat für das Team nicht gereicht.</b> Trainer und Physio haben gekündigt.');
+  lines.push(`<table class="rechnung">${zeilen.join('')}<tr class="summe"><td>Diese Woche</td><td class="num ${s.netto >= 0 ? 'plus' : 'minus'}">${s.netto >= 0 ? '+' : '−'} ${money(Math.abs(s.netto))}</td></tr></table>`);
+  lines.push(`Du stehst jetzt auf <b>Platz ${s.rank}</b> der Weltrangliste und hast <b class="gold">${money(career.money)}</b>.`);
+  for (const g of s.neueSponsoren) lines.push(`<b class="gold">Neuer Sponsor: ${esc(g.name)}!</b> ${esc(g.text)} (${money(g.geld)} pro Turnier)`);
+  if (s.seasonOver) lines.push(`<b>Die Saison ist zu Ende!</b> Weiter geht es mit der Saison ${career.season}. Du hast wieder ${CA.WILDCARDS_PRO_SAISON} Wildcards.`);
+  if (s.netto > 0) sound.coin();
+  showInfo(s.name, lines.join('<br>'), 'career');
+}
 
 // ---------------------------------------------------------------
 // Karriere
@@ -545,7 +564,7 @@ let careerTab = 'start';
 actions.career = (v) => {
   if (!career) return renderCreate();
   if (career.tournament) { ctxT = { T: career.tournament, def: D.tournamentById(career.tournament.defId), career: true }; return renderTournament(); }
-  if (['start', 'kalender', 'rangliste', 'skills', 'shop'].includes(v)) careerTab = v;
+  if (['start', 'kalender', 'rangliste', 'skills', 'shop', 'team'].includes(v)) careerTab = v;
   enterMenu();
   renderCareer();
 };
@@ -568,7 +587,7 @@ function renderCreate() {
       <label>Muster der Kleidung</label><div class="row">${['Einfarbig', 'Bruststreifen', 'Farbige Ärmel', 'Seitenstreifen', 'Schulterpartie'].map((n, k) => `<button class="${draft.pattern === k ? 'sel' : ''}" data-a="draft" data-v="pattern:${k}">${n}</button>`).join('')}</div>
       <label>Zweite Farbe</label>${sw('trim', [0xffffff, 0x1a1a1a, 0x1a2a4a, 0xe84a3a, 0xf2e85c, 0x1fb87a])}
     </div>
-    <p class="dim">Du startest auf Platz 101 der Weltrangliste mit 50.000 $ und 10 Fähigkeitspunkten.</p>
+    <p class="dim">Du startest ganz unten: Platz 2000 der Weltrangliste, ${money(CA.START_GELD)} und 10 Fähigkeitspunkte. Zuerst spielst du kleine ITF-Turniere – und arbeitest dich hoch bis nach Wimbledon.</p>
     <button class="primary" data-a="createCareer">Karriere starten ›</button>`);
 }
 actions.draft = (v) => {
@@ -590,59 +609,154 @@ actions.createCareer = () => {
   renderCareer();
 };
 
+// '+2 Kraft, +1 Präzision' aus { p: 2, c: 1 }
+const bonusText = (b) => Object.entries(b).map(([k, v]) => `${v > 0 ? '+' : '−'}${Math.abs(v)} ${D.STAT_NAMES[k]}`).join(', ');
+const sterne = (n) => (n ? '⭐'.repeat(n) : '');
+const BELAG_KURZ = { hard: 'Hartplatz', clay: 'Sand', grass: 'Rasen', indoor: 'Halle' };
+let shopCat = 'Schläger';
+
+// Ein Turnier, das diese Woche zur Auswahl steht
+function angebotKarte(a) {
+  const { def, zugang, kosten, fehlt } = a, c = career;
+  const ort = def.klein ? `${def.city} · ${KT.ERDTEILE[def.erdteil]}` : `${def.city} · ${KT.ERDTEILE[KT.ERDTEIL_GROSS[def.id]]}`;
+  const sieg = def.cat === 'F' ? 'Die besten 8 des Jahres' : `${def.draw} Spieler · Sieg: ${def.points.W} Punkte und ${money(def.money.W)}`;
+  const teile = [`Flug ${money(kosten.flug)}`];
+  if (kosten.hotel) teile.push(`Hotel ${money(kosten.hotel)}`);
+  teile.push(`Essen ${money(kosten.essen)}`);
+  const reise = `Reise: <b>${money(kosten.summe)}</b> <span class="dim">(${teile.join(' + ')}${kosten.hotel ? '' : ' · das Hotel zahlt das Turnier'})</span>`;
+  let knopf;
+  if (!zugang.ok && !zugang.wildcard) knopf = `<button disabled>🔒 Erst ab Platz ${zugang.bis}</button>`;
+  else if (fehlt) knopf = `<button disabled>Dir fehlen ${money(fehlt)}</button>`;
+  else if (!zugang.ok) knopf = `<button data-a="careerPlay" data-v="${def.id}:wc">🎟️ Mit Wildcard hinreisen (noch ${c.wildcards})</button>`;
+  else knopf = `<button class="primary" data-a="careerPlay" data-v="${def.id}">Hinreisen und spielen ›</button>`;
+  return `<div class="angebot ${zugang.ok ? '' : 'zu'}">
+    <div class="kopf"><b>${esc(def.name)}</b> ${catTag(def)}</div>
+    <div class="dim">${esc(ort)} · ${BELAG_KURZ[def.surface]} · ${sieg}</div>
+    <div>${reise}</div>${knopf}</div>`;
+}
+
+function frischeBalken(f) {
+  const farbe = f >= 70 ? '#3ad87a' : f >= 50 ? '#f2c02a' : '#e8442a';
+  return `<i class="frische"><b style="width:${f}%;background:${farbe}"></b></i>`;
+}
+
 function renderCareer() {
-  const c = career, me = CA.mePlayer(c), rk = CA.myRank(c), def = CA.nextTournament(c);
-  const tabs = [['start', 'Übersicht'], ['kalender', 'Kalender'], ['rangliste', 'Weltrangliste'], ['skills', 'Fähigkeiten' + (c.skillPoints ? ' ●' : '')], ['shop', 'Ausrüstung']];
+  const c = career, me = CA.mePlayer(c), rk = CA.myRank(c), def = CA.nextTournament(c), stufe = CA.vertragsStufe(c);
+  const tabs = [['start', 'Übersicht'], ['shop', 'Ausrüstung'], ['team', 'Team & Sponsoren'], ['skills', 'Fähigkeiten' + (c.skillPoints ? ' ●' : '')], ['kalender', 'Kalender'], ['rangliste', 'Weltrangliste']];
   let body = '';
   if (careerTab === 'start') {
-    const qual = CA.qualified(c, def);
+    const sp = CA.sponsorGeld(c), lohn = CA.lohn(c), muede = CA.frischeAbzug(c.frische);
+    const saite = CA.traegt(c, 'Saiten');
+    const tipps = [];
+    if (!CA.traegt(c, 'Schläger')) tipps.push('Du spielst noch mit dem alten Vereinsschläger. Unter „Ausrüstung“ gibt es bessere.');
+    if (saite && c.saitenRest <= 0) tipps.push('Deine Saiten sind müde und bringen nichts mehr. Lass unter „Ausrüstung“ neu bespannen.');
+    if (c.frische < 70) tipps.push(`Du bist müde (${bonusText(muede)}). Eine Pause oder ein Physio hilft.`);
+    if (stufe >= 0 && !c.vertrag.schlaeger) tipps.push('Eine Schläger-Marke würde dich ausrüsten! Schau unter „Team & Sponsoren“.');
     body = `
       <div class="panel"><div class="kpi">
-        <div><b>${rk}.</b><span>Weltrangliste</span></div>
-        <div><b>${CA.ranking(c).find((p) => p.me).points}</b><span>Punkte</span></div>
-        <div><b class="gold">${money(c.money)}</b><span>Preisgeld</span></div>
+        <div><b>${rk}.</b><span>Weltrangliste · ${CA.ranking(c).find((p) => p.me).points} Punkte</span></div>
+        <div><b class="gold">${money(c.money)}</b><span>Geld</span></div>
+        <div><b>${c.frische} %</b>${frischeBalken(c.frische)}<span>Frische</span></div>
+        <div><b>${CA.fans(c)} ⭐</b><span>Fans</span></div>
         <div><b>Level ${c.level}</b><span>${c.xp} / ${CA.xpNeed(c.level)} Erfahrung</span></div>
         <div><b>${c.titles}</b><span>Titel</span></div>
-      </div></div>
-      <div class="cols">
-        <div class="panel"><div class="dim">Saison ${c.season} · Turnier ${c.week + 1} von ${D.TOURNAMENTS.length}</div>
-          <h2 style="margin:6px 0">${def.name}</h2>
-          <p>${catTag(def)} · ${def.city} · ${def.month} · ${D.SURFACE_NAMES[def.surface]}</p>
-          <p class="dim">${def.cat === 'F' ? 'Nur die besten 8 der Weltrangliste. ' + (qual ? 'Du bist dabei!' : 'Du bist diesmal nicht qualifiziert.') : def.draw + ' Spieler · Sieger: ' + def.points.W + ' Punkte, ' + money(def.money.W)}</p>
-          <div class="row"><button class="primary" data-a="careerPlay">${qual ? 'Turnier spielen ›' : 'Turnier ansehen ›'}</button>
-          ${qual ? '<button data-a="careerSkip">Auslassen</button>' : ''}</div></div>
+      </div>${tipps.map((t) => `<p class="tipp">💡 ${t}</p>`).join('')}</div>
+      <div class="cols breit">
+        <div class="panel"><div class="dim">Saison ${c.season} · ${def.month} · Woche ${c.week + 1} von ${D.TOURNAMENTS.length}</div>
+          <h2 style="margin:6px 0">Wohin reist du diese Woche?</h2>
+          <label>So reist du</label><div class="row">${Object.entries(AU.REISEN).map(([k, r]) => `<button class="${c.reise === k ? 'sel' : ''}" data-a="careerReise" data-v="${k}">${r.name}</button>`).join('')}</div>
+          <p class="dim klein">${AU.REISEN[c.reise].text} ${AU.REISEN[c.reise].frische ? `(Frische ${AU.REISEN[c.reise].frische > 0 ? '+' : '−'}${Math.abs(AU.REISEN[c.reise].frische)})` : ''}
+            ${lohn ? ` · Dein Team kostet ${money(lohn)} pro Woche.` : ''}${sp.summe ? ` · Deine Sponsoren zahlen ${money(sp.summe)} pro Turnier.` : ''}</p>
+          ${CA.angebot(c).map(angebotKarte).join('')}
+          <label>Oder bleib zu Hause</label>
+          <div class="row">
+            <button data-a="careerLiga">Liga-Spiel für den Verein <small>ein Match · ${money(KT.LIGA.money.F)} bis ${money(KT.LIGA.money.W)}</small></button>
+            <button data-a="careerWoche" data-v="stunden">Tennisstunden geben <small>+ ${money(KT.STUNDEN_GELD)}, kein Match</small></button>
+            <button data-a="careerWoche" data-v="pause">Pause machen <small>danach 100 % frisch</small></button>
+          </div></div>
         <div class="panel">${playerCard(me, 'career', false)}
           <div class="row" style="margin-top:10px"><button class="grow" data-a="training" data-v="career" ${c.trainingLeft <= 0 ? 'disabled' : ''}>Training (${c.trainingLeft} übrig)</button></div>
-          ${c.skillPoints ? `<p class="gold">Du hast ${c.skillPoints} Fähigkeitspunkte zu verteilen!</p>` : ''}</div>
+          ${c.skillPoints ? `<p class="gold">Du hast ${c.skillPoints} Fähigkeitspunkte zu verteilen!</p>` : ''}
+          <p class="dim klein">Wildcards in dieser Saison: ${c.wildcards}. Mit einer Wildcard (Einladung) darfst du bei einem Turnier mitspielen, für das dein Platz knapp nicht reicht.</p></div>
       </div>`;
   } else if (careerTab === 'kalender') {
     const done = Object.fromEntries(c.history.filter((h) => h.season === c.season).map((h) => [h.tid, h]));
-    body = `<div class="panel scroll"><table><tr><th>Monat</th><th>Turnier</th><th>Belag</th><th>Dein Ergebnis</th><th class="num">Punkte</th></tr>
-      ${D.TOURNAMENTS.map((t, i) => `<tr class="${i === c.week ? 'me' : ''}"><td>${t.month}</td><td>${t.name} ${catTag(t)}</td><td>${D.SURFACE_NAMES[t.surface]}</td>
-        <td>${done[t.id] ? (done[t.id].label ? D.ROUND_NAMES[done[t.id].label] : '–') : i === c.week ? 'als Nächstes' : ''}</td><td class="num">${done[t.id] ? done[t.id].points : ''}</td></tr>`).join('')}
-      </table></div>`;
+    body = `<div class="panel scroll"><table><tr><th>Monat</th><th>Großes Turnier</th><th>Das hast du gemacht</th><th class="num">Punkte</th><th class="num">Geld</th></tr>
+      ${D.TOURNAMENTS.map((t, i) => { const h = done[t.id]; return `<tr class="${i === c.week ? 'me' : ''}"><td>${t.month}</td><td>${t.name} ${catTag(t)}</td>
+        <td>${h ? esc(h.name) + (h.label && h.label !== 'W' ? ' · ' + D.ROUND_NAMES[h.label] : h.label === 'W' ? ' · 🏆 Sieg' : '') : i === c.week ? 'diese Woche' : ''}</td>
+        <td class="num">${h ? h.points : ''}</td><td class="num ${h && h.netto < 0 ? 'minus' : ''}">${h && h.netto != null ? money(h.netto) : ''}</td></tr>`; }).join('')}
+      </table><p class="dim klein">Geld = was in der Woche übrig blieb (Preisgeld und Sponsoren minus Reise und Team).</p></div>`;
   } else if (careerTab === 'rangliste') {
     const list = CA.ranking(c);
-    const rows = list.filter((p) => p.rank <= 30 || Math.abs(p.rank - rk) <= 4);
+    const rows = list.filter((p) => p.rank <= 30 || p.me || (rk <= 104 && Math.abs(p.rank - rk) <= 4));
     body = `<div class="panel scroll"><table><tr><th class="num">Platz</th><th>Spieler</th><th class="num">Punkte</th></tr>
       ${rows.map((p, i) => `${i > 0 && rows[i - 1].rank < p.rank - 1 ? '<tr><td colspan="3" class="dim center">…</td></tr>' : ''}
         <tr class="${p.me ? 'me' : ''}"><td class="num">${p.rank}</td><td>${flag(p.country)} ${esc(p.name)}</td><td class="num">${p.points.toLocaleString('de-DE')}</td></tr>`).join('')}
-      </table></div>`;
+      </table>${rk > 100 ? '<p class="dim klein">Hinter den Top 100 stehen in echt noch rund 2000 Spieler. Dein Platz dort wird aus deinen Punkten geschätzt.</p>' : ''}</div>`;
   } else if (careerTab === 'skills') {
-    const eff = CA.effectiveStats(c);
+    const eff = CA.effectiveStats(c), liste = CA.bonusListe(c);
     body = `<div class="panel"><p>Freie Fähigkeitspunkte: <b class="gold">${c.skillPoints}</b> · Level ${c.level}. Punkte gibt es für jedes neue Level (Matches und Training bringen Erfahrung).</p>
       <table>${Object.keys(D.STAT_NAMES).map((k) => `<tr><td><b>${D.STAT_NAMES[k]}</b><br><small class="dim">${SKILL_INFO[k]}</small></td>
-        <td style="width:40%"><div class="stat" style="grid-template-columns:1fr 60px"><i><b style="width:${eff[k]}%"></b></i><span>${c.skills[k]}${eff[k] > c.skills[k] ? ' <span class="gold">+' + (eff[k] - c.skills[k]) + '</span>' : ''}</span></div></td>
-        <td class="right"><button data-a="skill" data-v="${k}" ${c.skillPoints <= 0 || c.skills[k] >= 95 ? 'disabled' : ''}>+1</button></td></tr>`).join('')}</table></div>`;
+        <td style="width:40%"><div class="stat" style="grid-template-columns:1fr 60px"><i><b style="width:${eff[k]}%"></b></i><span>${c.skills[k]}${eff[k] !== c.skills[k] ? ` <span class="${eff[k] > c.skills[k] ? 'gold' : 'minus'}">${eff[k] > c.skills[k] ? '+' : '−'}${Math.abs(eff[k] - c.skills[k])}</span>` : ''}</span></div></td>
+        <td class="right"><button data-a="skill" data-v="${k}" ${c.skillPoints <= 0 || c.skills[k] >= 95 ? 'disabled' : ''}>+1</button></td></tr>`).join('')}</table></div>
+      <div class="panel"><h3 style="margin-top:0">Woher kommen deine Pluspunkte?</h3>
+        ${liste.length ? `<table>${liste.map((b) => `<tr><td>${esc(b.name)}</td><td class="gold">${bonusText(b.bonus)}</td></tr>`).join('')}</table>` : '<p class="dim">Noch keine. Ausrüstung und ein gutes Team bringen Pluspunkte.</p>'}
+        <p class="dim klein">Schuhe zählen für den Belag des Turniers (hier: Hartplatz).</p></div>`;
   } else if (careerTab === 'shop') {
-    body = `<p>Dein Geld: <b class="gold">${money(c.money)}</b></p>` + D.SHOP_CATS.map((cat) => `<div class="panel"><h3 style="margin-top:0">${cat}</h3><div class="grid">
-      ${D.SHOP.filter((s) => s.cat === cat).map((s) => {
-        const own = c.owned.includes(s.id), on = c.equipped[cat] === s.id;
-        const bonus = Object.entries(s.bonus).map(([k, v]) => `+${v} ${D.STAT_NAMES[k]}`).join(', ');
-        return `<div class="panel" style="margin:0"><b>${s.name}</b><br><small class="gold">${bonus}</small><br>
-          ${own ? `<button class="${on ? 'sel' : ''}" data-a="equip" data-v="${s.id}" style="margin-top:8px">${on ? '✓ Ausgerüstet' : 'Ausrüsten'}</button>`
-            : `<button data-a="buy" data-v="${s.id}" style="margin-top:8px" ${c.money < s.price ? 'disabled' : ''}>Kaufen · ${money(s.price)}</button>`}</div>`;
-      }).join('')}</div></div>`).join('');
+    const karte = (s) => {
+      const frei = CA.gratis(c, s, stufe), own = c.owned.includes(s.id) || frei, on = c.equipped[s.cat] === s.id;
+      let info = '', knopf;
+      if (s.cat === 'Schläger') info = `<span class="tag">${s.typ}</span><br><small class="gold">${bonusText(s.bonus)}</small>${s.profis ? `<br><small class="dim">Diese Reihe spielt z. B. ${esc(s.profis)}</small>` : ''}`;
+      else if (s.cat === 'Saiten') info = `<small class="gold">${bonusText(s.bonus)}</small><br><small class="dim">${esc(s.text)} Hält ${CA.saitenLeben(c, s)} Matches.</small>`;
+      else if (s.cat === 'Schuhe') info = `<small class="gold">Tempo: ${Object.entries(s.tempo).map(([b, v]) => `${BELAG_KURZ[b]} +${v}`).join(' · ')}</small><br><small class="dim">${esc(s.text)}</small>`;
+      else info = `<small class="gold">${[s.bonus ? bonusText(s.bonus) : '', sterne(s.sterne)].filter(Boolean).join(' · ')}</small>${s.text ? `<br><small class="dim">${esc(s.text)}</small>` : ''}`;
+      if (s.cat === 'Saiten') {
+        knopf = on && c.saitenRest > 0 ? `<button class="sel" disabled>✓ Aufgezogen · noch ${c.saitenRest} ${c.saitenRest === 1 ? 'Match' : 'Matches'}</button>`
+          : `<button data-a="buy" data-v="${s.id}" ${!frei && c.money < s.price ? 'disabled' : ''}>Bespannen · ${frei ? 'gratis' : money(s.price)}</button>`;
+      } else if (s.cat === 'Schuhe') {
+        knopf = own ? `<button class="sel" disabled>✓ Im Schrank${frei ? ' (vom Ausrüster)' : ''}</button>` : `<button data-a="buy" data-v="${s.id}" ${c.money < s.price ? 'disabled' : ''}>Kaufen · ${money(s.price)}</button>`;
+      } else {
+        knopf = own ? `<button class="${on ? 'sel' : ''}" data-a="equip" data-v="${s.id}">${on ? '✓ Im Einsatz' : frei ? 'Nehmen (vom Ausrüster)' : 'Nehmen'}</button>`
+          : `<button data-a="buy" data-v="${s.id}" ${c.money < s.price ? 'disabled' : ''}>Kaufen · ${money(s.price)}</button>`;
+      }
+      const farbe = s.color != null ? s.color : s.shirt;
+      return `<div class="panel teil">${farbe != null ? `<i class="punkt" style="background:${hex(farbe)}"></i>` : ''}<b>${esc(s.name)}</b><br>${info}<br>${knopf.replace('<button', '<button style="margin-top:8px"')}</div>`;
+    };
+    const teile = AU.SHOP.filter((s) => s.cat === shopCat);
+    const marken = [...new Set(teile.map((s) => s.marke))];
+    // Schläger nach Marke sortiert anzeigen, alles andere in einer Liste
+    const liste = shopCat === 'Schläger'
+      ? marken.map((m) => `<div class="panel"><h3 style="margin-top:0">${m}${c.vertrag.schlaeger === m && stufe >= 0 ? ' <span class="tag gs">dein Ausrüster</span>' : ''}</h3><div class="grid">${teile.filter((s) => s.marke === m).map(karte).join('')}</div></div>`).join('')
+      : `<div class="panel"><div class="grid">${teile.map(karte).join('')}</div></div>`;
+    body = `<p>Dein Geld: <b class="gold">${money(c.money)}</b></p>
+      <div class="row tabs">${AU.SHOP_CATS.map((k) => `<button class="${shopCat === k ? 'sel' : ''}" data-a="shopCat" data-v="${k}">${k}</button>`).join('')}</div>
+      <p class="dim">${AU.SHOP_INFO[shopCat]}</p>${liste}`;
+  } else if (careerTab === 'team') {
+    const person = (p, aktiv, extra) => `<div class="panel teil"><b>${p.name}</b><br><small class="dim">${p.text}</small><br><small class="gold">${extra}</small><br>
+      <button class="${aktiv ? 'sel' : ''}" data-a="careerTeam" data-v="${p.id}" style="margin-top:8px">${aktiv ? '✓ In deinem Team' : p.lohn ? 'Einstellen · ' + money(p.lohn) + ' pro Woche' : 'Auswählen'}</button></div>`;
+    const S = stufe >= 0 ? AU.VERTRAGS_STUFEN[stufe] : null;
+    const next = AU.VERTRAGS_STUFEN[stufe + 1];
+    const markenWahl = (art, liste) => `<div class="row">${liste.map((m) => `<button class="${c.vertrag[art] === m ? 'sel' : ''}" data-a="careerVertrag" data-v="${art}:${m}" ${S ? '' : 'disabled'}>${m}</button>`).join('')}
+      ${c.vertrag[art] ? `<button class="ghost" data-a="careerVertrag" data-v="${art}:">Vertrag beenden</button>` : ''}</div>`;
+    const sp = CA.sponsorGeld(c);
+    body = `
+      <div class="panel"><h3 style="margin-top:0">Trainer</h3><p class="dim">Ein Trainer bringt dir mehr Erfahrung pro Match und Training. Bezahlt wird jede Woche – auch wenn du früh verlierst.</p>
+        <div class="grid">${AU.TRAINER.map((t) => person(t, c.trainer === t.id, [t.xp > 1 ? `+${Math.round((t.xp - 1) * 100)} % Erfahrung` : '', `${t.training}× Training`, t.bonus ? bonusText(t.bonus) : ''].filter(Boolean).join(' · '))).join('')}</div></div>
+      <div class="panel"><h3 style="margin-top:0">Physio</h3><p class="dim">Jedes Match macht müde. Wer müde ist, läuft langsamer. Ein Physio sorgt dafür, dass du dich schneller erholst. Deine Frische: <b>${c.frische} %</b></p>
+        <div class="grid">${AU.PHYSIOS.map((p) => person(p, c.physio === p.id, [`Erholung +${p.erholung} pro Woche`, `ein Match kostet ${p.last}`, p.bonus ? bonusText(p.bonus) : ''].filter(Boolean).join(' · '))).join('')}</div></div>
+      <div class="panel"><h3 style="margin-top:0">Ausrüster</h3>
+        <p>${S ? `Du bekommst zurzeit einen <b class="gold">${S.name}</b>: Die Sachen deiner Marke sind gratis${S.geld ? ` und die Marke zahlt dir <b>${money(S.geld)}</b> pro Turnier` : ', Geld gibt es aber noch keins'}.`
+          : `Noch will dich keine Marke ausrüsten. Ab Platz ${AU.VERTRAGS_STUFEN[0].bisPlatz} bekommst du deinen ersten Vertrag.`}
+          ${next ? `<span class="dim">Nächste Stufe ab Platz ${next.bisPlatz}: ${next.name} (${money(next.geld)} pro Turnier).</span>` : ''}</p>
+        <p class="dim klein">Geld gibt es nur, wenn du auch mit dem Schläger bzw. im Outfit deiner Marke spielst. Ab dem Profi-Vertrag baut dir die Schläger-Marke deinen Schläger nach Maß (+1 Kraft, +1 Präzision).</p>
+        <label>Schläger, Saiten und Tasche von</label>${markenWahl('schlaeger', AU.SCHLAEGER_MARKEN)}
+        <label>Kleidung und Schuhe von</label>${markenWahl('kleidung', AU.KLEIDER_MARKEN)}</div>
+      <div class="panel"><h3 style="margin-top:0">Sponsoren</h3>
+        <p>Pro Turnier bekommst du zurzeit <b class="gold">${money(sp.summe)}</b>. Deine <b>${CA.fans(c)} ⭐ Fans</b> bringen dabei ${CA.fans(c) * AU.FAN_PROZENT} % extra.
+          <span class="dim">Fans bekommst du durch Titel und schicke Outfits.</span></p>
+        <table>${AU.GELDGEBER.map((g) => { const da = c.sponsoren.includes(g.id); const w = g.wenn;
+          const bed = w.siege ? `nach ${w.siege} gewonnenen Matches` : w.titel ? 'nach deinem ersten Titel' : w.platz ? `ab Platz ${w.platz}` : '';
+          return `<tr class="${da ? '' : 'dim'}"><td>${da ? '✓' : '🔒'} <b>${g.name}</b><br><small>${da ? g.text : 'Kommt ' + bed}</small></td><td class="num">${money(g.geld)}</td></tr>`; }).join('')}</table></div>`;
   }
   show(`<div class="bar">${back()}<h2>${flag(c.country)} ${esc(c.name)}</h2><button class="ghost" data-a="careerDelete">Karriere löschen</button></div>
     <div class="tabs">${tabs.map(([k, n]) => `<button class="${careerTab === k ? 'sel' : ''}" data-a="career" data-v="${k}">${n}</button>`).join('')}</div>${body}`);
@@ -654,14 +768,20 @@ const SKILL_INFO = {
 actions.skill = (v) => { CA.raiseSkill(career, v); keepScroll(renderCareer); };
 actions.buy = (v) => { if (CA.buy(career, v)) sound.coin(); keepScroll(renderCareer); };
 actions.equip = (v) => { CA.equip(career, v); keepScroll(renderCareer); };
-actions.careerPlay = () => { ctxT = { T: CA.startTournament(career), def: CA.nextTournament(career), career: true }; renderTournament(); };
-actions.careerSkip = () => {
-  const T = CA.startTournament(career);
-  T.humanId = null;
-  TN.simulateRest(T);
+actions.shopCat = (v) => { shopCat = v; keepScroll(renderCareer); };
+actions.careerReise = (v) => { CA.setReise(career, v); keepScroll(renderCareer); };
+actions.careerTeam = (v) => { CA.setTeam(career, v); keepScroll(renderCareer); };
+actions.careerVertrag = (v) => { const [art, marke] = v.split(':'); CA.setVertrag(career, art, marke); keepScroll(renderCareer); };
+// Zu einem Turnier reisen. v = 'turnier' oder 'turnier:wc' (mit Wildcard)
+actions.careerPlay = (v) => {
+  const [id, wc] = String(v || '').split(':');
+  const T = CA.startTournament(career, id || undefined, wc === 'wc');
+  if (!T) return renderCareer();
   ctxT = { T, def: D.tournamentById(T.defId), career: true };
   renderTournament();
 };
+actions.careerLiga = () => { const T = CA.ligaSpiel(career); ctxT = { T, def: D.tournamentById(T.defId), career: true }; renderTournament(); };
+actions.careerWoche = (v) => wocheZeigen(CA.wocheOhneTurnier(career, v));
 let delArmed = false;
 actions.careerDelete = (v, el) => {
   if (!delArmed) { delArmed = true; el.textContent = 'Wirklich löschen? Nochmal tippen'; setTimeout(() => { delArmed = false; }, 4000); return; }

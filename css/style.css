@@ -60,6 +60,22 @@ button.fokus { outline: 4px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 8
 .right { text-align: right; }
 .tag { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: rgba(255, 255, 255, 0.12); }
 .tag.gs { background: #b8862a; } .tag.m { background: #2a6ab8; } .tag.f { background: #8a3ad8; }
+.tag.a500 { background: #1f8a8a; } .tag.a250 { background: #3a8a4a; } .tag.ch { background: #8a5a2a; } .tag.itf { background: #5a5a66; }
+/* Karriere: Turnier-Auswahl, Abrechnung, Shop */
+.cols.breit { grid-template-columns: 1.6fr 1fr; }
+@media (max-width: 760px) { .cols.breit { grid-template-columns: 1fr; } }
+.angebot { background: rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 10px 12px; margin: 8px 0; display: grid; gap: 4px; }
+.angebot.zu { opacity: 0.6; }
+.angebot button { justify-self: start; margin-top: 4px; }
+.klein { font-size: 12px; }
+.tipp { margin: 10px 0 0; font-size: 14px; }
+.minus { color: #ff8a7a; } .plus { color: #7ae89a; }
+table.rechnung { margin: 8px auto; min-width: min(340px, 100%); text-align: left; }
+table.rechnung .summe td { border-top: 2px solid rgba(255, 255, 255, 0.3); font-weight: 700; }
+i.frische { display: block; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.15); margin: 4px 0; overflow: hidden; }
+i.frische b { display: block; height: 100%; font-size: 0; }
+.panel.teil { margin: 0; }
+i.punkt { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 6px; vertical-align: -2px; border: 1px solid rgba(255, 255, 255, 0.4); }
 
 /* Spielerkarte */
 .pcard { text-align: left; padding: 10px 12px; display: block; width: 100%; }

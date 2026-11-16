@@ -213,7 +213,8 @@ export class Stadium {
     }
 
     // --- Zuschauer ---
-    const fill = quality === 'niedrig' ? 0.45 : 0.86;
+    // Bei kleinen Turnieren sitzen nur wenige Leute auf der Tribüne (def.zuschauer, 1 = voll)
+    const fill = (quality === 'niedrig' ? 0.45 : 0.86) * (def.zuschauer ?? 1);
     const people = seats.filter(() => Math.random() < fill);
     this.zuschauerBauen(G, people, night);
 

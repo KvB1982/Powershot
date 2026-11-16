@@ -47,6 +47,8 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 | `js/game3d.js`, `js/stadium.js`, `js/audio.js` | Darstellung, Stadion, Sound (Aufnahmen aus `sounds/`) |
 | `assets/zuschauer.webp` | 48 erfundene Zuschauer in einem Bild (8 × 6, je 128 × 192 Pixel; 32 von vorn, 16 von der Seite); `stadium.js` zeigt sie als flache Bildtafeln |
 | `js/tournament.js`, `js/career.js`, `js/app.js` | Turnierbaum, Karriere (localStorage), Menüs |
+| `js/kleinetour.js` | Kleine Tour für die Karriere: Stufen (`STUFEN`: ITF M15/M25, Challenger, ATP 250/500), 56 kleine Turniere, Flugpreise, Liga-Spiel, 40 erfundene Nachwuchsspieler – ohne three.js |
+| `js/ausruestung.js` | Shop mit echten Marken und Modellreihen (nur Namen als Text), Trainer, Physios, Reise-Arten, Ausrüster-Verträge, Geldgeber – ohne three.js |
 | `js/season.js` | Saison mit einem echten Profi: ATP Race (alle starten bei 0), Finals-Qualifikation (Top 8, Grand-Slam-Regel), localStorage – ohne three.js |
 | `js/saisonansicht.js` | Baut HTML für Turnierbaum, Saison-Zeitleiste, Race-Tabelle und Punkte-Erklärung (Aussehen in `css/style.css`) |
 | `python/` | Die ursprünglichen Pygame-Zero-Versionen (mit `pythoncore-3.14-64`, pgzero + pygame-ce) |
@@ -102,6 +104,15 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
   (`gerade`, `slice`, `kick`, `unten`; ohne Angabe: erster gerade, zweiter Kick). Zusätzlich darf sie in `schlag` eigene Zahlen mitgeben,
   die über die Tabelle gelegt werden, z. B. `{ type: 'drive', schlag: { top: 3400, tempo: [28, 28] } }` – gedacht für die Apple Watch.
 - Stoppball und Aufschlag von unten haben kein festes Tempo, sondern `bogen` (Höhe über dem Netz); `solveBogen` sucht das Tempo dazu.
+
+## Karriere: Geld, Reisen, Ausrüstung
+
+- Start auf Platz 2000 mit 4.000 $. Jede Woche (14 pro Saison, eine je großem Turnier) wählt man: kleines Turnier, großes Turnier, Liga-Spiel, Tennisstunden geben oder Pause.
+  `career.js`: `angebot`, `zugang` (Platz-Grenzen, Wildcards), `reiseKosten`, `sponsorGeld`, `startTournament`, `matchGespielt`, `finishTournament`, `wocheOhneTurnier`.
+- Der Platz hinter den Top 100 wird aus den Punkten geschätzt (`KURVE` in `career.js`). Das große Turnier der Woche wird ohne den Spieler durchgerechnet, wenn er woanders spielt.
+- Frische (0–100): Matches kosten, Wochen erholen (Physio); unter 70 gibt es Abzüge. Saiten halten nur ein paar Matches und werden automatisch neu bespannt.
+- Echt sind Marken, Modellreihen, Punkte pro Runde und die Turnierorte. Geschätzt sind alle Pluspunkte, Preisgelder (Größenordnung), Platz-Grenzen, Flugpreise, Löhne und Sponsorengeld.
+- Marken nur als Text, keine Logos; das Spiel ist für den Privatgebrauch.
 
 ## Stil der Top 20 (Wiedererkennen ohne echte Gesichter)
 

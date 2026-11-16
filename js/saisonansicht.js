@@ -45,14 +45,14 @@ function kasten(T, m, aktuell) {
 // rounds: Liste von { label, matches }. Runden, die noch nicht dran waren, zeigen leere Kästen.
 function baum(T, def, rounds, aktuellIdx) {
   const cols = rounds.map((r, i) => {
-    const pts = def.cat === 'F' ? '' : `<small>raus = ${zahl(def.points[r.label] || 0)} P.</small>`;
+    const pts = def.cat === 'F' || def.cat === 'LIGA' ? '' : `<small>raus = ${zahl(def.points[r.label] || 0)} P.</small>`;
     const kopf = `<div class="bh ${i === aktuellIdx ? 'cur' : ''}"><b>${D.ROUND_NAMES[r.label]}</b>${pts}</div>`;
     const body = r.matches.map((m) => `<div class="bw">${kasten(T, m, i === aktuellIdx)}</div>`).join('');
     return `<div class="bcol ${i === 0 ? 'first' : ''} ${i === rounds.length - 1 ? 'last' : ''} ${i === aktuellIdx ? 'curcol' : ''}">${kopf}<div class="bms">${body}</div></div>`;
   }).join('');
   // Ganz rechts: der Pokal mit dem Sieger
   const champ = T.champion ? T.players[T.champion] : null;
-  const pokal = `<div class="bcol pokal"><div class="bh"><b>Sieger</b>${def.cat === 'F' ? '' : `<small>${zahl(def.points.W)} P.</small>`}</div>
+  const pokal = `<div class="bcol pokal"><div class="bh"><b>Sieger</b>${def.cat === 'F' || def.cat === 'LIGA' ? '' : `<small>${zahl(def.points.W)} P.</small>`}</div>
     <div class="bms"><div class="bw"><div class="bsieger ${champ && T.champion === T.humanId ? 'me' : ''}">🏆<span>${champ ? flag(champ.country) + ' ' + esc(champ.short) : '?'}</span></div></div></div></div>`;
   return `<div class="bscroll"><div class="bracket">${cols}${pokal}</div></div>`;
 }
