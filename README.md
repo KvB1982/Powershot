@@ -28,6 +28,7 @@ bekommt man es als Vollbild-App.
 |---|---|
 | **Freies Spiel** | Einen der Top 100 der Weltrangliste wählen (Stand 9. November 2026), Gegner und Stadion aussuchen. |
 | **Turnier** | Ein einzelnes Turnier mit einem Profi durchspielen. |
+| **Saison** | Einen echten Profi aussuchen und mit ihm das Jahr spielen. Für jedes Ergebnis gibt es Punkte im ATP Race (echte ATP-Punkte je Runde). Die besten 8 fahren zu den ATP Finals. Mit Zeitleiste, Race-Tabelle und Turnierbaum. |
 | **Karriere** | Eigenen Spieler erstellen, bei Platz 101 starten, die Saison spielen: 4 Grand Slams, 9 Masters 1000, ATP Finals. Ranglistenpunkte, Preisgeld, Ausrüstung kaufen, Fähigkeiten steigern. |
 | **Training** | Ballmaschine (Zielfelder treffen) und Aufschlagtraining. In der Karriere bringt Training Erfahrung. |
 
@@ -167,6 +168,8 @@ Einstellbar unter „Einstellungen“. Auf Geräten mit Touchscreen ist „Touch
 | `js/game3d.js` | Kamera, Ball, Markierungen, Verbindung von Match, Figuren und Sound |
 | `js/audio.js` | Sound (Aufnahmen aus `sounds/`, Rest wird im Browser erzeugt) |
 | `js/tournament.js` | Turnierbaum und ATP-Finals-Format |
+| `js/season.js` | Saison mit einem Profi: ATP Race, Qualifikation für die ATP Finals, Speichern |
+| `js/saisonansicht.js` | Turnierbaum, Zeitleiste der Saison und Race-Tabelle als HTML |
 | `js/career.js` | Karriere: Rangliste, Geld, Ausrüstung, Fähigkeiten, Speichern |
 | `js/app.js` | Menüs und Abläufe |
 | `tools/` | Testläufe ohne Grafik (`node tools/sim.mjs`, `node tools/logic.mjs`) |

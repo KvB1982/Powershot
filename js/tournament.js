@@ -67,6 +67,7 @@ export function playRound(T, humanResult) {
     const mine = m.a === T.humanId || m.b === T.humanId;
     if (mine && humanResult) {
       m.winner = humanResult.winner; m.score = humanResult.score; m.setDiff = humanResult.setDiff ?? 1;
+      m.humanFirst = true;   // dieses Ergebnis ist aus deiner Sicht geschrieben (deine Spiele zuerst)
     } else {
       const r = simulateMatch(T.players[m.a].ovr, T.players[m.b].ovr);
       m.winner = r.winner === 0 ? m.a : m.b; m.score = r.score;

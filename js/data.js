@@ -181,8 +181,13 @@ export const STAT_NAMES = { s: 'Aufschlag', p: 'Kraft', t: 'Tempo', c: 'Präzisi
 // ---------------------------------------------------------------
 // Turniere der Saison (Grand Slams, Masters 1000, ATP Finals)
 // ---------------------------------------------------------------
-const GS_P = { W: 2000, F: 1300, SF: 800, QF: 400, R16: 200, R32: 50 };
-const M_P = { W: 1000, F: 650, SF: 400, QF: 200, R16: 30 };
+// Punkte wie bei der echten ATP (Regeln 2026): Die Zahl sagt, was man bekommt, wenn man in dieser Runde ausscheidet.
+// Echt:    Grand Slam   W 2000 · F 1300 · HF 800 · VF 400 · Achtelfinale 200 · Runde der 32: 100 · Runde der 64: 50 · 1. Runde: 10
+//          Masters 1000 W 1000 · F  650 · HF 400 · VF 200 · Achtelfinale 100 · Runde der 32:  50 · davor 30 oder 10
+// Bei uns sind die Felder kleiner (Grand Slam 32 Spieler, Masters 16). Wir tun so, als hätten alle die
+// ersten Runden schon gewonnen. Darum gilt: gleiche Runde = gleiche Punkte wie in echt.
+const GS_P = { W: 2000, F: 1300, SF: 800, QF: 400, R16: 200, R32: 100 };
+const M_P = { W: 1000, F: 650, SF: 400, QF: 200, R16: 100 };
 const GS_M = { W: 3000000, F: 1600000, SF: 800000, QF: 430000, R16: 250000, R32: 120000 };
 const M_M = { W: 1100000, F: 600000, SF: 330000, QF: 180000, R16: 90000 };
 

@@ -9,6 +9,8 @@ import { loadMocap } from './mocap.js';
 import * as D from './data.js';
 import * as TN from './tournament.js';
 import * as CA from './career.js';
+import * as SE from './season.js';
+import { bracketHtml, timelineHtml, raceHtml, pointsHtml } from './saisonansicht.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -45,6 +47,7 @@ const screen = $('#screen'), hudEl = $('#hud');
 
 let match = null, paused = false, session = null;
 let career = CA.loadCareer();
+let season = SE.loadSeason();
 let menuVenue = 'ao';
 
 function show(html) { screen.innerHTML = `<div class="wrap">${html}</div>`; screen.classList.add('on'); screen.scrollTop = 0; }
@@ -102,6 +105,7 @@ actions.home = () => {
     <div class="menu">
       <button class="big primary" data-a="free">Freies Spiel <small>Spieler wählen und loslegen</small></button>
       <button class="big" data-a="career">Karriere <small>${career ? esc(career.name) + ' · Platz ' + CA.myRank(career) : 'Eigenen Spieler aufbauen'}</small></button>
+      <button class="big" data-a="saison">Saison <small>${season ? esc(SE.seasonPlayer(season).short) + ' · ATP Race Platz ' + SE.myRace(season).rank : 'Mit einem Profi durchs Jahr · ATP Race'}</small></button>
       <button class="big" data-a="tourMenu">Turnier <small>Ein Turnier mit einem Profi spielen</small></button>
       <button class="big" data-a="training">Training <small>Ballmaschine · Aufschlag</small></button>
       <div class="row"><button class="grow" data-a="settings" data-v="home">Einstellungen</button><button class="grow" data-a="help" data-v="home">Steuerung</button></div>
@@ -277,10 +281,6 @@ actions.tourStart = () => {
 
 // Gemeinsame Turnier-Ansicht (einzelnes Turnier und Karriere)
 let ctxT = null;
-const pname = (T, id, bold) => {
-  const p = T.players[id];
-  return `<span class="${id === T.humanId ? 'me' : ''} ${bold ? 'w' : ''}">${flag(p.country)} ${esc(p.short)} <small class="dim">(${p.seed})</small></span>`;
-};
 function renderTournament() {
   const { T, def } = ctxT;
   menuVenue = def.id;
@@ -306,17 +306,16 @@ function renderTournament() {
     top = `<div class="panel center"><p>${T.humanId ? 'Du bist ausgeschieden.' : 'Du spielst dieses Turnier nicht mit.'}</p>
       <button class="primary" data-a="tourSim">Turnier zu Ende spielen lassen</button></div>`;
   }
-  let groups = '';
-  if (T.format === 'finals') {
-    groups = `<div class="cols">${T.groups.map((g, gi) => `<div class="panel"><h3 style="margin-top:0">Gruppe ${'AB'[gi]}</h3><table>
-      <tr><th>Spieler</th><th class="num">Siege</th><th class="num">Sätze</th></tr>
-      ${[...g].sort((x, y) => T.rr[y].wins - T.rr[x].wins || T.rr[y].sets - T.rr[x].sets).map((id) => `<tr class="${id === T.humanId ? 'me' : ''}"><td>${pname(T, id)}</td><td class="num">${T.rr[id].wins}</td><td class="num">${T.rr[id].sets > 0 ? '+' : ''}${T.rr[id].sets}</td></tr>`).join('')}
-      </table></div>`).join('')}</div>`;
+  // In der Saison kommt man vom Turnier zurück zur Übersicht (das Turnier bleibt gespeichert)
+  const zurueck = ctxT.season ? '<button class="ghost" data-a="saison" data-v="start">‹ Saison</button>' : '';
+  show(`<div class="bar">${zurueck}<h2>${def.name} ${catTag(def)}</h2><span class="dim">${def.city} · ${D.SURFACE_NAMES[def.surface]}</span></div>${top}${bracketHtml(T, def)}`);
+  // Den Baum so hinschieben, dass man die aktuelle Runde sieht
+  // (links daneben bleibt die Runde davor stehen, damit man sieht, woher die Spieler kommen)
+  const cur = screen.querySelector('.bcol.curcol'), box = screen.querySelector('.bscroll');
+  if (cur && box) {
+    const ab = cur.previousElementSibling || cur;
+    box.scrollLeft = ab.getBoundingClientRect().left - box.querySelector('.bracket').getBoundingClientRect().left;
   }
-  const rounds = T.rounds.map((r, i) => ({ r, l: T.labels[i], i })).reverse().map(({ r, l, i }) => `
-    <div class="panel"><h3 style="margin-top:0">${D.ROUND_NAMES[l]}${l === 'RR' ? ' · Spieltag ' + (i + 1) : ''}</h3>
-    ${r.map((x) => `<div class="match"><span>${pname(T, x.a, x.winner === x.a)} – ${pname(T, x.b, x.winner === x.b)}</span><span class="sc">${x.winner ? esc(x.score) : '–'}</span></div>`).join('')}</div>`).join('');
-  show(`<div class="bar"><h2>${def.name} ${catTag(def)}</h2><span class="dim">${def.city} · ${D.SURFACE_NAMES[def.surface]}</span></div>${top}${groups}${rounds}`);
 }
 actions.tourPlay = () => {
   const { T, def } = ctxT;
@@ -327,6 +326,7 @@ actions.tourPlay = () => {
     me: getPlayer(T.humanId), opp: getPlayer(oppId), def, title: `${def.name} · ${D.ROUND_NAMES[TN.currentLabel(T)]}`,
     onEnd: (res) => {
       TN.playRound(T, { winner: res.won ? T.humanId : oppId, score: res.score, setDiff: res.setDiff });
+      if (ctxT.season) SE.saveSeason(season);
       if (ctxT.career) {
         const ups = CA.addXp(career, res.won ? 60 + 25 * roundIdx : 25);
         CA.saveCareer(career);
@@ -337,8 +337,9 @@ actions.tourPlay = () => {
   });
 };
 actions.tourShow = () => renderTournament();
-actions.tourSim = () => { TN.simulateRest(ctxT.T); if (ctxT.career) CA.saveCareer(career); renderTournament(); };
+actions.tourSim = () => { TN.simulateRest(ctxT.T); if (ctxT.career) CA.saveCareer(career); if (ctxT.season) SE.saveSeason(season); renderTournament(); };
 actions.tourDone = () => {
+  if (ctxT.season) return seasonTournamentDone();
   if (!ctxT.career) return actions.home();
   const s = CA.finishTournament(career);
   const lines = [
@@ -487,6 +488,127 @@ actions.careerDelete = (v, el) => {
   if (!delArmed) { delArmed = true; el.textContent = 'Wirklich löschen? Nochmal tippen'; setTimeout(() => { delArmed = false; }, 4000); return; }
   delArmed = false;
   CA.deleteCareer(); career = null; actions.home();
+};
+
+// ---------------------------------------------------------------
+// Saison: mit einem echten Profi durchs Jahr, Punkte sammeln fürs ATP Race
+// ---------------------------------------------------------------
+const pickS = { me: 'zverev', page: 0 };
+let saisonTab = 'start';
+
+actions.saison = (v) => {
+  if (!season) return renderSeasonPick();
+  // Läuft gerade ein Turnier? Dann geht es dort weiter. (Über „‹ Zurück“ im Turnier kommt man mit v = 'start' zur Übersicht.)
+  if (season.tournament && !v) return showSeasonTournament();
+  if (['start', 'race', 'punkte'].includes(v)) saisonTab = v;
+  enterMenu();
+  renderSeason();
+};
+function showSeasonTournament() {
+  ctxT = { T: season.tournament, def: D.tournamentById(season.tournament.defId), season: true };
+  renderTournament();
+}
+
+function renderSeasonPick() {
+  show(`
+    <div class="bar">${back()}<h2>Neue Saison</h2><button class="primary" data-a="saisonNeu">Saison starten ›</button></div>
+    <p class="dim">Such dir einen Profi aus. Mit ihm spielst du alle 4 Grand Slams und 9 Masters-Turniere.
+    Für jedes Ergebnis gibt es Punkte im ATP Race. Schaffst du es unter die besten 8, darfst du zu den ATP Finals!</p>
+    <div class="panel"><h3 style="margin-top:0">Dein Profi: ${esc(getPlayer(pickS.me).name)}</h3>${pageTabs('saisonSeite', pickS.page)}
+      <div class="grid">${pagePlayers(pickS.page).map((p) => playerCard(p, 'saisonWahl', pickS.me === p.id)).join('')}</div></div>
+    <button class="primary" data-a="saisonNeu">Saison starten ›</button>`);
+}
+actions.saisonSeite = (v) => { pickS.page = +v; keepScroll(renderSeasonPick); };
+actions.saisonWahl = (v) => { pickS.me = v; keepScroll(renderSeasonPick); };
+actions.saisonNeu = () => {
+  season = SE.newSeason(pickS.me);
+  SE.saveSeason(season);
+  saisonTab = 'start';
+  renderSeason();
+};
+
+function renderSeason() {
+  const s = season, me = SE.seasonPlayer(s), ich = SE.myRace(s), def = SE.nextTournament(s);
+  const table = SE.raceTable(s);
+  const achter = table[SE.FINALS_PLAETZE - 1], neunter = table[SE.FINALS_PLAETZE];
+  const dabei = SE.qualified(s);
+  // Wie weit ist es bis zur Finals-Linie (Platz 8)?
+  const abstand = ich.rank <= SE.FINALS_PLAETZE ? `${(ich.points - neunter.points).toLocaleString('de-DE')} P. vor Platz 9` : `${(achter.points - ich.points).toLocaleString('de-DE')} P. bis Platz 8`;
+  const tabs = [['start', 'Saison'], ['race', 'ATP Race'], ['punkte', 'Punkte-Regeln']];
+  let body = '';
+  if (saisonTab === 'start') {
+    let next;
+    if (s.over) {
+      const sieger = s.history[s.history.length - 1];
+      next = `<div class="panel center"><h2 class="gold">Saison ${s.year} beendet</h2>
+        <p>Du beendest das Jahr auf <b>Platz ${ich.rank}</b> im ATP Race mit <b>${ich.points.toLocaleString('de-DE')} Punkten</b> und ${s.titles} Titel${s.titles === 1 ? '' : 'n'}.</p>
+        <p class="dim">ATP-Finals-Sieger: ${esc(sieger.champion)}</p>
+        <button class="primary" data-a="saisonEnde">Neue Saison starten ›</button></div>`;
+    } else {
+      const finals = def.cat === 'F';
+      const laeuft = !!s.tournament;
+      next = `<div class="panel"><div class="dim">${laeuft ? 'Läuft gerade' : 'Als Nächstes'}</div>
+        <h2 style="margin:6px 0">${def.name}</h2>
+        <p>${catTag(def)} · ${def.city} · ${def.month} · ${D.SURFACE_NAMES[def.surface]}</p>
+        <p class="dim">${finals ? 'Nur die besten 8 im Race. ' + (dabei ? 'Du bist dabei!' : 'Du hast es diesmal nicht geschafft – du kannst zuschauen.')
+          : def.draw + ' Spieler · Sieger: ' + def.points.W.toLocaleString('de-DE') + ' Punkte'}</p>
+        <div class="row"><button class="primary" data-a="${laeuft ? 'saisonWeiter' : 'saisonPlay'}">${laeuft ? 'Weiter im Turnier ›' : !finals || dabei ? 'Turnier spielen ›' : 'Turnier ansehen ›'}</button>
+        ${!laeuft && !finals ? '<button data-a="saisonSkip">Auslassen</button>' : ''}</div></div>`;
+    }
+    body = `${timelineHtml(s)}
+      <div class="cols">
+        <div>${next}
+          <div class="panel"><div class="kpi vier">
+            <div><b>${ich.rank}.</b><span>ATP Race</span></div>
+            <div><b>${ich.points.toLocaleString('de-DE')}</b><span>Punkte</span></div>
+            <div><b class="${dabei ? 'gold' : ''}">${dabei ? '✓ dabei' : 'noch nicht'}</b><span>ATP Finals · ${abstand}</span></div>
+            <div><b>${s.titles}</b><span>Titel</span></div>
+          </div></div>
+          <div class="panel">${playerCard(me, 'saison', false)}</div>
+        </div>
+        <div class="panel"><h3 style="margin-top:0">ATP Race – Stand</h3>${raceHtml(s, true)}
+          <div class="center" style="margin-top:10px"><button data-a="saison" data-v="race">Ganze Tabelle ›</button></div></div>
+      </div>`;
+  } else if (saisonTab === 'race') {
+    body = `<div class="panel"><p class="dim" style="margin-top:0">Alle starten im Januar bei 0. Die besten 8 nach dem Paris Masters fahren zu den ATP Finals. 🏆 = hat dieses Jahr einen Grand Slam gewonnen.</p>${raceHtml(s, false)}</div>`;
+  } else {
+    body = pointsHtml();
+  }
+  show(`<div class="bar">${back()}<h2>${flag(me.country)} ${esc(me.name)} <small class="dim">Saison ${s.year}</small></h2><button class="ghost" data-a="saisonDelete">Saison löschen</button></div>
+    <div class="tabs">${tabs.map(([k, n]) => `<button class="${saisonTab === k ? 'sel' : ''}" data-a="saison" data-v="${k}">${n}</button>`).join('')}</div>${body}`);
+  // Die Zeitleiste so hinschieben, dass „Du bist hier“ in der Mitte steht
+  const now = $('#tlNow'), box = screen.querySelector('.tlscroll');
+  if (box) box.scrollLeft = now ? Math.max(0, now.offsetLeft - box.clientWidth / 2 + now.offsetWidth / 2) : box.scrollWidth;
+}
+actions.saisonPlay = () => { SE.startTournament(season); showSeasonTournament(); };
+actions.saisonWeiter = () => showSeasonTournament();
+actions.saisonSkip = () => {
+  const T = SE.startTournament(season, true);
+  TN.simulateRest(T);
+  SE.saveSeason(season);
+  showSeasonTournament();
+};
+function seasonTournamentDone() {
+  const s = SE.finishTournament(season);
+  const lines = [
+    s.label ? `Dein Ergebnis: <b>${s.label === 'W' ? 'Turniersieg 🏆' : D.ROUND_NAMES[s.label]}</b>` : 'Du hast nicht mitgespielt.',
+    `Punkte fürs ATP Race: <b class="gold">+${s.points.toLocaleString('de-DE')}</b>`,
+    `Du stehst jetzt auf <b>Platz ${s.rank}</b> im Race (${s.total.toLocaleString('de-DE')} Punkte).`,
+  ];
+  if (s.finalsQualified === true) lines.push('<b class="gold">Geschafft! Du bist unter den besten 8 und fährst zu den ATP Finals nach Turin!</b>');
+  if (s.finalsQualified === false) lines.push('Für die ATP Finals hat es diesmal leider nicht gereicht.');
+  if (s.seasonOver) lines.push('<b>Die Saison ist zu Ende!</b>');
+  if (s.label === 'W') sound.coin();
+  saisonTab = 'start';
+  showInfo(s.name, lines.join('<br>'), 'saisonStart');
+}
+actions.saisonStart = () => actions.saison('start');
+actions.saisonEnde = () => { season = null; SE.deleteSeason(); renderSeasonPick(); };
+let delSeasonArmed = false;
+actions.saisonDelete = (v, el) => {
+  if (!delSeasonArmed) { delSeasonArmed = true; el.textContent = 'Wirklich löschen? Nochmal tippen'; setTimeout(() => { delSeasonArmed = false; }, 4000); return; }
+  delSeasonArmed = false;
+  SE.deleteSeason(); season = null; actions.home();
 };
 
 // ---------------------------------------------------------------
@@ -670,7 +792,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) { if (match && !paused) togglePause(); } else if (sound.ctx) sound.unlock();
 });
 
-window.__powershot = { game, controls, settings, step, get match() { return match; }, get career() { return career; }, actions };
+window.__powershot = { game, controls, settings, step, get match() { return match; }, get career() { return career; }, get season() { return season; }, actions };
 // Das Spielermodell laden (höchstens 8 Sekunden warten – sonst geht es mit den einfachen Figuren los)
 await Promise.race([Promise.all([loadFigure(), loadMocap()]), new Promise((r) => setTimeout(r, 8000))]);
 $('#loading').remove();

@@ -15,13 +15,13 @@ Repository: https://github.com/KvB1982/Powershot · läuft auf GitHub Pages unte
 ```bash
 python tools/server.py          # http://localhost:8765, ohne Zwischenspeicher
 node tools/sim.mjs 0 1 mittel hard 3    # Computer gegen Computer, ohne Grafik
-node tools/logic.mjs            # Turnier und Karriere durchrechnen
+node tools/logic.mjs            # Turnier, Karriere und Saison (ATP Race) durchrechnen
 node tools/rookie.mjs           # Neuling gegen Profi auf jeder Schwierigkeit
 node tools/mocap.mjs            # Aufnahmen aus mocap/*.FBX in mocap/bewegungen.json umrechnen (--info zeigt nur an)
 ```
 
 Im eingebauten Browser der App ist `requestAnimationFrame` gedrosselt. Das Spiel deshalb über
-`window.__powershot.step(n)` vorspulen (`__powershot` enthält `game`, `controls`, `settings`, `match`, `career`, `actions`).
+`window.__powershot.step(n)` vorspulen (`__powershot` enthält `game`, `controls`, `settings`, `match`, `career`, `season`, `actions`).
 Für Bilder die Szene selbst rendern und per `canvas.toDataURL()` in ein Overlay legen – Screenshots der Seite sind oft veraltet.
 
 ## Aufbau
@@ -42,6 +42,8 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 | `js/game3d.js`, `js/stadium.js`, `js/audio.js` | Darstellung, Stadion, Sound (Aufnahmen aus `sounds/`) |
 | `assets/zuschauer.webp` | 48 erfundene Zuschauer in einem Bild (8 × 6, je 128 × 192 Pixel; 32 von vorn, 16 von der Seite); `stadium.js` zeigt sie als flache Bildtafeln |
 | `js/tournament.js`, `js/career.js`, `js/app.js` | Turnierbaum, Karriere (localStorage), Menüs |
+| `js/season.js` | Saison mit einem echten Profi: ATP Race (alle starten bei 0), Finals-Qualifikation (Top 8, Grand-Slam-Regel), localStorage – ohne three.js |
+| `js/saisonansicht.js` | Baut HTML für Turnierbaum, Saison-Zeitleiste, Race-Tabelle und Punkte-Erklärung (Aussehen in `css/style.css`) |
 | `python/` | Die ursprünglichen Pygame-Zero-Versionen (mit `pythoncore-3.14-64`, pgzero + pygame-ce) |
 
 ## iPad und iPhone (Home-Bildschirm-App)
@@ -69,3 +71,4 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 - Die Seiten werden nicht getauscht; beim Seitenwechsel gehen die Spieler nur zur Bank.
 - Laufen ist ein gebauter Schrittzyklus, keine Aufnahme. Slice-Topspin-Unterschiede bei einhändigen Spielern fehlen.
 - Spielstärke und Ballwechsel-Länge sind nur grob eingestellt.
+- Punkte: echte ATP-Werte je Runde (Regeln 2026), aber kleinere Felder (Grand Slam 32, Masters 16) und keine ATP-500/250-Turniere.
