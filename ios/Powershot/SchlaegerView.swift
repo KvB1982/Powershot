@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SchlaegerView: View {
     @ObservedObject private var funk = Funk.shared
+    @ObservedObject private var uhr = Uhr.shared
     @State private var tasten: Set<String> = []         // gerade gedrückte Tasten: "a", "b", "x", "y"
     private let takt = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
 
@@ -29,6 +30,8 @@ struct SchlaegerView: View {
                     .multilineTextAlignment(.center)
                     .font(.title3)
             }
+
+            Text(uhr.anzeige).font(.footnote).foregroundStyle(.secondary)
 
             HStack(spacing: 10) {
                 taste("Schlag", "a"); taste("Slice", "b"); taste("Lob", "x"); taste("Stopp", "y")

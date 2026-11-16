@@ -25,6 +25,7 @@ final class Schlaeger: NSObject, ObservableObject {
     private let bewegung = CMMotionManager()
     private let gesundheit = HKHealthStore()
     private var training: HKWorkoutSession?
+    private var startNummer = 0
 
     // Der Schwung, der gerade beobachtet wird
     private var aktiv = false
@@ -65,6 +66,7 @@ final class Schlaeger: NSObject, ObservableObject {
             if let messung { self?.pruefen(messung) }
         }
         anzahl = 0
+        startNummer = (Int(Date().timeIntervalSince1970) % 100_000) * 1000
         laeuft = true
     }
 
@@ -88,12 +90,13 @@ final class Schlaeger: NSObject, ObservableObject {
             return
         }
         if stark > staerkster { staerkster = stark; hoch = nachOben }
-        guard jetzt - beginn >= 0.12 else { return }             // 0,12 Sekunden lang den stärksten Wert suchen
+        guard jetzt - beginn >= 0.06 else { return }             // nur 0,06 Sekunden lang den stärksten Wert suchen – die Meldung soll schnell raus
         aktiv = false; ende = jetzt
 
         let kraft = min(1, max(0, (staerkster - schwungStart) / (schwungVoll - schwungStart)))
         anzahl += 1
-        melden(["schwung": anzahl, "kraft": kraft, "hoch": hoch / staerkster,
+        // Die Nummer enthält die Startzeit, damit nach einem neuen "Start" keine Nummer doppelt vorkommt.
+        melden(["schwung": startNummer + anzahl, "kraft": kraft, "hoch": hoch / staerkster,
                 "zeit": Date().timeIntervalSince1970])
     }
 

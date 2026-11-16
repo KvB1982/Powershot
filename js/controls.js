@@ -137,6 +137,11 @@ export class Controls {
     // Ein fertig erkannter Schwung von der Apple Watch? Jeder hat eine Nummer, damit er nur einmal zählt.
     const uhr = s.schwung && s.schwung.id !== this.schwungId ? s.schwung : null;
     if (s.schwung) this.schwungId = s.schwung.id;
+    // Zum Einstellen: kurz anzeigen, dass ein Schwung von der Uhr angekommen ist und wie lange er unterwegs war.
+    if (uhr && this.onHint) {
+      const ms = Math.round((uhr.alter || 0) * 1000);
+      this.onHint(this.mode === 'controller' ? `⌚ Schwung angekommen (${ms} ms unterwegs)` : '⌚ Schwung angekommen – Steuerung steht nicht auf „Controller“');
+    }
     // Im Menü (kein Ballwechsel): Stick wählt einen Knopf aus, A drückt ihn, B geht zurück.
     if (!this.enabled && this.onMenu) {
       const dir = Math.abs(P.x) > Math.abs(P.f) ? (P.x > 0.6 ? 'rechts' : P.x < -0.6 ? 'links' : '')
@@ -381,14 +386,23 @@ export class Controls {
     return { x: this.stick.x, f: this.stick.f };
   }
 
-  peek() {
+  // bisTreffen: nur für den Controller – Sekunden bis zum Treffen (negativ = schon vorbei)
+  peek(serving, bisTreffen = null) {
     if (this.mode === 'klassik') return this.classicRaw(!!this.committed);
     if (this.mode === 'profi') {
       if (this.committed) return this.profiRaw(this.committed);
       if (this.charging) return { ...this.profiRaw({ type: this.type, power: this.power }), committed: false };
       return null;
     }
-    if (this.mode === 'controller') return this.committed ? this.padRaw(this.committed) : null;
+    if (this.mode === 'controller') {
+      if (this.committed) return this.padRaw(this.committed);
+      // Noch nicht geschwungen: Die Ziellinie zeigt, wohin der Ball ginge, wenn du GENAU JETZT schwingst.
+      // Sie wandert von links (früh) über die Mitte nach rechts (spät).
+      if (this.ctx !== 'rally' || bisTreffen === null || bisTreffen > 1.5) return null;
+      const ziel = bisTreffen < 0 ? clamp(-bisTreffen / TIMING_SPAET, 0, 1)
+        : -clamp((bisTreffen - TIMING_MITTE) / (TIMING_FRUEH - TIMING_MITTE), 0, 1);
+      return { type: 'drive', aimMode: 'abs', aim: (this.pad.x || ziel) * 0.88, depth: 0.78, power: 0.6, committed: false };
+    }
     return this.committed || this.live;
   }
 

@@ -267,7 +267,11 @@ export class Match {
     const p = this.P[0];
     if (!p.isHuman || !this.controls) return null;
     const serving = (this.state === 'serveReady' || this.state === 'toss') && this.server === 0;
-    let raw = this.controls.peek(serving);
+    // Für den Controller: Wie viele Sekunden noch bis zum Treffen? (negativ = der beste Moment ist schon vorbei)
+    let bisTreffen = null;
+    if (p.spaetSeit != null) bisTreffen = -(this.sinceHit - p.spaetSeit);
+    else if (p.plan) bisTreffen = p.plan.t - this.sinceHit;
+    let raw = this.controls.peek(serving, bisTreffen);
     if (!raw) return null;
     if (raw.idle) raw = { ...raw, power: 0.85 };
     if (serving && this.state === 'toss') return null;
