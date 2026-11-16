@@ -129,6 +129,7 @@ final class ControllerBruecke: NSObject {
         var nachricht = nachricht
         // Hat die Apple Watch gerade einen Schwung gemeldet? Dann kommt er mit.
         if nachricht["schwung"] == nil, let schwung = Uhr.shared.aktuell() { nachricht["schwung"] = schwung }
+        if nachricht["geste"] == nil, let geste = Uhr.shared.geste() { nachricht["geste"] = geste }
         guard let daten = try? JSONSerialization.data(withJSONObject: nachricht),
               let text = String(data: daten, encoding: .utf8) else { return }
         web.evaluateJavaScript("window.__powershotPad && window.__powershotPad(\(text))")

@@ -20,6 +20,7 @@ let schlagarten: [(kuerzel: String, name: String)] = [
     ("volley", "Volley"), ("smash", "Schmetterball"), ("lob", "Lob"), ("stopp", "Stoppball"),
     ("aufschlag-gerade", "Aufschlag gerade"), ("aufschlag-slice", "Aufschlag Slice"),
     ("aufschlag-kick", "Aufschlag Kick"), ("aufschlag-unten", "Aufschlag von unten"),
+    ("doppelklopfen", "Doppelklopfen (Hände aneinander)"),
     ("kein-schlag", "Kein Schlag (laufen, jubeln …)"),
 ]
 
@@ -35,6 +36,13 @@ final class Schlaeger: NSObject, ObservableObject {
     private let schwungStart = 1.6      // ab dieser Beschleunigung (in g) zählt es als Schwung
     private let schwungVoll = 5.0       // so stark = volle Kraft
     private let schwungPause = 0.4      // Sekunden Ruhe nach einem Schwung
+    // Doppelklopfen (zweimal kurz die Hände aneinander): Ein Klopfer ist ein harter Stoß, bei dem sich das
+    // Handgelenk kaum dreht. Bei einem echten Schlag dreht es sich dagegen stark.
+    private let klopfDrehung = 2.0      // dreht sich das Handgelenk langsamer als so (rad/s), ist es ein Klopfer
+    private let klopfAbstand = 0.1...0.5   // so viele Sekunden dürfen zwischen den zwei Klopfern liegen
+    private var staerksteDrehung = 0.0
+    private var letzterKlopfer = -9.0
+    private var gesten = 0
 
     private let bewegung = CMMotionManager()
     private let gesundheit = HKHealthStore()
@@ -173,14 +181,31 @@ final class Schlaeger: NSObject, ObservableObject {
         if !aktiv {
             guard stark >= schwungStart, jetzt - ende >= pause else { return }
             aktiv = true; beginn = jetzt; staerkster = stark; hoch = nachOben
+            staerksteDrehung = 0
             return
         }
         if stark > staerkster { staerkster = stark; hoch = nachOben }
+        let dreh = m.rotationRate
+        staerksteDrehung = max(staerksteDrehung, (dreh.x * dreh.x + dreh.y * dreh.y + dreh.z * dreh.z).squareRoot())
         guard jetzt - beginn >= 0.06 else { return }             // nur 0,06 Sekunden lang den stärksten Wert suchen – die Meldung soll schnell raus
         aktiv = false; ende = jetzt
 
         // Beim Aufnehmen: 0,4 Sekunden vor dem Schlagbeginn bis 0,7 Sekunden danach ausschneiden (sobald die Zeit um ist).
         if aufnahme != nil { schnitt = (beginn - 0.4, beginn + 0.7); return }
+
+        // War das ein Klopfer statt eines Schlags? (harter Stoß, aber das Handgelenk hat sich kaum gedreht)
+        if staerksteDrehung < klopfDrehung {
+            ende = jetzt - schwungPause + 0.08                    // der zweite Klopfer darf gleich danach kommen
+            if klopfAbstand.contains(jetzt - letzterKlopfer) {
+                letzterKlopfer = -9
+                gesten += 1
+                WKInterfaceDevice.current().play(.directionUp)    // spürbares Zeichen: Doppelklopfen erkannt
+                melden(["geste": "klopfen", "nr": startNummer + gesten, "zeit": Date().timeIntervalSince1970])
+            } else {
+                letzterKlopfer = jetzt
+            }
+            return
+        }
 
         let kraft = min(1, max(0, (staerkster - schwungStart) / (schwungVoll - schwungStart)))
         anzahl += 1

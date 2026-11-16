@@ -37,6 +37,7 @@ final class Uhr: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     private var letzter: [String: Any]?
+    private var letzteGeste: [String: Any]?       // das letzte Doppelklopfen von der Uhr
     private let schloss = NSLock()
 
     func starten() {
@@ -69,6 +70,14 @@ final class Uhr: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     // Nachrichten kommen auf drei Wegen an: mit Antwort, ohne Antwort oder als nachgeschicktes Päckchen.
+    /// Das letzte Doppelklopfen von der Uhr – nur, wenn es höchstens 1,5 Sekunden her ist.
+    func geste() -> [String: Any]? {
+        schloss.lock(); defer { schloss.unlock() }
+        guard let g = letzteGeste, let zeit = g["zeit"] as? Double,
+              Date().timeIntervalSince1970 - zeit < 1.5 else { return nil }
+        return ["id": g["nr"] ?? 0]
+    }
+
     func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
         angekommen(message)
         replyHandler(["ok": true])
@@ -81,6 +90,11 @@ final class Uhr: NSObject, ObservableObject, WCSessionDelegate {
     private func angekommen(_ message: [String: Any]) {
         if message["test"] != nil {
             DispatchQueue.main.async { self.anzeige = "⌚ Test-Nachricht von der Uhr ist angekommen" }
+            return
+        }
+        if message["geste"] != nil {
+            schloss.lock(); letzteGeste = message; schloss.unlock()
+            DispatchQueue.main.async { self.anzeige = "⌚ Doppelklopfen von der Uhr erkannt" }
             return
         }
         guard message["schwung"] != nil else { return }

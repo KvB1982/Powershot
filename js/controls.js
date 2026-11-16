@@ -63,6 +63,7 @@ export class Controls {
     this.onHint = null;           // wird von app.js gesetzt: kurzer Hinweis-Text auf dem Bildschirm
     // Zum Fehlersuchen: Wie viele Meldungen kommen vom Controller/Schläger an, wie viele Schwünge von der Uhr?
     this.diag = { pakete: 0, uhr: 0, letzter: '–' };
+    this.netzWechsel = false;     // true, sobald "ans Netz / zurück" gewünscht wurde (Doppelklopfen oder Taste)
     this.nativePad = false;       // true, sobald die iOS-App den Controller meldet
     this.onPause = null;          // wird von app.js gesetzt: Pause-Taste am Controller
     this.onMenu = null;           // wird von app.js gesetzt: Controller im Menü ('links', 'rechts', 'hoch', 'runter', 'ok', 'zurueck')
@@ -148,7 +149,14 @@ export class Controls {
     P.connected = true; P.name = s.name || 'Controller';
     P.x = tot(s.lx || 0); P.f = tot(s.ly || 0);
     P.motion = !!s.motion;
-    const neu = { a: !!s.a, b: !!s.b, x: !!s.x, y: !!s.y, pause: !!s.pause };
+    const neu = { a: !!s.a, b: !!s.b, x: !!s.x, y: !!s.y, pause: !!s.pause, netz: !!s.netz };
+    // Doppelklopfen von der Apple Watch (jedes hat eine Nummer, damit es nur einmal zählt) oder die Taste "Netz"
+    const klopfen = s.geste && s.geste.id !== this.gesteId;
+    if (s.geste) this.gesteId = s.geste.id;
+    if (this.enabled && this.mode === 'controller' && (klopfen || (neu.netz && !alt.netz))) {
+      this.netzWechsel = true;
+      this.diag.letzter = 'Doppelklopfen / Netz-Taste';
+    }
     P.btn = neu;
     if (neu.pause && !alt.pause && this.onPause) this.onPause();
     // Ein fertig erkannter Schwung von der Apple Watch? Jeder hat eine Nummer, damit er nur einmal zählt.
@@ -437,6 +445,13 @@ export class Controls {
     }
     this.committed = null; this.charging = false; this.power = 0; this.live = null;
     return raw;
+  }
+
+  // Fragt das Match: Soll zwischen Netz und Grundlinie gewechselt werden? (Die Frage löscht den Wunsch wieder.)
+  takeNetz() {
+    const r = this.netzWechsel;
+    this.netzWechsel = false;
+    return r;
   }
 
   takeServe() {
