@@ -41,6 +41,7 @@ export class Controls {
     this.pad = { connected: false, name: '', x: 0, f: 0, btn: {}, motion: false };
     this.schwung = { aktiv: false, t0: 0, peak: 0, hoch: 0, ende: -9 };
     this.padAt = -9;              // wann der letzte Controller-Schlag ausgelöst wurde
+    this.daumen = { id: null, x: 0 };   // Zielen mit dem Daumen, wenn das iPhone der Schläger ist
     this.nativePad = false;       // true, sobald die iOS-App den Controller meldet
     this.onPause = null;          // wird von app.js gesetzt: Pause-Taste am Controller
     this.onMenu = null;           // wird von app.js gesetzt: Controller im Menü ('links', 'rechts', 'hoch', 'runter', 'ok', 'zurueck')
@@ -179,7 +180,9 @@ export class Controls {
 
   // Wie bei "profi": Die Richtung, in die der Stick beim Treffen zeigt, bestimmt das Ziel.
   padRaw(c) {
-    const lr = this.pad.x, ud = this.pad.f;
+    // Richtung: der Stick – oder, wenn das iPhone der Schläger ist, der Daumen auf dem Bildschirm
+    // (links halten = nach links, rechts halten = nach rechts, loslassen = Mitte).
+    const lr = this.pad.x || this.daumen.x, ud = this.pad.f;
     if (this.ctx === 'serve') return { type: 'serve', aim: lr * 0.85, power: Math.min(1.05, c.power + 0.1), committed: true };
     return { type: c.type, aimMode: 'abs', aim: lr * 0.88, depth: 0.78 + ud * 0.16, power: clamp(c.power, 0.2, 1), committed: true };
   }
@@ -211,6 +214,7 @@ export class Controls {
       this.lastClick = this.time;
       return;
     }
+    if (this.mode === 'controller') { this.daumenSetzen(e, true); return; }
     if (this.mode !== 'touch') return;
     e.preventDefault();
     const r = this.el.getBoundingClientRect();
@@ -223,7 +227,17 @@ export class Controls {
     }
   }
 
+  // Wo liegt der Daumen? Ganz links = -1, Mitte = 0, ganz rechts = +1
+  daumenSetzen(e, neu) {
+    if (e.pointerType !== 'touch') return;
+    if (neu) this.daumen.id = e.pointerId;
+    if (e.pointerId !== this.daumen.id) return;
+    const r = this.el.getBoundingClientRect();
+    this.daumen.x = clamp(((e.clientX - r.left) / r.width - 0.5) * 2.4, -1, 1);
+  }
+
   onMove(e) {
+    if (this.enabled && this.mode === 'controller') { this.daumenSetzen(e, false); return; }
     if (!this.enabled || this.mode !== 'touch') return;
     const r = this.el.getBoundingClientRect();
     const x = e.clientX - r.left, y = e.clientY - r.top;
@@ -246,6 +260,7 @@ export class Controls {
       this.commitClassic('drive');
       return;
     }
+    if (e.pointerId === this.daumen.id) this.daumen = { id: null, x: 0 };
     if (this.mode !== 'touch') return;
     if (e.pointerId === this.stick.id) {
       this.stick = { id: null, x0: 0, y0: 0, x: 0, f: 0 };

@@ -29,7 +29,7 @@ const settings = Object.assign({
 }, (() => { try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch (e) { return {}; } })());
 const saveSettings = () => { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) { /* egal */ } };
 
-const CONTROL_NAMES = { klassik: 'Klassik (Maus)', touch: 'Touch (iPad)', profi: 'Profi (Tastatur)', controller: 'Controller (Switch)' };
+const CONTROL_NAMES = { klassik: 'Klassik (Maus)', touch: 'Touch (iPad)', profi: 'Profi (Tastatur)', controller: 'Controller / iPhone-Schläger' };
 const ASSIST_NAMES = { voll: 'Voll (läuft von allein)', seitlich: 'Nur seitlich', aus: 'Aus (selbst laufen)' };
 
 // ---------------------------------------------------------------
@@ -191,7 +191,10 @@ const HELP = `
       Stärker schwingen = härterer Schlag. Von oben nach unten = Slice.</li>
     <li><kbd>A</kbd>: Topspin · <kbd>B</kbd>: Slice · <kbd>X</kbd>: Lob · <kbd>Y</kbd>: Stoppball.</li>
     <li><b>Stick:</b> laufen. Die Richtung, die du <b>beim Treffen</b> hältst, bestimmt das Ziel.</li>
-    <li><b>Aufschlag:</b> schwingen oder <kbd>A</kbd> drücken. <kbd>+</kbd>: Pause.</li></ul></div>
+    <li><b>Aufschlag:</b> schwingen oder <kbd>A</kbd> drücken. <kbd>+</kbd>: Pause.</li>
+    <li><b>iPhone als Schläger</b> (in der App): Halte das iPhone fest in der Hand und schwing es wie einen Schläger.
+      Der Daumen auf dem Bildschirm zielt: links halten = nach links, rechts = nach rechts, loslassen = Mitte.
+      Lass am besten die Laufhilfe auf „Voll“. Achtung: gut festhalten, am besten mit Hülle!</li></ul></div>
   <p class="dim"><kbd>P</kbd> oder <kbd>Esc</kbd> = Pause. Der gelbe Ring zeigt, wo der Ball des Gegners landet. Der orange Ring ist dein Ziel.</p>`;
 let helpBack = 'home';
 actions.help = (v) => { if (v) helpBack = v; show(`<div class="bar">${back(helpBack)}<h2>Steuerung</h2></div>${HELP}`); };
@@ -649,7 +652,7 @@ function startMatch(o) {
   $('#hint').textContent = {
     touch: 'Links: laufen · Rechts: nach oben wischen = Schlag · unten = Stopp · Doppeltipp = Lob',
     klassik: 'Mausrad/←→ zielen · Linke Taste halten = Kraft · Doppelklick = Lob · ↑↓ laufen',
-    controller: 'Schwingen oder A = Schlag · B Slice · X Lob · Y Stopp · Stick = laufen und zielen',
+    controller: 'Schwingen oder A = Schlag · B Slice · X Lob · Y Stopp · Stick oder Daumen = zielen',
     profi: 'WASD laufen · Leertaste Topspin · K Slice · L Lob · I Stopp · Richtung beim Treffen halten',
   }[settings.control];
   // Auf dem Handy blendet sich der Hinweis nach ein paar Sekunden aus (siehe style.css). Dafür die Klasse neu setzen.
