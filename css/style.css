@@ -249,9 +249,38 @@ tr.cut td { text-align: center; font-size: 11px; font-weight: 700; color: var(--
   #speed { top: 62px; font-size: 14px; }
   #hint { font-size: 11px; }
   #hint.kurz { animation: hinweisWeg 1s 9s forwards; }   /* der Hinweis verschwindet nach 9 Sekunden */
-  .title { margin: 1vh 0 2vh; }
-  .title h1 { font-size: clamp(36px, 14vh, 72px); }
-  .modal { margin-top: 2vh; }
+  /* Menüs: kleinere Schrift und flachere Knöpfe, damit alles auf den Bildschirm passt */
+  #screen { padding-top: max(10px, env(safe-area-inset-top)); padding-bottom: 14px; }
+  .title { margin: 0 0 10px; }
+  .title h1 { font-size: 38px; letter-spacing: 1px; }
+  .title p { font-size: 12px; margin-top: 2px; }
+  h2 { font-size: 20px; margin-bottom: 8px; }
+  h3 { font-size: 15px; margin: 10px 0 6px; }
+  label { font-size: 12px; margin: 8px 0 4px; }
+  .bar { margin-bottom: 10px; gap: 8px; }
+  .panel { padding: 10px 12px; margin-bottom: 10px; border-radius: 12px; }
+  button, .btn { font-size: 14px; padding: 7px 12px; min-height: 38px; border-radius: 10px; }
+  button.big { font-size: 16px; padding: 8px 14px; }
+  button.big small { font-size: 11px; }
+  /* Startbildschirm: die Knöpfe stehen in zwei Spalten nebeneinander */
+  .menu { grid-template-columns: 1fr 1fr; gap: 8px; max-width: 640px; }
+  .menu > .row { gap: 8px; }
+  .row { gap: 7px; }
+  .grid { gap: 7px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  .grid.small { grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); }
+  .pcard { padding: 7px 9px; }
+  .pcard .nm { font-size: 13px; }
+  table { font-size: 13px; }
+  td, th { padding: 5px 6px; }
+  .kpi b { font-size: 17px; }
+  .kpi div { padding: 7px 9px; }
+  .vs .who { font-size: 16px; }
+  .swatches button { width: 36px; height: 36px; }
+  input[type=text] { font-size: 16px; padding: 8px 10px; }
+  .help li { font-size: 13px; margin: 3px 0; }
+  .modal { margin-top: 2vh; max-width: 480px; }
+  .modal h2 { font-size: 24px; }
+  .modal .score { font-size: 19px; margin-bottom: 8px; }
   .bcol { width: 172px; }
   .bcol.pokal { width: 120px; }
   .tl { width: 118px; }
