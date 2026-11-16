@@ -42,6 +42,13 @@ xcrun simctl launch "iPhone 18 Pro" com.von-bleichert.powershot
 5. Im Fenster „Organizer“: Distribute App → TestFlight & App Store → Upload.
 6. In App Store Connect unter TestFlight die Tester eintragen. Interne Tester (bis 100, eigenes Team) brauchen keine Prüfung durch Apple.
 
+Dasselbe im Terminal (im Ordner `ios/`), wenn die App in App Store Connect schon angelegt ist:
+
+```bash
+xcodebuild -project Powershot.xcodeproj -scheme Powershot -configuration Release -destination 'generic/platform=iOS' -archivePath ~/Library/Developer/Xcode/Archives/Powershot.xcarchive -allowProvisioningUpdates archive
+xcodebuild -exportArchive -archivePath ~/Library/Developer/Xcode/Archives/Powershot.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath ~/Library/Developer/Xcode/Archives/Powershot-export -allowProvisioningUpdates
+```
+
 Bei jedem neuen Upload muss die Build-Nummer steigen (Ziel „Powershot“ → General → Build).
 
 ## Was nicht in die App darf
