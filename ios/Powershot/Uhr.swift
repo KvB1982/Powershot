@@ -13,6 +13,29 @@ final class Uhr: NSObject, ObservableObject, WCSessionDelegate {
     @Published var anzeige = "⌚ Noch kein Schwung von der Apple Watch"
     private var empfangen = 0
 
+    /// Aufgenommene Schlag-Serien von der Uhr (Dateien im Ordner "Aufnahmen")
+    @Published var aufnahmen: [URL] = []
+    static var aufnahmeOrdner: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Aufnahmen")
+    }
+    private func aufnahmenLesen() {
+        let dateien = (try? FileManager.default.contentsOfDirectory(at: Uhr.aufnahmeOrdner, includingPropertiesForKeys: nil)) ?? []
+        aufnahmen = dateien.filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    /// Die Uhr hat eine aufgenommene Serie geschickt: in den Ordner "Aufnahmen" legen.
+    func session(_ session: WCSession, didReceive file: WCSessionFile) {
+        let name = (file.metadata?["name"] as? String) ?? file.fileURL.lastPathComponent
+        try? FileManager.default.createDirectory(at: Uhr.aufnahmeOrdner, withIntermediateDirectories: true)
+        let ziel = Uhr.aufnahmeOrdner.appendingPathComponent(name)
+        try? FileManager.default.removeItem(at: ziel)
+        try? FileManager.default.copyItem(at: file.fileURL, to: ziel)     // muss sofort passieren, die Datei verschwindet danach
+        DispatchQueue.main.async {
+            self.anzeige = "⌚ Aufnahme empfangen: \(name)"
+            self.aufnahmenLesen()
+        }
+    }
+
     private var letzter: [String: Any]?
     private let schloss = NSLock()
 
@@ -28,6 +51,7 @@ final class Uhr: NSObject, ObservableObject, WCSessionDelegate {
             }
         }
         #endif
+        aufnahmenLesen()
         guard WCSession.isSupported() else { return }      // ein iPad hat keine Uhr
         WCSession.default.delegate = self
         WCSession.default.activate()
