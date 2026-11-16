@@ -51,6 +51,9 @@ xcodebuild -exportArchive -archivePath ~/Library/Developer/Xcode/Archives/Powers
 
 Bei jedem neuen Upload muss die Build-Nummer steigen (Ziel „Powershot“ → General → Build).
 
-## Was nicht in die App darf
+## Bewegungsaufnahmen (nur privat)
 
-Die gekauften Bewegungsaufnahmen (`mocap/`) werden nicht mitkopiert. In der App laufen deshalb die handgebauten Bewegungen.
+Liegt auf diesem Mac die Datei `mocap/bewegungen.json` (sie steht nicht auf GitHub), kopiert `spiel-kopieren.sh` sie mit in die App.
+Dann spielen die Figuren mit den aufgenommenen Bewegungen. Die Originale (`mocap/*.FBX`) kommen nie in die App.
+So eine App darf nur privat bleiben: interne TestFlight-Tester ja, externe Tester oder App Store nein (Lizenz „Privat“).
+Fehlt die Datei, laufen die handgebauten Bewegungen.
