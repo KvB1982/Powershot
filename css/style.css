@@ -149,6 +149,88 @@ label { display: block; font-size: 13px; color: var(--dim); margin: 12px 0 6px; 
 .center { text-align: center; }
 .gold { color: var(--accent); }
 
+/* ---------- Turnierbaum ---------- */
+/* Eine Spalte pro Runde. Jede Spalte ist gleich hoch, darum stehen die Spiele der nächsten Runde
+   genau zwischen den zwei Spielen, aus denen ihre Spieler kommen. Die Linien malen ::before und ::after. */
+.bpanel { padding: 12px 8px 12px 12px; }
+.bhint { font-size: 12px; margin-bottom: 8px; }
+.bscroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 6px; }
+.bracket { display: flex; min-width: max-content; }
+.bcol { display: flex; flex-direction: column; width: 196px; flex: none; }
+.bcol.pokal { width: 150px; }
+.bh { margin: 0 14px 8px; padding: 6px 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.07); text-align: center; font-size: 14px; }
+.bh small { display: block; font-size: 11px; color: var(--dim); font-weight: 500; }
+.bh.cur { background: var(--accent); color: #141a05; }
+.bh.cur small { color: #3a4210; }
+.bms { flex: 1; display: flex; flex-direction: column; }
+.bw { flex: 1; display: flex; align-items: center; position: relative; padding: 4px 14px; }
+.bw::before, .bw::after { content: ''; position: absolute; width: 14px; border: 0 solid rgba(255, 255, 255, 0.3); }
+.bcol:not(.first) .bw::before { left: 0; top: 50%; border-top-width: 2px; }
+.bcol:not(.pokal) .bw::after { right: 0; top: 50%; border-top-width: 2px; }
+.bcol:not(.pokal):not(.last) .bw:nth-child(odd)::after { height: 50%; border-right-width: 2px; }
+.bcol:not(.pokal):not(.last) .bw:nth-child(even)::after { top: 0; height: 50%; border-top-width: 0; border-bottom-width: 2px; border-right-width: 2px; }
+.bm { width: 100%; background: rgba(0, 0, 0, 0.32); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.bm.mine { border-color: rgba(232, 240, 74, 0.6); }
+.bm.cur.mine { box-shadow: 0 0 0 2px var(--accent); }
+.bp { display: flex; align-items: center; gap: 6px; height: 25px; padding: 0 6px; font-size: 13px; }
+.bp + .bp { border-top: 1px solid var(--line); }
+.bp .sd { width: 18px; text-align: right; font-size: 10px; color: var(--dim); flex: none; }
+.bp .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bp .sc { display: flex; gap: 5px; font-variant-numeric: tabular-nums; color: var(--dim); }
+.bp .sc b { font-weight: 500; min-width: 8px; text-align: center; }
+.bp .sc b.hi { color: var(--text); font-weight: 800; }
+.bp.w .nm { font-weight: 800; }
+.bp.l .nm { color: var(--dim); }
+.bp.me .nm { color: var(--accent); font-weight: 800; }
+.bp.leer .nm { color: rgba(255, 255, 255, 0.25); font-style: italic; }
+.bsieger { width: 100%; text-align: center; font-size: 34px; line-height: 1.2; }
+.bsieger span { display: block; font-size: 15px; font-weight: 800; }
+.bsieger.me span { color: var(--accent); }
+/* ATP Finals: Gruppen */
+.bliste .bm { margin-top: 6px; }
+.btag { font-size: 12px; color: var(--dim); margin-top: 12px; }
+.klein { font-size: 12px; margin-top: 6px; }
+table.gruppe tr.weiter td:first-child { color: var(--good); font-weight: 800; }
+
+/* ---------- Saison: Zeitleiste ---------- */
+.tlpanel { padding: 14px 0 10px; }
+.tlkopf { display: flex; align-items: center; gap: 12px; padding: 0 16px 10px; flex-wrap: wrap; }
+.tlbar { flex: 1; min-width: 120px; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.tlbar i { display: block; height: 100%; background: var(--accent); }
+.tlscroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 0 8px 6px; }
+.tlrow { display: flex; min-width: max-content; }
+.tl { width: 132px; flex: none; text-align: center; padding: 0 4px; }
+.tlm { font-size: 12px; font-weight: 700; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; height: 18px; }
+/* Die Linie mit dem Punkt: fertige Turniere sind gelb ausgefüllt, das nächste blinkt */
+.tld { position: relative; height: 34px; display: grid; place-items: center; margin: 0 -4px; }
+.tld::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; background: rgba(255, 255, 255, 0.16); }
+.tl.done .tld::before { background: var(--accent); }
+.tl.now .tld::before { background: linear-gradient(90deg, var(--accent) 50%, rgba(255, 255, 255, 0.16) 50%); }
+.tld i { position: relative; width: 16px; height: 16px; border-radius: 50%; background: #1a2440; border: 3px solid #2a6ab8; }
+.tl.gs .tld i { border-color: #d8a23a; width: 22px; height: 22px; }
+.tl.f .tld i { border-color: #a45af0; width: 22px; height: 22px; }
+.tl.done .tld i { background: var(--accent); }
+.tl.now .tld i { background: #fff; animation: tlBlink 1.4s infinite; }
+@keyframes tlBlink { 0%, 100% { box-shadow: 0 0 0 0 rgba(232, 240, 74, 0.7); } 50% { box-shadow: 0 0 0 9px rgba(232, 240, 74, 0); } }
+.tln { font-size: 14px; font-weight: 800; line-height: 1.2; min-height: 34px; display: grid; place-items: center; }
+.tlc { font-size: 10.5px; color: var(--dim); }
+.tlr { font-size: 12px; margin-top: 4px; min-height: 32px; }
+.tlr b, .tlr span { display: block; }
+.tlr span { color: var(--dim); }
+.tlr .hier { color: var(--accent); }
+.tl.todo { opacity: 0.6; }
+.tl.now .tln { color: var(--accent); }
+
+/* ---------- Saison: Tabelle ATP Race ---------- */
+table.race td { vertical-align: middle; }
+table.race tr.quali td:first-child { color: var(--good); font-weight: 800; }
+.rbar { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); margin-top: 4px; overflow: hidden; }
+.rbar i { display: block; height: 100%; background: var(--accent2); }
+tr.me .rbar i { background: var(--accent); }
+tr.cut td { text-align: center; font-size: 11px; font-weight: 700; color: var(--good); padding: 3px; border-bottom: 2px dashed var(--good); }
+.scrollx { overflow-x: auto; }
+.kpi.vier { grid-template-columns: 1fr 1fr; }
+
 /* ---------- iPhone und andere kleine Bildschirme ---------- */
 /* Hinweis "Bitte quer halten": nur auf Handys im Hochformat zu sehen */
 #drehen { position: fixed; inset: 0; z-index: 60; display: none; place-items: center; align-content: center; gap: 14px;
@@ -168,5 +250,9 @@ label { display: block; font-size: 13px; color: var(--dim); margin: 12px 0 6px; 
   .title { margin: 1vh 0 2vh; }
   .title h1 { font-size: clamp(36px, 14vh, 72px); }
   .modal { margin-top: 2vh; }
+  .bcol { width: 172px; }
+  .bcol.pokal { width: 120px; }
+  .tl { width: 118px; }
 }
 @keyframes hinweisWeg { to { opacity: 0; } }
+
