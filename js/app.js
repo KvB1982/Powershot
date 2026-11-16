@@ -519,6 +519,8 @@ function startMatch(o) {
     klassik: 'Mausrad/←→ zielen · Linke Taste halten = Kraft · Doppelklick = Lob · ↑↓ laufen',
     profi: 'WASD laufen · Leertaste Topspin · K Slice · L Lob · I Stopp · Richtung beim Treffen halten',
   }[settings.control];
+  // Auf dem Handy blendet sich der Hinweis nach ein paar Sekunden aus (siehe style.css). Dafür die Klasse neu setzen.
+  $('#hint').classList.remove('kurz'); void $('#hint').offsetWidth; $('#hint').classList.add('kurz');
   hud.update();
   hud.message(o.title || '', 'info');
   sound.setCrowd(0.05);
@@ -662,6 +664,12 @@ function step(n = 60) {
     hudFrame(1 / 60);
   }
 }
+// iPad/iPhone: Wechselt man zu einer anderen App oder sperrt den Bildschirm, macht das Spiel Pause.
+// Kommt man zurück, wird der Ton wieder aufgeweckt (iOS hält ihn sonst an).
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { if (match && !paused) togglePause(); } else if (sound.ctx) sound.unlock();
+});
+
 window.__powershot = { game, controls, settings, step, get match() { return match; }, get career() { return career; }, actions };
 // Das Spielermodell laden (höchstens 8 Sekunden warten – sonst geht es mit den einfachen Figuren los)
 await Promise.race([Promise.all([loadFigure(), loadMocap()]), new Promise((r) => setTimeout(r, 8000))]);

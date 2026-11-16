@@ -14,6 +14,7 @@ html, body {
   margin: 0; height: 100%; overflow: hidden; background: #0b1020; color: var(--text);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-user-select: none; user-select: none; overscroll-behavior: none;
+  -webkit-touch-callout: none;   /* kein Menü beim langen Drücken (iPad/iPhone) */
 }
 #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 #touch { position: fixed; inset: 0; touch-action: none; }
@@ -147,3 +148,25 @@ label { display: block; font-size: 13px; color: var(--dim); margin: 12px 0 6px; 
 .modal .score { text-align: center; font-size: 26px; font-weight: 800; margin-bottom: 12px; }
 .center { text-align: center; }
 .gold { color: var(--accent); }
+
+/* ---------- iPhone und andere kleine Bildschirme ---------- */
+/* Hinweis "Bitte quer halten": nur auf Handys im Hochformat zu sehen */
+#drehen { position: fixed; inset: 0; z-index: 60; display: none; place-items: center; align-content: center; gap: 14px;
+  background: #0b1020; font-size: 22px; font-weight: 700; text-align: center; }
+#drehen div { font-size: 64px; }
+@media (orientation: portrait) and (max-width: 600px) { #drehen { display: grid; } }
+
+/* Querformat auf dem Handy: wenig Höhe, deshalb alles etwas kleiner */
+@media (max-height: 500px) {
+  #scoreboard { font-size: 13px; padding: 3px 2px; }
+  #scoreboard td { padding: 2px 7px; }
+  #scoreboard td.nm { min-width: 90px; }
+  #pauseBtn { width: 44px; height: 44px; min-height: 0; }
+  #speed { top: 62px; font-size: 14px; }
+  #hint { font-size: 11px; }
+  #hint.kurz { animation: hinweisWeg 1s 9s forwards; }   /* der Hinweis verschwindet nach 9 Sekunden */
+  .title { margin: 1vh 0 2vh; }
+  .title h1 { font-size: clamp(36px, 14vh, 72px); }
+  .modal { margin-top: 2vh; }
+}
+@keyframes hinweisWeg { to { opacity: 0; } }

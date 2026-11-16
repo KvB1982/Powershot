@@ -43,6 +43,17 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 | `js/tournament.js`, `js/career.js`, `js/app.js` | Turnierbaum, Karriere (localStorage), Menüs |
 | `python/` | Die ursprünglichen Pygame-Zero-Versionen (mit `pythoncore-3.14-64`, pgzero + pygame-ce) |
 
+## iPad und iPhone (Home-Bildschirm-App)
+
+- Das Spiel ist eine „Web-App“: In Safari https://kvb1982.github.io/Powershot/ öffnen → Teilen → „Zum Home-Bildschirm“.
+  Dann startet es im Vollbild mit eigenem Symbol (`manifest.webmanifest`, `icons/`).
+- `sw.js` merkt sich alle Dateien, damit es nach dem ersten Start auch ohne Internet läuft. Programm-Dateien kommen
+  zuerst aus dem Netz, Modelle/Sounds/three.js zuerst aus dem Speicher. Wird ein Modell oder Sound unter gleichem
+  Namen ersetzt: `VERSION` in `sw.js` erhöhen.
+- Auf `localhost` ist `sw.js` abgeschaltet; zum Testen `http://localhost:8765/?offline` aufrufen.
+- Symbol neu erzeugen (Mac): `cd icons && for s in 180 192 512; do sips -s format png -z $s $s icon.svg --out icon-$s.png; done`
+- Auf dem Mac heißt der Startbefehl `python3 tools/server.py`.
+
 ## Was nicht ins Repository darf
 
 - `mocap/` – gekaufte Bewegungsaufnahmen (Fab, Lizenz „Privat“, „Verwendung mit KI: Nein“ beachten) und die daraus erzeugte

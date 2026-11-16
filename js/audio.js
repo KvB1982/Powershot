@@ -77,7 +77,7 @@ export class Sound {
 
   // Muss nach dem ersten Tippen/Klicken aufgerufen werden (Browser-Regel)
   unlock() {
-    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    if (this.ctx) { if (this.ctx.state !== 'running') this.ctx.resume(); return; }   // iOS kennt auch 'interrupted'
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     this.ctx = new AC();

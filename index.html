@@ -7,6 +7,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0b1020">
+  <meta name="apple-mobile-web-app-title" content="Powershot">
+  <!-- Damit das Spiel wie eine App auf den Home-Bildschirm gelegt werden kann (Teilen → Zum Home-Bildschirm) -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" href="icons/icon-192.png">
   <title>Powershot Tennis</title>
   <link rel="stylesheet" href="css/style.css">
   <script type="importmap">
@@ -34,7 +39,24 @@
 
   <div id="screen"></div>
   <div id="loading">Powershot wird geladen …</div>
+  <div id="drehen"><div>📱↻</div>Bitte das Handy quer halten</div>
 
   <script type="module" src="js/app.js"></script>
+  <script>
+    // Den Helfer für "Spielen ohne Internet" anmelden (siehe sw.js).
+    // Beim Entwickeln am eigenen Rechner (localhost) lassen wir ihn weg, damit man immer die neuesten
+    // Dateien sieht. Zum Ausprobieren dort: http://localhost:8765/?offline
+    const lokal = ['localhost', '127.0.0.1'].includes(location.hostname);
+    if ('serviceWorker' in navigator && (!lokal || location.search.includes('offline'))) {
+      navigator.serviceWorker.register('sw.js').catch((e) => console.warn('Ohne Internet geht es nicht:', e));
+      // Sobald alles geladen ist: dem Helfer sagen, welche Dateien die Seite schon geholt hat.
+      const melden = async () => {
+        const reg = await navigator.serviceWorker.ready;
+        const liste = [location.href, ...performance.getEntriesByType('resource').map((r) => r.name)];
+        reg.active.postMessage({ merken: liste });
+      };
+      if (document.readyState === 'complete') melden(); else window.addEventListener('load', melden);
+    }
+  </script>
 </body>
 </html>
