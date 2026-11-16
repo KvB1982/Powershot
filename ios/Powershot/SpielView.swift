@@ -8,6 +8,10 @@ import SwiftUI
 import WebKit
 
 struct SpielView: UIViewRepresentable {
+    // Der "Merker" hält die Controller-Brücke fest, solange das Fenster lebt.
+    final class Merker { var controller: ControllerBruecke? }
+    func makeCoordinator() -> Merker { Merker() }
+
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.setURLSchemeHandler(SpielDateien(), forURLScheme: "powershot")
@@ -26,6 +30,7 @@ struct SpielView: UIViewRepresentable {
         web.isInspectable = true                                  // am Mac mit Safari hineinschauen (Entwickler-Menü)
         #endif
         web.load(URLRequest(url: URL(string: "powershot://spiel/index.html")!))
+        context.coordinator.controller = ControllerBruecke(web: web)   // Switch-Controller ans Spiel anschließen
         return web
     }
 
@@ -42,7 +47,7 @@ final class SpielDateien: NSObject, WKURLSchemeHandler {
         "js": "text/javascript; charset=utf-8", "mjs": "text/javascript; charset=utf-8",
         "json": "application/json; charset=utf-8", "webmanifest": "application/manifest+json",
         "glb": "model/gltf-binary", "mp3": "audio/mpeg", "png": "image/png", "jpg": "image/jpeg",
-        "svg": "image/svg+xml",
+        "svg": "image/svg+xml", "webp": "image/webp",
     ]
 
     func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {

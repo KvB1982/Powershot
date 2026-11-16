@@ -34,7 +34,7 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 | `js/data.js` | Top 100 (Stand 9.11.2026, Werte geschätzt), Turniere, Shop, Schwierigkeit, `EINHAND` |
 | `js/physics.js`, `js/rules.js` | Ballflug, Zählweise – ohne three.js, in node testbar |
 | `js/match.js` | Zustände: intro → serveReady → toss → rally → pointOver → (changeover) → over; Computergegner |
-| `js/controls.js` | Steuerung: `klassik` (Maus), `touch` (iPad), `profi` (Tastatur) |
+| `js/controls.js` | Steuerung: `klassik` (Maus), `touch` (iPad), `profi` (Tastatur), `controller` (Switch-Controller; Schwung-Zahlen `SWING_…` oben in der Datei) |
 | `js/figur.js` | Sechs Spielermodelle (`assets/spieler_a…f.glb`), Skinning auf 13 Knochen, Umfärben im Shader |
 | `js/posen.js` | Handgebaute Posen und Schlagbewegungen (Rückfall, wenn es keine Aufnahme gibt) |
 | `js/mocap.js` | Lädt `mocap/bewegungen.json`, falls vorhanden |
@@ -54,6 +54,13 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 - Auf `localhost` ist `sw.js` abgeschaltet; zum Testen `http://localhost:8765/?offline` aufrufen.
 - Symbol neu erzeugen (Mac): `cd icons && for s in 180 192 512; do sips -s format png -z $s $s icon.svg --out icon-$s.png; done`
 - Auf dem Mac heißt der Startbefehl `python3 tools/server.py`.
+
+## iOS-App (Ordner `ios/`)
+
+- `ios/Powershot.xcodeproj`: dünne Hülle (WKWebView) um das Spiel, Anleitung und TestFlight-Schritte in `ios/README.md`.
+- `ios/Powershot/ControllerBruecke.swift` liest Switch-Controller (GameController-Framework) und ruft 60-mal pro Sekunde
+  `window.__powershotPad({...})` auf; das landet in `Controls.setPad`. Im Browser fragt `Controls.pollPad` die Gamepad-Schnittstelle ab (nur Tasten/Stick).
+- Schwingen mit echtem Joy-Con ist noch nicht am Gerät erprobt; die Schwellen sind geschätzt.
 
 ## Was nicht ins Repository darf
 

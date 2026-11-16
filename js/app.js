@@ -27,7 +27,7 @@ const settings = Object.assign({
 }, (() => { try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch (e) { return {}; } })());
 const saveSettings = () => { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) { /* egal */ } };
 
-const CONTROL_NAMES = { klassik: 'Klassik (Maus)', touch: 'Touch (iPad)', profi: 'Profi (Tastatur)' };
+const CONTROL_NAMES = { klassik: 'Klassik (Maus)', touch: 'Touch (iPad)', profi: 'Profi (Tastatur)', controller: 'Controller (Switch)' };
 const ASSIST_NAMES = { voll: 'Voll (läuft von allein)', seitlich: 'Nur seitlich', aus: 'Aus (selbst laufen)' };
 
 // ---------------------------------------------------------------
@@ -128,6 +128,9 @@ actions.settings = (v) => {
     <div class="bar">${back(settingsBack)}<h2>Einstellungen</h2></div>
     <div class="panel">
       ${optionRow('Steuerung', 'control', CONTROL_NAMES)}
+      <p class="dim" style="margin:6px 0 0;font-size:13px">🎮 ${controls.pad.connected
+        ? `Verbunden: ${esc(controls.pad.name)} · ${controls.pad.motion ? 'Schwingen wird erkannt' : 'nur Tasten und Stick (kein Schwingen)'}`
+        : 'Kein Controller verbunden. Koppeln: iPad-Einstellungen → Bluetooth, am Joy-Con die kleine runde Taste gedrückt halten.'}</p>
       ${optionRow('Laufhilfe', 'assist', ASSIST_NAMES)}
       ${optionRow('Schwierigkeit', 'difficulty', Object.fromEntries(Object.entries(D.DIFFICULTY).map(([k, d]) => [k, d.name])))}
       ${optionRow('Matchlänge', 'length', Object.fromEntries(Object.entries(D.LENGTHS).map(([k, d]) => [k, d.name])))}
@@ -178,6 +181,13 @@ const HELP = `
     <li><kbd>Leertaste</kbd>/<kbd>J</kbd>: Topspin · <kbd>K</kbd>: Slice · <kbd>L</kbd>: Lob · <kbd>I</kbd>: Stoppball. Halten = mehr Kraft.</li>
     <li>Die Richtungstasten, die du <b>beim Treffen</b> hältst, bestimmen das Ziel: links/rechts = Ecke, hoch = lang, runter = kurz.</li>
     <li><b>Aufschlag:</b> Leertaste halten und loslassen, mit links/rechts zielen. Zu lange halten = Fehler.</li></ul></div>
+  <div class="panel help"><h3>Controller (Switch Joy-Con / Pro Controller)</h3><ul>
+    <li>Erst koppeln (Bluetooth), dann in den Einstellungen bei „Steuerung“ den Controller wählen.</li>
+    <li><b>Schwingen</b> (nur in der iPad-/iPhone-App): Schwing den Joy-Con wie einen Schläger, wenn der Ball bei dir ist.
+      Stärker schwingen = härterer Schlag. Von oben nach unten = Slice.</li>
+    <li><kbd>A</kbd>: Topspin · <kbd>B</kbd>: Slice · <kbd>X</kbd>: Lob · <kbd>Y</kbd>: Stoppball.</li>
+    <li><b>Stick:</b> laufen. Die Richtung, die du <b>beim Treffen</b> hältst, bestimmt das Ziel.</li>
+    <li><b>Aufschlag:</b> schwingen oder <kbd>A</kbd> drücken. <kbd>+</kbd>: Pause.</li></ul></div>
   <p class="dim"><kbd>P</kbd> oder <kbd>Esc</kbd> = Pause. Der gelbe Ring zeigt, wo der Ball des Gegners landet. Der orange Ring ist dein Ziel.</p>`;
 let helpBack = 'home';
 actions.help = (v) => { if (v) helpBack = v; show(`<div class="bar">${back(helpBack)}<h2>Steuerung</h2></div>${HELP}`); };
@@ -517,6 +527,7 @@ function startMatch(o) {
   $('#hint').textContent = {
     touch: 'Links: laufen · Rechts: nach oben wischen = Schlag · unten = Stopp · Doppeltipp = Lob',
     klassik: 'Mausrad/←→ zielen · Linke Taste halten = Kraft · Doppelklick = Lob · ↑↓ laufen',
+    controller: 'Schwingen oder A = Schlag · B Slice · X Lob · Y Stopp · Stick = laufen und zielen',
     profi: 'WASD laufen · Leertaste Topspin · K Slice · L Lob · I Stopp · Richtung beim Treffen halten',
   }[settings.control];
   // Auf dem Handy blendet sich der Hinweis nach ein paar Sekunden aus (siehe style.css). Dafür die Klasse neu setzen.
@@ -647,6 +658,7 @@ let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+  controls.pollPad();               // Controller im Browser abfragen (auch in der Pause, wegen der Pause-Taste)
   if (match && !paused) {
     controls.update(dt);
     match.update(dt);
@@ -669,6 +681,11 @@ function step(n = 60) {
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { if (match && !paused) togglePause(); } else if (sound.ctx) sound.unlock();
 });
+
+// Controller: Die Pause-Taste hält das Spiel an. Die iOS-App meldet den Controller über diese beiden Funktionen.
+controls.onPause = () => togglePause();
+window.__powershotPad = (s) => { controls.nativePad = true; controls.setPad(s); };
+window.__powershotPadWeg = () => { controls.nativePad = false; controls.padWeg(); };
 
 window.__powershot = { game, controls, settings, step, get match() { return match; }, get career() { return career; }, actions };
 // Das Spielermodell laden (höchstens 8 Sekunden warten – sonst geht es mit den einfachen Figuren los)
