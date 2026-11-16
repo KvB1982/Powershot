@@ -97,8 +97,10 @@ const GANG = {
   kippen: 0.022,      // die Schulter über dem Standbein sinkt etwas, die andere hebt sich (Meter)
   nicken: 0.012,      // der Oberkörper pendelt bei jedem Schritt ein wenig vor und zurück (Meter)
   wiegen: 0.03,       // der Körper wiegt sich über das Bein, das gerade steht (Meter)
-  armFrei: 0.19,      // so weit schwingt der freie Arm vor und zurück (Meter)
-  armSchlaeger: 0.10, // der Schlägerarm schwingt weniger – der Schläger ist ja schwer
+  armFrei: 0.27,      // so weit schwingt der freie Arm vor und zurück (Meter)
+  armSchlaeger: 0.16, // der Schlägerarm schwingt weniger – der Schläger ist ja schwer
+  armAbstand: 0.12,   // so weit hängen die Hände seitlich neben der Schulter (Meter) – größer = Arme weiter weg vom Körper
+  armBeugen: 0.10,    // vorn beugt sich der Ellbogen, die Hand kommt so viel höher (Meter)
   ferse: 0.5,         // so stark rollt der Fuß ab: hinten geht die Ferse hoch, vorn zeigen die Zehen hoch (Bogenmaß)
 };
 const UP = new THREE.Vector3(0, 1, 0);
@@ -466,13 +468,15 @@ export class Avatar {
       // Gehen: Die Arme hängen an den Schultern und pendeln wie ein Pendel – der freie Arm vor, wenn das andere Bein vor geht.
       // Vorn beugt sich der Ellbogen etwas (die Hand kommt höher).
       const vorL = armS * gehK, vorR = -armS * gehK;
-      const gehL = add3(shL, [0.03 + GANG.armFrei * vorL, -0.05, -0.555 + 0.06 * Math.max(0, vorL)]);
-      const gehR = add3(shR, [0.06 + GANG.armSchlaeger * vorR, 0.04, -0.52 + 0.03 * Math.max(0, vorR)]);
+      // Die Hände hängen ein Stück neben dem Körper; vorn schwingen sie leicht nach innen, hinten nach außen.
+      const ab = GANG.armAbstand;
+      const gehL = add3(shL, [0.04 + GANG.armFrei * vorL, -(ab - 0.04 * vorL), -0.535 + GANG.armBeugen * Math.max(0, vorL)]);
+      const gehR = add3(shR, [0.06 + GANG.armSchlaeger * vorR, ab - 0.03 * vorR, -0.51 + GANG.armBeugen * 0.5 * Math.max(0, vorR)]);
       handL = mix3(handL, limitReach(shL, gehL, dm.reach), walkK);
       handR = mix3(handR, limitReach(shR, gehR, dm.reach), walkK);
     }
     // (beim Gehen zeigen die Ellbogen nach hinten statt nach außen – sonst sieht es nach Muskelprotz aus)
-    const beuge = mix3(ARM_BEND, [-1, 0.12, -0.3], walkK);
+    const beuge = mix3(ARM_BEND, [-1, 0.3, -0.3], walkK);
     let elR = ik(shR, handR, dm.upper, dm.fore, beuge);
     let elL = ik(shL, handL, dm.upper, dm.fore, mirror(beuge));
 
