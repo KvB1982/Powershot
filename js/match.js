@@ -11,6 +11,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const NOFX = new Proxy({}, { get: () => () => {} });
 const SPAET_FENSTER = 0.12;  // Controller: so lange (Sekunden) darf man nach dem besten Moment noch schlagen (= Ball geht nach rechts)
 const REACH = 1.4;          // so weit reicht man mit dem Schläger (Meter)
+const KAMERA_HILFE = 2.0;   // Kamera-Steuerung: So nah (Meter) musst du am Ball stehen, damit der Spieler den letzten Schritt allein macht
 export const TOSS_TIME = 1.4;      // Dauer der Aufschlagbewegung vom Stand bis zum Treffpunkt
 const WALK_SPEED = 2.0;            // Gehen beim Seitenwechsel (m/s) – zügiges Gehen, kein Laufen
 const CHANGEOVER_TIME = 6.4;       // Dauer des Seitenwechsels (s)
@@ -512,7 +513,26 @@ export class Match {
     let wx = dx * k, wz = dzz * k;
 
     // Eigene Eingabe geht vor
-    if (p.isHuman && this.controls && this.state === 'rally') {
+    // Kamera-Steuerung: Die Kamera sagt, wo du im Zimmer stehst – genau dorthin läuft dein Spieler.
+    const kam = p.isHuman && this.controls && this.controls.kameraZiel && this.state === 'rally' ? this.controls.kameraZiel() : null;
+    if (kam) {
+      let zx = clamp(kam.x, -8.8, 8.8), zz = tz;
+      if (kam.vor !== null) {
+        // vor: 0 = Grundlinie, 1 = am Netz, -1 = weit hinter der Grundlinie
+        const tief = kam.vor >= 0 ? lerp(C.L + 0.7, 3.2, kam.vor) : C.L + 0.7 - kam.vor * 2.5;
+        zz = p.dz * tief;
+        p.homeZ = tief;
+      }
+      // Kleine Hilfe: Bist du schon nah an der Stelle, wo der Ball hinkommt, macht dein Spieler den letzten Schritt allein.
+      if (incoming && p.plan && assist !== 'aus') {
+        if (Math.abs(p.plan.sx - zx) < KAMERA_HILFE) zx = p.plan.sx;
+        if (Math.abs(p.plan.sz - zz) < KAMERA_HILFE) zz = p.plan.sz;
+      }
+      dx = zx - p.x; dzz = zz - p.z;
+      dist = Math.hypot(dx, dzz);
+      k = dist > 0.01 ? Math.min(p.maxSpeed, dist * 7) / dist : 0;
+      wx = dx * k; wz = dzz * k;
+    } else if (p.isHuman && this.controls && this.state === 'rally') {
       const m = this.controls.move();
       if (Math.abs(m.x) > 0.15) wx = m.x * p.maxSpeed;
       if (Math.abs(m.f) > 0.15) {

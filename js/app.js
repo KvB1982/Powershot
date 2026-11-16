@@ -3,6 +3,8 @@
 import { Sound } from './audio.js';
 import { Game3D } from './game3d.js';
 import { Controls } from './controls.js';
+import { KameraLauf, RAUM } from './kamera.js';
+import { KameraBild } from './kamerabild.js';
 import { Match } from './match.js';
 import { AUFSCHLAEGE, AUFSCHLAG_ARTEN, standardAufschlag } from './schlaege.js';
 import { loadFigure } from './figur.js';
@@ -27,10 +29,12 @@ const touchDevice = window.matchMedia && window.matchMedia('(pointer: coarse)').
 const settings = Object.assign({
   control: touchDevice ? 'touch' : 'klassik', assist: 'voll', difficulty: 'mittel', length: 'kurz',
   sound: true, volume: 0.8, voice: true, quality: 'hoch', figures: 'echt',
+  kamera: 'aus', kameraRaum: 'mittel', kameraTauschen: false,
 }, (() => { try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch (e) { return {}; } })());
 const saveSettings = () => { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) { /* egal */ } };
 
 const CONTROL_NAMES = { klassik: 'Klassik (Maus)', touch: 'Touch (iPad)', profi: 'Profi (Tastatur)', controller: 'Controller / iPhone-Schläger' };
+const KAMERA_NAMES = { aus: 'Aus', seite: 'Nur links und rechts', voll: 'Auch vor und zurück' };
 const ASSIST_NAMES = { voll: 'Voll (läuft von allein)', seitlich: 'Nur seitlich', aus: 'Aus (selbst laufen)' };
 
 // ---------------------------------------------------------------
@@ -44,6 +48,16 @@ const game = new Game3D($('#view'), sound);
 game.setQuality(settings.quality);
 game.realFigures = settings.figures === 'echt';
 const controls = new Controls($('#touch'), $('#stick'));
+// Laufen mit der Kamera: kameraLauf rechnet (kamera.js), kameraBild holt das Bild und erkennt den Körper (kamerabild.js)
+const kameraLauf = new KameraLauf();
+const kameraBild = new KameraBild(kameraLauf);
+controls.kamera = kameraLauf;
+function kameraEinstellen() {
+  kameraLauf.art = settings.kamera;
+  kameraLauf.raum = settings.kameraRaum;
+  kameraLauf.tauschen = !!settings.kameraTauschen;
+}
+kameraEinstellen();
 const screen = $('#screen'), hudEl = $('#hud');
 
 let match = null, paused = false, session = null;
@@ -144,6 +158,8 @@ actions.settings = (v) => {
         : 'Kein Controller verbunden. Koppeln: iPad-Einstellungen → Bluetooth, am Joy-Con die kleine runde Taste gedrückt halten.'}</p>
       ${window.webkit?.messageHandlers?.powershot ? `<div class="row" style="margin-top:8px">
         <button data-a="schlaeger">📱 Dieses Gerät als Schläger für ein anderes benutzen</button></div>` : ''}
+      <label>Laufen mit der Kamera</label><div class="row">
+        <button data-a="kamera" data-v="settings">📷 ${settings.kamera === 'aus' ? 'Aus – einrichten …' : KAMERA_NAMES[settings.kamera] + (kameraLauf.bereit ? ' · eingemessen' : ' · noch einmessen!')}</button></div>
       ${optionRow('Laufhilfe', 'assist', ASSIST_NAMES)}
       ${optionRow('Schwierigkeit', 'difficulty', Object.fromEntries(Object.entries(D.DIFFICULTY).map(([k, d]) => [k, d.name])))}
       ${optionRow('Matchlänge', 'length', Object.fromEntries(Object.entries(D.LENGTHS).map(([k, d]) => [k, d.name])))}
@@ -176,6 +192,112 @@ actions.set = (v) => {
   if (key === 'assist' && match) match.cfg.assist = settings.assist;
   actions.settings();
 };
+
+// ---------------------------------------------------------------
+// Laufen mit der Kamera: einrichten und einmessen
+// ---------------------------------------------------------------
+let kameraZurueck = 'settings';     // wohin "Zurück" führt
+let kameraDanach = null;            // falls ein Match auf die Kamera wartet: das hier startet es danach
+let messStart = 0;                  // wann der Countdown zum Einmessen abläuft (0 = keiner)
+actions.kamera = (v) => {
+  if (v) kameraZurueck = v;
+  const an = settings.kamera !== 'aus';
+  const wahl = (label, key, names) => `<label>${label}</label><div class="row">${Object.keys(names).map((k) =>
+    `<button class="${String(settings[key]) === k ? 'sel' : ''}" data-a="kameraSet" data-v="${key}:${k}">${names[k]}</button>`).join('')}</div>`;
+  show(`
+    <div class="bar"><button class="ghost" data-a="kameraFertig" data-v="zurueck">‹ Zurück</button><h2>Laufen mit der Kamera</h2></div>
+    <div class="panel">
+      <p class="dim" style="margin-top:0">Die Kamera schaut dir zu: Gehst du im Zimmer nach rechts, läuft dein Spieler nach rechts.
+        Geschlagen wird wie sonst auch (Uhr, Controller, Maus …). Das Bild bleibt auf diesem Gerät und wird nicht gespeichert.</p>
+      ${wahl('Kamera steuert', 'kamera', KAMERA_NAMES)}
+      ${an ? wahl('Wie viel Platz hast du nach jeder Seite?', 'kameraRaum', Object.fromEntries(Object.entries(RAUM).map(([k, r]) => [k, r.name]))) : ''}
+    </div>
+    ${an ? `<div class="panel">
+      <div class="kameraZeile"><canvas id="kameraVorschau" width="480" height="360"></canvas><canvas id="kameraPlatz" width="150" height="360"></canvas></div>
+      <p id="kameraText" class="center" style="min-height:2.6em;font-weight:700"></p>
+      <div class="row" style="justify-content:center">
+        <button class="primary" data-a="kameraMessen">🎯 Einmessen</button>
+        <button data-a="kameraSet" data-v="kameraTauschen:${!settings.kameraTauschen}">⇄ Links und rechts tauschen</button>
+        <button data-a="kameraWechseln">📷 Andere Kamera</button>
+      </div>
+      <p class="dim" style="font-size:13px;margin-bottom:0">So geht es: Stell das Gerät unter oder neben den Fernseher. Geh 2 bis 3 Meter zurück, bis du
+        vom Kopf bis zur Hüfte im Bild bist. Drück „Einmessen“ und stell dich in die Mitte – dort ist die Mitte der Grundlinie.
+        Es darf nur eine Person im Bild sein.</p>
+    </div>` : ''}
+    <div class="center"><button class="primary" data-a="kameraFertig">${kameraDanach ? 'Los geht’s!' : 'Fertig'}</button></div>`);
+  if (an && kameraBild.status === 'aus') kameraBild.start(kameraBild.kameraId);
+};
+actions.kameraSet = (v) => {
+  const [key, raw] = v.split(':');
+  settings[key] = raw === 'true' ? true : raw === 'false' ? false : raw;
+  saveSettings();
+  kameraEinstellen();
+  if (settings.kamera === 'aus') kameraBild.stop();
+  actions.kamera();
+};
+// Einmessen: erst 3 Sekunden Zeit, um sich hinzustellen, dann misst kamera.js kurz die Mitte aus.
+actions.kameraMessen = () => { kameraLauf.mitte = null; messStart = performance.now() + 3000; };
+actions.kameraWechseln = () => kameraBild.naechste();
+actions.kameraFertig = (v) => {
+  messStart = 0;
+  const danach = kameraDanach;
+  kameraDanach = null;
+  if (danach && v !== 'zurueck') return danach();
+  if (danach) { kameraBild.stop(); return actions.home(); }      // doch nicht spielen: zurück ins Hauptmenü
+  if (hudEl.hidden) kameraBild.stop();          // im Menü braucht niemand die Kamera – das Lämpchen geht aus
+  actions[kameraZurueck]();
+};
+
+// Läuft bei jedem Bild mit: Vorschau, kleiner Platz und Hinweistext auf dem Kamera-Bildschirm
+function kameraFrame() {
+  const vorschau = $('#kameraVorschau');
+  if (!vorschau) return;
+  const jetzt = performance.now();
+  if (messStart && jetzt >= messStart) { messStart = 0; kameraLauf.einmessen(); }
+  kameraBild.zeichne(vorschau);
+  const ziel = kameraLauf.ziel(jetzt / 1000);
+  kameraPlatz($('#kameraPlatz'), ziel);
+  let text;
+  if (kameraBild.status === 'startet') text = 'Kamera startet … (beim ersten Mal wird die Körpererkennung geladen, etwa 20 MB)';
+  else if (kameraBild.status === 'fehler') text = '⚠️ ' + kameraBild.fehler;
+  else if (kameraBild.status !== 'an') text = 'Die Kamera ist aus.';
+  else if (messStart) text = `Stell dich in die Mitte … ${Math.ceil((messStart - jetzt) / 1000)}`;
+  else if (kameraLauf.sammeln) text = kameraLauf.gesehen ? 'Stillhalten …' : 'Ich sehe dich nicht ganz – Schultern und Hüfte müssen im Bild sein.';
+  else if (!kameraLauf.bereit) text = 'Bist du vom Kopf bis zur Hüfte im Bild? Dann drück „Einmessen“.';
+  else if (!ziel) text = 'Ich sehe dich gerade nicht.';
+  else text = '✅ Eingemessen! Geh nach links und rechts – der gelbe Punkt ist dein Spieler.';
+  const el = $('#kameraText');
+  if (el.textContent !== text) el.textContent = text;
+}
+
+// Zeichnet deine Platzhälfte von oben (Netz oben, Grundlinie unten) und deinen Spieler als gelben Punkt.
+function kameraPlatz(flaeche, ziel) {
+  const g = flaeche.getContext('2d'), w = flaeche.width, h = flaeche.height;
+  const L = 11.885, B = 4.115;                          // Länge einer Platzhälfte und halbe Breite des Einzelfelds (Meter)
+  const px = (x) => w / 2 + x * (w / 13), pz = (z) => 14 + z * ((h - 28) / (L + 3.2));
+  g.fillStyle = '#1d5c8a'; g.fillRect(0, 0, w, h);
+  g.strokeStyle = '#fff'; g.lineWidth = 2;
+  g.strokeRect(px(-B), pz(0), px(B) - px(-B), pz(L) - pz(0));
+  g.beginPath(); g.moveTo(px(-B), pz(6.4)); g.lineTo(px(B), pz(6.4)); g.moveTo(px(0), pz(0)); g.lineTo(px(0), pz(6.4)); g.stroke();
+  g.lineWidth = 4; g.beginPath(); g.moveTo(px(-B) - 6, pz(0)); g.lineTo(px(B) + 6, pz(0)); g.stroke();       // das Netz
+  if (!ziel) return;
+  const vor = ziel.vor === null ? 0 : ziel.vor;
+  const z = vor >= 0 ? L + 0.7 + (3.2 - L - 0.7) * vor : L + 0.7 - vor * 2.5;
+  g.fillStyle = '#ffd34a';
+  g.beginPath(); g.arc(px(Math.max(-6.2, Math.min(6.2, ziel.x))), pz(z), 8, 0, 7); g.fill();
+}
+
+// Im Spiel: ein kleines Kamerabild unten links, damit man sieht, ob man noch im Bild ist (grüner Rand = alles gut).
+let miniZeit = 0;
+function kameraMini(dt) {
+  const el = $('#kameraMini');
+  const an = settings.kamera !== 'aus' && kameraBild.status === 'an';
+  el.classList.toggle('on', an);
+  if (!an || (miniZeit += dt) < 0.1) return;            // zehnmal pro Sekunde reicht
+  miniZeit = 0;
+  kameraBild.zeichne(el);
+  el.classList.toggle('weg', !kameraLauf.ziel(performance.now() / 1000));
+}
 
 const HELP = `
   <div class="panel help"><h3>Touch (iPad / Handy)</h3><ul>
@@ -212,6 +334,13 @@ const HELP = `
       <b>Timing = Richtung:</b> früh schwingen = Ball nach links, genau richtig = Mitte, spät = nach rechts.
       Aufschlag und Schmetterball (hoher Ball): von oben nach unten schwingen.
       Lass am besten die Laufhilfe auf „Voll“. Achtung: gut festhalten, am besten mit Hülle!</li></ul></div>
+  <div class="panel help"><h3>Laufen mit der Kamera (Webcam oder Kamera vom iPad)</h3><ul>
+    <li>Einstellungen → „Laufen mit der Kamera“. Die Kamera schaut dir zu und dein Spieler läuft dorthin, wo du im Zimmer stehst.</li>
+    <li><b>Einmessen:</b> Stell dich 2 bis 3 Meter vor die Kamera in die Mitte. Kopf bis Hüfte müssen im Bild sein, und nur eine Person.</li>
+    <li>Ein Schritt im Zimmer sind mehrere Meter auf dem Platz. Wie viele, stellst du bei „Wie viel Platz hast du?“ ein.</li>
+    <li><b>Auch vor und zurück:</b> Ein Schritt auf die Kamera zu = ans Netz. Das klappt nicht ganz so genau wie links und rechts.</li>
+    <li>Bist du nah genug am Ball, macht dein Spieler den letzten Schritt allein (außer bei Laufhilfe „Aus“).</li>
+    <li>Geschlagen wird wie sonst: mit Uhr, iPhone-Schläger, Controller, Maus oder Tastatur.</li></ul></div>
   <div class="panel help"><h3>Was die Schläge mit dem Ball machen</h3><ul>
     <li><b>Topspin:</b> Der Ball dreht nach vorne. Er fällt von selbst ins Feld und springt hoch und schnell weg.</li>
     <li><b>Hoher Topspin:</b> noch mehr Drall, hoch über das Netz – sehr sicher, springt dem Gegner bis zur Schulter.</li>
@@ -657,6 +786,9 @@ actions.saisonDelete = (v, el) => {
 // ---------------------------------------------------------------
 // o: { me, opp, def, mode, title, onEnd(res) }
 function startMatch(o) {
+  // Kamera-Steuerung an, aber noch nicht eingemessen? Dann zuerst zum Kamera-Bildschirm, danach geht es hier weiter.
+  if (settings.kamera !== 'aus' && !kameraLauf.bereit) { kameraDanach = () => startMatch(o); return actions.kamera(); }
+  if (settings.kamera !== 'aus' && kameraBild.status === 'aus') kameraBild.start(kameraBild.kameraId);
   hide();
   const len = D.LENGTHS[settings.length];
   const mode = o.mode || 'match';
@@ -682,7 +814,7 @@ function startMatch(o) {
     klassik: 'Mausrad/←→ zielen · Linke Taste halten = Kraft · Doppelklick = Lob · ↑↓ laufen',
     controller: 'Schwingen oder A = Schlag · B Slice · X Lob · Y Stopp · früh = links, spät = rechts',
     profi: 'WASD laufen · Leertaste Topspin · U gerade · O hoher Topspin · K Slice · L Lob · I Stopp · Richtung beim Treffen halten',
-  }[settings.control];
+  }[settings.control] + (settings.kamera !== 'aus' ? ' · 📷 laufen mit der Kamera' : '');
   // Auf dem Handy blendet sich der Hinweis nach ein paar Sekunden aus (siehe style.css). Dafür die Klasse neu setzen.
   $('#hint').classList.remove('kurz'); void $('#hint').offsetWidth; $('#hint').classList.add('kurz');
   hud.update();
@@ -749,6 +881,7 @@ function diagFrame(dt) {
 function hudFrame(dt) {
   if (hudEl.hidden) return;
   diagFrame(dt);
+  kameraMini(dt);
   const off = (t, el) => { if (t > 0 && t - dt <= 0) el.classList.remove('on'); return t - dt; };
   msgTimer = off(msgTimer, $('#msg'));
   toastTimer = off(toastTimer, $('#toast'));
@@ -797,6 +930,7 @@ actions.quit = () => {
 };
 
 function endMatch() {
+  kameraBild.stop();                // Kamera aus, das Einmessen bleibt gemerkt
   controls.enabled = false;
   controls.showStick(false);
   hudEl.hidden = true;
@@ -843,6 +977,7 @@ function loop(now) {
   }
   game.frame(match && paused ? 0 : dt);
   hudFrame(dt);
+  kameraFrame();
   requestAnimationFrame(loop);
 }
 
@@ -911,7 +1046,7 @@ controls.onPause = () => togglePause();
 window.__powershotPad = (s) => { controls.nativePad = true; controls.setPad(s); };
 window.__powershotPadWeg = () => { controls.nativePad = false; controls.padWeg(); };
 
-window.__powershot = { game, controls, settings, step, get match() { return match; }, get career() { return career; }, get season() { return season; }, actions };
+window.__powershot = { game, controls, settings, step, kameraLauf, kameraBild, get match() { return match; }, get career() { return career; }, get season() { return season; }, actions };
 // Das Spielermodell laden (höchstens 8 Sekunden warten – sonst geht es mit den einfachen Figuren los)
 await Promise.race([Promise.all([loadFigure(), loadMocap()]), new Promise((r) => setTimeout(r, 8000))]);
 $('#loading').remove();

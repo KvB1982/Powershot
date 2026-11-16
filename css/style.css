@@ -300,3 +300,13 @@ tr.cut td { text-align: center; font-size: 11px; font-weight: 700; color: var(--
 }
 @keyframes hinweisWeg { to { opacity: 0; } }
 
+
+/* Laufen mit der Kamera: Vorschau beim Einrichten und das kleine Bild im Spiel */
+.kameraZeile { display: flex; gap: 10px; justify-content: center; align-items: stretch; }
+.kameraZeile canvas { border-radius: 12px; border: 1px solid var(--line); min-width: 0; }
+#kameraVorschau { width: min(100%, 480px); aspect-ratio: 4 / 3; }
+#kameraPlatz { height: auto; max-height: 360px; aspect-ratio: 150 / 360; }
+#kameraMini { position: absolute; left: max(10px, env(safe-area-inset-left)); bottom: 38px; width: 128px; height: 96px; display: none;
+  border-radius: 10px; border: 3px solid #5fd36b; opacity: 0.9; }
+#kameraMini.on { display: block; }
+#kameraMini.weg { border-color: #ff5a4a; }      /* roter Rand: Die Kamera sieht dich gerade nicht */

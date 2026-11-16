@@ -31,7 +31,7 @@ async function holen(request) {
   return antwort;
 }
 
-// Gehört die Adresse zum Spiel? (eigene Dateien und three.js von jsDelivr, aber nie die Bewegungsaufnahmen)
+// Gehört die Adresse zum Spiel? (eigene Dateien, three.js und die Körpererkennung von jsDelivr, aber nie die Bewegungsaufnahmen)
 function gehoertDazu(url) {
   const eigene = url.origin === self.location.origin;
   if (!eigene && url.hostname !== 'cdn.jsdelivr.net') return false;

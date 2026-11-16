@@ -3,6 +3,7 @@
 //   touch   : für iPad/Handy (links Joystick, rechts wischen)
 //   profi   : Tastatur, selbst laufen, verschiedene Schläge, Richtung beim Treffen
 //   controller : Switch-Controller (Joy-Con, Pro Controller): Stick, Tasten und – in der iOS-App – Schwingen
+// Dazu kommt, wenn man will, das Laufen mit der Kamera (kamera.js) – das geht mit jeder der vier Arten zusammen.
 //
 // Das Match fragt die Steuerung ab:
 //   move()        -> { x, f }   Laufrichtung (-1..1), f = nach vorne
@@ -76,6 +77,7 @@ export class Controls {
     this.onMenu = null;           // wird von app.js gesetzt: Controller im Menü ('links', 'rechts', 'hoch', 'runter', 'ok', 'zurueck')
     this.menuDir = '';            // Richtung, in die der Stick gerade gedrückt ist
     this.menuAt = 0;              // wann die Richtung zuletzt gemeldet wurde (zum Wiederholen beim Festhalten)
+    this.kamera = null;           // wird von app.js gesetzt: Laufen mit der Kamera (siehe kamera.js)
     this.bind();
   }
 
@@ -459,6 +461,11 @@ export class Controls {
     }
     this.committed = null; this.charging = false; this.power = 0; this.live = null;
     return raw;
+  }
+
+  // Fragt das Match: Wohin soll der Spieler laufen, wenn die Kamera steuert? (null = Kamera steuert gerade nicht)
+  kameraZiel() {
+    return this.kamera ? this.kamera.ziel(performance.now() / 1000) : null;
   }
 
   // Fragt das Match: Soll zwischen Netz und Grundlinie gewechselt werden? (Die Frage löscht den Wunsch wieder.)
