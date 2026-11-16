@@ -1,9 +1,10 @@
 // Powershot – das laufende Match: Aufschlag, Ballwechsel, Regeln, Computergegner.
 // Diese Datei kennt keine Grafik. Sie meldet alles über "fx" an die Anzeige.
 
-import { COURT as C, SURFACES, Ball, solveSafe, solveShot, predict, gauss } from './physics.js';
+import { COURT as C, SURFACES, Ball, solveSafe, solveShot, solveBogen, predict, gauss } from './physics.js';
 import { MatchScore } from './rules.js';
 import { DIFFICULTY } from './data.js';
+import { GRUNDSCHLAEGE, AUFSCHLAEGE, schlagWerte, aufschlagWerte, standardAufschlag } from './schlaege.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -15,6 +16,7 @@ export const TOSS_TIME = 1.4;      // Dauer der Aufschlagbewegung vom Stand bis 
 const WALK_SPEED = 2.0;            // Gehen beim Seitenwechsel (m/s) – zügiges Gehen, kein Laufen
 const CHANGEOVER_TIME = 6.4;       // Dauer des Seitenwechsels (s)
 export const TOSS_FLIGHT = 0.85;   // so lange fliegt der Ball frei, bevor er getroffen wird (davor ist er in der Hand)
+export const UNTEN_TIME = 0.75;    // Aufschlag von unten: so lange dauert es vom Loslassen des Balls bis zum Treffen
 
 export class Match {
   // cfg: { players:[a,b], human:0|null, surface, difficulty, sets, games,
@@ -86,8 +88,8 @@ export class Match {
       this.tossT += dt;
       const srv = this.P[this.server];
       this.ball.pos = this.tossPos(srv, this.tossT);
-      this.fx.toss(srv.side, clamp(this.tossT / TOSS_TIME, 0, 1));
-      if (this.tossT >= TOSS_TIME) this.doServe();
+      if (!this.serveUnten) this.fx.toss(srv.side, clamp(this.tossT / TOSS_TIME, 0, 1));
+      if (this.tossT >= this.tossDauer) this.doServe();
     } else if (st === 'rally' || st === 'pointOver' || st === 'faultPause' || st === 'feedWait') {
       this.sinceHit += dt;
       const ev = this.ball.step(dt, this.surface);
@@ -178,6 +180,7 @@ export class Match {
     this.pred = null;
     this.rally = 0;
     this.netHit = false;
+    this.serveUnten = false; this.tossDauer = TOSS_TIME;
     this.state = 'serveReady';
     this.timer = srv.isHuman ? 0 : 1.3;
     if (srv.isHuman && this.controls) this.controls.begin('serve');
@@ -198,12 +201,20 @@ export class Match {
 
   startToss(intent) {
     this.serveIntent = intent;
+    // Beim Aufschlag von unten wird der Ball nicht hochgeworfen, sondern nur fallen gelassen
+    this.serveUnten = intent.art === 'unten';
+    this.tossDauer = this.serveUnten ? UNTEN_TIME : TOSS_TIME;
     this.tossT = 0;
     this.state = 'toss';
   }
 
   // Wo ist der Ball beim Hochwerfen? t = Sekunden seit Beginn
   tossPos(p, t) {
+    if (this.serveUnten && this.state === 'toss') {
+      // Aufschlag von unten: Die Hand hält den Ball auf Hüfthöhe und lässt ihn kurz vor dem Schlag fallen
+      const s = Math.max(0, t - (UNTEN_TIME - 0.25));
+      return { x: p.x + p.hand * p.dz * 0.45, y: 1.06 - 4.905 * s * s, z: p.z - p.dz * 0.35 };
+    }
     // Erst hebt die Hand den Ball an, dann fliegt er frei: hoch bis etwa 3,2 m und zurück auf 2,75 m
     const tr = TOSS_TIME - TOSS_FLIGHT, s = t - tr;
     const lift = clamp((t - 0.15) / (tr - 0.15), 0, 1);
@@ -215,22 +226,35 @@ export class Match {
   doServe() {
     const p = this.P[this.server];
     const sc = this.score;
-    const from = this.tossPos(p, TOSS_TIME);
+    const from = this.tossPos(p, this.tossDauer);
     const shot = this.buildShot(p, this.serveIntent, { from, stretch: 0, serveNo: sc.serveNo, incoming: 0 });
     if (this.mode === 'match' && sc.serveNo === 1) sc.stats[p.side].firstTotal++;
     this.state = 'rally';
     this.launch(p, from, shot, true);
-    this.fx.swing(p.side, 'sv', from.y);
-    this.fx.hit({ side: p.side, speed: shot.speed, power: 1, type: 'serve' });
+    // Von unten sieht der Schlag aus wie ein Vorhand-Slice, sonst wie ein Aufschlag über dem Kopf
+    if (this.serveUnten) this.fx.swing(p.side, 'fh', from.y, 'slice'); else this.fx.swing(p.side, 'sv', from.y);
+    this.fx.hit({ side: p.side, speed: shot.speed, power: 1, type: 'serve', art: shot.art });
   }
 
+  // Der Computer wählt Aufschlagart und Ziel – so ähnlich wie die Profis:
+  // erster Aufschlag meist gerade oder Slice, zweiter fast immer Kick. Ganz selten kommt einer von unten.
   aiServe(p) {
     const first = this.score.serveNo === 1;
-    const r = Math.random();
+    const r = Math.random(), r2 = Math.random();
     const bs = this.serveBox.sign;
     const edge = 0.45 + (1 - p.s) * 0.9;              // schwächere Aufschläger zielen weniger an die Linie
-    const x = bs * (r < 0.42 ? C.W - edge : r < 0.84 ? edge : C.W / 2);
-    return { type: 'serve', x, d: C.SL - (first ? 0.45 : 1.0) - Math.random() * 0.8, power: first ? 0.82 + 0.18 * Math.random() : 0.45 };
+    let art;
+    if (first) art = r2 < 0.65 ? 'gerade' : r2 < 0.92 ? 'slice' : 'kick';
+    else art = r2 < 0.70 ? 'kick' : r2 < 0.95 ? 'slice' : 'gerade';
+    if (first && this.mode === 'match' && Math.random() < 0.012 + 0.02 * p.c * (this.diff.aiStat > 0.9 ? 1 : 0)) art = 'unten';
+    let x = bs * (r < 0.42 ? C.W - edge : r < 0.84 ? edge : C.W / 2);
+    // Slice und Kick dorthin, wo ihre Kurve am meisten weh tut: Der Slice zieht nach außen weg,
+    // der Kick springt zur anderen Seite hoch weg.
+    const kurve = -bs * p.dz * p.hand;                // +1: der Slice dieses Spielers biegt hier nach außen ab
+    if (art === 'slice' && r < 0.6) x = bs * (kurve > 0 ? C.W - edge : edge);
+    if (art === 'kick' && r < 0.6) x = bs * (kurve > 0 ? edge : C.W - edge);
+    const d = C.SL - (first ? 0.45 : 1.0) - Math.random() * 0.8;
+    return { type: 'serve', art, x, d, power: first ? 0.82 + 0.18 * Math.random() : 0.45 };
   }
 
   // ---------------------------------------------------------------
@@ -245,7 +269,9 @@ export class Match {
       const bs = this.serveBox.sign;
       const x = bs * (C.W / 2) + clamp(raw.aim || 0, -1, 1) * (C.W / 2 - 0.3);
       const d = raw.depth != null ? C.SL * raw.depth : C.SL * (0.45 + 0.5 * pw);
-      return { type: 'serve', x, d, power: p01 };
+      // Welche Aufschlagart? Ohne Auswahl: erster gerade, zweiter Kick.
+      const art = AUFSCHLAEGE[raw.art] ? raw.art : standardAufschlag(this.score.serveNo);
+      return { type: 'serve', art, x, d, power: p01, schlag: raw.schlag };
     }
     let type = raw.type || 'drive';
     let d = raw.depth != null ? C.L * raw.depth : C.L * (0.25 + 0.68 * pw);
@@ -260,7 +286,7 @@ export class Match {
     }
     if (this.diff.clampIn) x = clamp(x, -(C.W - 0.4), C.W - 0.4);
     if (this.diff.autoReturn) d = Math.min(d, C.L - 0.6);
-    return { type, x, d, power: p01 };
+    return { type, x, d, power: p01, schlag: raw.schlag };
   }
 
   // Wohin würde der Schlag mit der aktuellen Eingabe gehen? (für die Ziel-Anzeige)
@@ -289,26 +315,35 @@ export class Match {
     let type = intent.type, vh, spin, clear, sigma, pNet, ctl = p.c;
     let tx = intent.x, td = intent.d;
 
+    let S;           // die Zahlen der Schlagart aus js/schlaege.js
     if (type === 'serve') {
       const first = o.serveNo === 1;
-      vh = (35 + 23 * p.s) * (0.72 + 0.28 * pw) * (first ? 1 : 0.8);
-      spin = first ? 0.25 : 0.9;
-      clear = first ? 0.1 : 0.25;
-      sigma = (0.24 + (1 - p.s) * 0.8) * (0.35 + pw * pw) * (first ? 1 : 0.5);
-      pNet = (0.02 + 0.09 * pw * (1 - p.s * 0.6)) * (first ? 1 : 0.35);
+      S = aufschlagWerte(intent.art, intent.schlag);
+      const z = first ? { tempo: 1, streu: 1, netzfehler: 1 } : S.zweiter;     // zweiter Aufschlag: etwas vorsichtiger
+      vh = S.bogen ? 12 : (35 + 23 * p.s) * (0.72 + 0.28 * pw) * S.tempo * z.tempo;
+      clear = S.netz;
+      sigma = (0.24 + (1 - p.s) * 0.8) * (0.35 + pw * pw) * S.streu * z.streu;
+      pNet = (0.02 + 0.09 * pw * (1 - p.s * 0.6)) * S.netzfehler * z.netzfehler;
+      if (S.tiefe) td = S.tiefe[0] + (S.tiefe[1] - S.tiefe[0]) * pw;
     } else {
-      if (o.volley && (type === 'drive' || type === 'slice')) type = o.from.y > 2.0 ? 'smash' : 'volley';
-      else if (type === 'drive' && o.from.y > 2.1) type = 'smash';
-      if (type === 'drive') { vh = (23 + 17 * p.p) * (0.55 + 0.45 * pw); spin = 0.7; clear = 0.3 - 0.15 * pw; }
-      else if (type === 'slice') { vh = (16 + 7 * p.p) * (0.7 + 0.3 * pw); spin = -0.6; clear = 0.25; }
-      else if (type === 'drop') { vh = 9.5; spin = -0.8; clear = 0.3; td = clamp(td, 1.5, 4); }
-      else if (type === 'lob') { vh = 11.5; spin = 0.3; clear = 1.5; }
-      else if (type === 'volley') { vh = (17 + 11 * p.p) * (0.6 + 0.4 * pw); spin = -0.2; clear = 0.2; ctl = p.v; }
-      else { vh = 32 + 12 * p.p; spin = 0; clear = 0.15; ctl = (p.v + p.c) / 2; }   // Schmetterball
-      sigma = (0.15 + (1 - ctl) * 0.9) * (0.45 + 0.7 * pw + 2.0 * o.stretch + 0.35 * (o.incoming / 40));
+      const grund = GRUNDSCHLAEGE.includes(type);
+      if (o.volley && (grund || type === 'slice')) type = o.from.y > 2.0 ? 'smash' : 'volley';
+      else if (grund && o.from.y > 2.1) type = 'smash';
+      S = schlagWerte(type, intent.schlag);
+      const tp = Array.isArray(S.tempo) ? S.tempo : [S.tempo || 12, S.tempo || 12];
+      const nz = Array.isArray(S.netz) ? S.netz : [S.netz, S.netz];
+      vh = (tp[0] + (tp[1] - tp[0]) * p.p) * (1 - (S.kraft || 0) + (S.kraft || 0) * pw);
+      clear = nz[0] + (nz[1] - nz[0]) * pw;
+      if (S.tiefe) td = clamp(td, S.tiefe[0], S.tiefe[1]);
+      if (type === 'volley') ctl = p.v;
+      if (type === 'smash') ctl = (p.v + p.c) / 2;
+      sigma = (0.15 + (1 - ctl) * 0.9) * (0.45 + 0.7 * pw + 2.0 * o.stretch + 0.35 * (o.incoming / 40)) * S.streu;
       vh *= 1 - 0.3 * o.stretch;         // aus der Bedrängnis wird der Schlag schwächer
-      pNet = 0.012 + 0.04 * sigma;
+      pNet = (0.012 + 0.04 * sigma) * S.netzfehler;
     }
+    // Der Drall des Balls. Die Tabelle gilt für Rechtshänder – bei Linkshändern dreht sich die Seite um.
+    // (dz dreht die Zahlen für den Spieler auf der anderen Platzseite nicht um: "rechts" heißt immer rechts in Flugrichtung.)
+    spin = { top: S.top || 0, seite: (S.seite || 0) * p.hand, drall: (S.drall || 0) * p.hand };
     sigma *= sigK; pNet *= netK;
     tx += gauss() * sigma;
     td += gauss() * sigma * 1.3;
@@ -323,11 +358,13 @@ export class Match {
       // Netzfehler: flach und zu kurz gezielt
       sol = solveShot(o.from, { x: tx, y: 0, z: -p.dz * 1.0 }, Math.max(vh, 24), 0);
       if (sol.clearance > -0.05) sol = solveShot(o.from, { x: tx, y: 0, z: p.dz * 0.5 }, Math.max(vh, 24), 0);
+    } else if (S.bogen) {
+      sol = solveBogen(o.from, target, spin, S.bogen);       // Gefühlsschlag: das Tempo ergibt sich aus dem Bogen
     } else {
       sol = solveSafe(o.from, target, vh, spin, clear);
     }
     const v = sol.vel;
-    return { vel: v, spin, speed: Math.hypot(v.x, v.y, v.z), type, target };
+    return { vel: v, spin, speed: Math.hypot(v.x, v.y, v.z), type, art: type === 'serve' ? intent.art : null, target };
   }
 
   // Ball losschicken und alles vorbereiten, was danach gebraucht wird
@@ -637,8 +674,12 @@ export class Match {
       d = C.L * (0.7 + 0.22 * Math.random());
       if (inside) power = Math.min(1, power + 0.15);
       power -= o.stretch * 0.3;
+      // Im Feld und gut am Ball: öfter der gerade Schuss. Weit hinten: öfter der hohe Topspin, um Zeit zu gewinnen.
+      const r3 = Math.random();
+      if (inside && o.stretch < 0.3 && r3 < 0.15 + 0.3 * p.p) type = 'flach';
+      else if (!inside && r3 < (Math.abs(p.z) > C.L + 1.5 ? 0.3 : 0.08)) type = 'topspin';
     }
-    if (inside && !p.netRush && p.v > 0.5 && Math.random() < 0.3 * p.v && type === 'drive') p.netRush = true;
+    if (inside && !p.netRush && p.v > 0.5 && Math.random() < 0.3 * p.v && GRUNDSCHLAEGE.includes(type)) p.netRush = true;
     return { type, x, d, power: clamp(power, 0.2, 1) };
   }
 

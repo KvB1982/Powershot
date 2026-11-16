@@ -157,6 +157,7 @@ Einstellbar unter „Einstellungen“. Auf Geräten mit Touchscreen ist „Touch
 |---|---|
 | `js/data.js` | Spieler (Top 20 + erfundene), Turnierkalender, Ausrüstung, Schwierigkeitsstufen |
 | `js/physics.js` | Ballflug in Metern: Schwerkraft, Luftwiderstand, Spin, Aufprall je Belag, Netz |
+| `js/schlaege.js` | Alle Schlagarten und Aufschlagarten (gerade, Slice, Kick, von unten) mit Tempo und Drall – hier kann man Zahlen ändern und ausprobieren |
 | `js/rules.js` | Zählweise: Punkte, Spiele, Sätze, Tiebreak, Aufschlagwechsel |
 | `js/match.js` | Das laufende Match: Aufschlag, Ballwechsel, Regeln, Computergegner, Training |
 | `js/controls.js` | Die drei Steuerungsarten |

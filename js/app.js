@@ -6,6 +6,7 @@ import { Controls } from './controls.js';
 import { KameraLauf, RAUM } from './kamera.js';
 import { KameraBild } from './kamerabild.js';
 import { Match } from './match.js';
+import { AUFSCHLAEGE, AUFSCHLAG_ARTEN, standardAufschlag } from './schlaege.js';
 import { loadFigure } from './figur.js';
 import { loadMocap } from './mocap.js';
 import * as D from './data.js';
@@ -81,6 +82,12 @@ window.addEventListener('keydown', (e) => {
   if ((e.key === 'Escape' || e.key.toLowerCase() === 'p') && match && session && !session.over) togglePause();
 });
 $('#pauseBtn').addEventListener('click', () => { sound.unlock(); togglePause(); });
+// Die vier Knöpfe für die Aufschlagart (unten in der Mitte). Die Zahl davor ist die Taste auf der Tastatur.
+$('#aufschlagWahl').innerHTML = AUFSCHLAG_ARTEN.map((a, i) => `<button data-art="${a}"><small>${i + 1}</small>${AUFSCHLAEGE[a].kurz}</button>`).join('');
+$('#aufschlagWahl').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (b) controls.aufschlagArt = b.dataset.art;
+});
 
 // ---------------------------------------------------------------
 // Bausteine für die Menüs
@@ -297,26 +304,28 @@ const HELP = `
     <li><b>Linke Bildschirmhälfte:</b> Finger auflegen und ziehen = laufen (Joystick). Ohne Finger läuft dein Spieler von allein zum Ball.</li>
     <li><b>Rechte Hälfte, nach oben wischen:</b> Schlag. Nach links/rechts wischen = Richtung. Je länger der Wisch, desto härter und tiefer. Zu lang = Aus!</li>
     <li><b>Nach unten wischen:</b> Stoppball. <b>Zur Seite wischen:</b> Slice. <b>Doppelt tippen:</b> Lob. <b>Einmal tippen:</b> sicherer Ball.</li>
-    <li><b>Aufschlag:</b> nach oben wischen (Richtung und Länge wie beim Schlag).</li>
+    <li><b>Aufschlag:</b> nach oben wischen (Richtung und Länge wie beim Schlag). Vorher unten die Art antippen: Gerade, Slice, Kick oder Von unten.</li>
     <li>Du kannst wischen, sobald der Gegner geschlagen hat. Der Schlag kommt, wenn der Ball bei dir ist.</li></ul></div>
   <div class="panel help"><h3>Klassik (Maus)</h3><ul>
     <li><kbd>Mausrad</kbd> oder <kbd>←</kbd> <kbd>→</kbd>: zielen (Rad hoch = links).</li>
     <li><kbd>Linke Maustaste halten</kbd>: Kraft aufladen. Im roten Bereich geht der Ball ins Aus.</li>
     <li><kbd>Doppelklick</kbd> oder <kbd>rechte Maustaste</kbd>: Lob.</li>
     <li><kbd>↑</kbd> <kbd>↓</kbd>: ans Netz / zurück. Seitlich läuft dein Spieler von allein.</li>
-    <li><b>Aufschlag:</b> Kraft aufladen und loslassen.</li></ul></div>
+    <li><b>Aufschlag:</b> Kraft aufladen und loslassen. Art wählen mit <kbd>1</kbd> Gerade · <kbd>2</kbd> Slice · <kbd>3</kbd> Kick · <kbd>4</kbd> Von unten (oder unten anklicken).</li></ul></div>
   <div class="panel help"><h3>Profi (Tastatur)</h3><ul>
     <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> oder Pfeiltasten: laufen. Stell die Laufhilfe auf „Aus“ für das volle Erlebnis.</li>
     <li><kbd>Leertaste</kbd>/<kbd>J</kbd>: Topspin · <kbd>K</kbd>: Slice · <kbd>L</kbd>: Lob · <kbd>I</kbd>: Stoppball. Halten = mehr Kraft.</li>
+    <li><kbd>U</kbd>: gerader Schuss (sehr schnell und flach, aber riskant) · <kbd>O</kbd>: hoher Topspin (sicher, springt hoch weg).</li>
     <li>Die Richtungstasten, die du <b>beim Treffen</b> hältst, bestimmen das Ziel: links/rechts = Ecke, hoch = lang, runter = kurz.</li>
-    <li><b>Aufschlag:</b> Leertaste halten und loslassen, mit links/rechts zielen. Zu lange halten = Fehler.</li></ul></div>
+    <li><b>Aufschlag:</b> Leertaste halten und loslassen, mit links/rechts zielen. Zu lange halten = Fehler.
+      <kbd>J</kbd> = gerade · <kbd>K</kbd> = Slice · <kbd>L</kbd> = Kick · <kbd>I</kbd> = von unten. Mit der Leertaste kommt der erste Aufschlag gerade, der zweite als Kick.</li></ul></div>
   <div class="panel help"><h3>Controller (Switch Joy-Con / Pro Controller)</h3><ul>
     <li>Erst koppeln (Bluetooth), dann in den Einstellungen bei „Steuerung“ den Controller wählen.</li>
     <li><b>Schwingen</b> (nur in der iPad-/iPhone-App): Schwing den Joy-Con wie einen Schläger, wenn der Ball bei dir ist.
       Stärker schwingen = härterer Schlag. Von oben nach unten = Slice.</li>
     <li><kbd>A</kbd>: Topspin · <kbd>B</kbd>: Slice · <kbd>X</kbd>: Lob · <kbd>Y</kbd>: Stoppball.</li>
     <li><b>Stick:</b> laufen. Die Richtung, die du <b>beim Treffen</b> hältst, bestimmt das Ziel.</li>
-    <li><b>Aufschlag:</b> schwingen oder <kbd>A</kbd> drücken. <kbd>+</kbd>: Pause.</li>
+    <li><b>Aufschlag:</b> schwingen oder <kbd>A</kbd> drücken (erster gerade, zweiter Kick). <kbd>B</kbd> = Slice · <kbd>X</kbd> = Kick · <kbd>Y</kbd> = von unten. <kbd>+</kbd>: Pause.</li>
     <li><b>Ans Netz und zurück:</b> Mit der Apple Watch zweimal kurz die Hände aneinander klopfen. Auf dem iPhone-Schläger-Bildschirm
       gibt es dafür die Taste „Netz“. Dasselbe noch einmal bringt dich zurück an die Grundlinie.</li>
     <li><b>iPhone als Schläger fürs iPad</b> (in der App): Auf dem iPad „Controller / iPhone-Schläger“ wählen.
@@ -332,6 +341,17 @@ const HELP = `
     <li><b>Auch vor und zurück:</b> Ein Schritt auf die Kamera zu = ans Netz. Das klappt nicht ganz so genau wie links und rechts.</li>
     <li>Bist du nah genug am Ball, macht dein Spieler den letzten Schritt allein (außer bei Laufhilfe „Aus“).</li>
     <li>Geschlagen wird wie sonst: mit Uhr, iPhone-Schläger, Controller, Maus oder Tastatur.</li></ul></div>
+  <div class="panel help"><h3>Was die Schläge mit dem Ball machen</h3><ul>
+    <li><b>Topspin:</b> Der Ball dreht nach vorne. Er fällt von selbst ins Feld und springt hoch und schnell weg.</li>
+    <li><b>Hoher Topspin:</b> noch mehr Drall, hoch über das Netz – sehr sicher, springt dem Gegner bis zur Schulter.</li>
+    <li><b>Gerader Schuss:</b> kaum Drall, sehr schnell und knapp über das Netz. Bleibt flach, geht aber leichter ins Netz oder ins Aus.</li>
+    <li><b>Slice:</b> Der Ball dreht rückwärts. Er schwebt lange, wird beim Aufkommen gebremst und bleibt flach.</li>
+    <li><b>Stoppball:</b> ganz kurz hinter das Netz, mit viel Rückwärtsdrall – er bleibt fast liegen.</li>
+    <li><b>Aufschlag gerade:</b> der schnellste, aber er geht am häufigsten daneben.</li>
+    <li><b>Aufschlag Slice:</b> fliegt eine Kurve zur Seite und zieht den Gegner aus dem Feld.</li>
+    <li><b>Aufschlag Kick:</b> langsamer und sehr sicher. Geht hoch über das Netz und springt hoch und zur Seite weg – gut als zweiter Aufschlag.</li>
+    <li><b>Aufschlag von unten:</b> kurz und langsam – eine Überraschung, wenn der Gegner weit hinten steht.</li>
+    <li>Auf <b>Sand</b> springt der Ball höher und wird stärker gebremst, auf <b>Rasen</b> bleibt er flach und schnell.</li></ul></div>
   <p class="dim"><kbd>P</kbd> oder <kbd>Esc</kbd> = Pause. Der gelbe Ring zeigt, wo der Ball des Gegners landet. Der orange Ring ist dein Ziel.</p>`;
 let helpBack = 'home';
 actions.help = (v) => { if (v) helpBack = v; show(`<div class="bar">${back(helpBack)}<h2>Steuerung</h2></div>${HELP}`); };
@@ -793,7 +813,7 @@ function startMatch(o) {
     touch: 'Links: laufen · Rechts: nach oben wischen = Schlag · unten = Stopp · Doppeltipp = Lob',
     klassik: 'Mausrad/←→ zielen · Linke Taste halten = Kraft · Doppelklick = Lob · ↑↓ laufen',
     controller: 'Schwingen oder A = Schlag · B Slice · X Lob · Y Stopp · früh = links, spät = rechts',
-    profi: 'WASD laufen · Leertaste Topspin · K Slice · L Lob · I Stopp · Richtung beim Treffen halten',
+    profi: 'WASD laufen · Leertaste Topspin · U gerade · O hoher Topspin · K Slice · L Lob · I Stopp · Richtung beim Treffen halten',
   }[settings.control] + (settings.kamera !== 'aus' ? ' · 📷 laufen mit der Kamera' : '');
   // Auf dem Handy blendet sich der Hinweis nach ein paar Sekunden aus (siehe style.css). Dafür die Klasse neu setzen.
   $('#hint').classList.remove('kurz'); void $('#hint').offsetWidth; $('#hint').classList.add('kurz');
@@ -823,9 +843,11 @@ const hud = {
     t.textContent = text; t.className = 'on ' + (kind || '');
     toastTimer = 1.6;
   },
-  serveSpeed(kmh) {
+  serveSpeed(kmh, side, art) {
     const s = $('#speed');
-    s.textContent = kmh + ' km/h'; s.classList.add('on');
+    // Bei Slice, Kick und "von unten" steht die Art dabei, damit man sieht, was da gerade kam
+    const name = art && art !== 'gerade' && AUFSCHLAEGE[art] ? AUFSCHLAEGE[art].name + ' · ' : '';
+    s.textContent = name + kmh + ' km/h'; s.classList.add('on');
     speedTimer = 2.5;
   },
   training(tr, pts, ok) {
@@ -868,6 +890,14 @@ function hudFrame(dt) {
   const myTurn = match && ((match.state === 'serveReady' && match.server === 0) || (match.state === 'rally' && match.ball.lastHitter === 1));
   const on = h.show && myTurn && !session.over && h.type !== 'lob';
   bar.classList.toggle('on', !!on);
+  // Aufschlagart wählen: nur solange du selbst aufschlägst und der Ball noch in der Hand ist
+  const wahl = $('#aufschlagWahl');
+  const waehlen = !!match && match.state === 'serveReady' && match.server === 0 && match.P[0].isHuman && !session.over && !paused;
+  wahl.classList.toggle('on', waehlen);
+  if (waehlen) {
+    const art = controls.aufschlagArt || standardAufschlag(match.score.serveNo);
+    for (const b of wahl.children) b.classList.toggle('an', b.dataset.art === art);
+  }
   if (on) {
     const f = $('#powerFill');
     f.style.width = Math.min(100, h.power / h.max * 100) + '%';
