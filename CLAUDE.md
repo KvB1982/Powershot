@@ -17,11 +17,8 @@ python tools/server.py          # http://localhost:8765, ohne Zwischenspeicher
 node tools/sim.mjs 0 1 mittel hard 3    # Computer gegen Computer, ohne Grafik
 node tools/logic.mjs            # Turnier, Karriere und Saison (ATP Race) durchrechnen
 node tools/rookie.mjs           # Neuling gegen Profi auf jeder Schwierigkeit
-<<<<<<< HEAD
 node tools/kamera.mjs           # Laufen mit der Kamera: Rechnung prüfen (ohne Kamera, mit künstlichen Körperpunkten)
-=======
 node tools/ballflug.mjs hard     # Flugbahn und Absprung jeder Schlag- und Aufschlagart messen und prüfen (auch clay, grass, indoor)
->>>>>>> origin/main
 node tools/mocap.mjs            # Aufnahmen aus mocap/*.FBX in mocap/bewegungen.json umrechnen (--info zeigt nur an)
 ```
 
@@ -112,7 +109,8 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 - Gesichter sind erfunden – keine Abbilder echter Spieler erzeugen.
 - Die Seiten werden nicht getauscht; beim Seitenwechsel gehen die Spieler nur zur Bank.
 - Laufen mit der Kamera: nur eine Person im Bild; vor und zurück wird aus der Größe im Bild geschätzt und ist ungenauer als links und rechts.
-- Laufen ist ein gebauter Schrittzyklus, keine Aufnahme. Slice-Topspin-Unterschiede bei einhändigen Spielern fehlen.
+- Laufen ist ein gebauter Schrittzyklus, keine Aufnahme. Das Gehen beim Seitenwechsel auch (Zahlen: `GANG` oben in `js/avatar.js`);
+  liegt in `mocap/bewegungen.json` eine Aufnahme `walk` (Eintrag in `tools/mocap.mjs`, mit einer echten Datei noch nicht erprobt), ersetzt sie den gebauten Gang. Slice-Topspin-Unterschiede bei einhändigen Spielern fehlen.
 - Spielstärke und Ballwechsel-Länge sind nur grob eingestellt.
 - Drall: Der Schlag des Gegners nimmt den Drall des ankommenden Balls nicht auf. Die Figur hat für die neuen Schlagarten und den Aufschlag von unten keine eigenen Bewegungen (Topspin- bzw. Vorhand-Slice-Bewegung).
 - Punkte: echte ATP-Werte je Runde (Regeln 2026), aber kleinere Felder (Grand Slam 32, Masters 16) und keine ATP-500/250-Turniere.

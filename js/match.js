@@ -13,8 +13,8 @@ const SPAET_FENSTER = 0.12;  // Controller: so lange (Sekunden) darf man nach de
 const REACH = 1.4;          // so weit reicht man mit dem Schläger (Meter)
 const KAMERA_HILFE = 2.0;   // Kamera-Steuerung: So nah (Meter) musst du am Ball stehen, damit der Spieler den letzten Schritt allein macht
 export const TOSS_TIME = 1.4;      // Dauer der Aufschlagbewegung vom Stand bis zum Treffpunkt
-const WALK_SPEED = 2.0;            // Gehen beim Seitenwechsel (m/s) – zügiges Gehen, kein Laufen
-const CHANGEOVER_TIME = 6.4;       // Dauer des Seitenwechsels (s)
+const WALK_SPEED = 1.5;            // Gehen beim Seitenwechsel (m/s) – gemütliches Gehen, kein Eilen
+const CHANGEOVER_TIME = 8.0;       // Dauer des Seitenwechsels (s)
 export const TOSS_FLIGHT = 0.85;   // so lange fliegt der Ball frei, bevor er getroffen wird (davor ist er in der Hand)
 export const UNTEN_TIME = 0.75;    // Aufschlag von unten: so lange dauert es vom Loslassen des Balls bis zum Treffen
 
@@ -77,7 +77,8 @@ export class Match {
       for (const p of this.P) {
         const tx = -(C.NET_W + 0.7), tz = p.dz * 4;
         const dx = tx - p.x, dzz = tz - p.z, dist = Math.hypot(dx, dzz);
-        const v = Math.min(WALK_SPEED, dist * 4);
+        // gemütlich losgehen (nicht aus dem Stand auf volles Tempo) und vor der Bank abbremsen
+        const v = Math.min(WALK_SPEED * Math.min(1, (CHANGEOVER_TIME - this.timer) / 0.6 + 0.15), dist * 3);
         p.vx = dist > 0.05 ? dx / dist * v : 0; p.vz = dist > 0.05 ? dzz / dist * v : 0;
         p.x += p.vx * dt; p.z += p.vz * dt;
       }

@@ -5,7 +5,7 @@
 
 import * as THREE from 'three';
 import { figureReady, makeFigure, REST, BONES } from './figur.js';
-import { mocapClip, mocapFrame, mocapLoop } from './mocap.js';
+import { mocapClip, mocapFrame, mocapLoop, mocapGang } from './mocap.js';
 import { pose as namedPose, mixPose, strokePose, prepPose, strokeName, strokeFamily, strokeStart, strokeEnd } from './posen.js';
 
 // Maße des Skeletts: einmal für die einfache Figur aus Kapseln, einmal für das realistische Modell
@@ -86,6 +86,19 @@ const LOW_BALL = 0.75;       // darunter wird eher verteidigt
 const SERVE_LEAD = 1.4;      // Dauer der Aufschlagbewegung, wenn das Match nichts anderes sagt
 const FOOT_REST = 0.46;      // Neigung des Fußes im normalen Stand (Zehen tiefer als der Knöchel)
 const FADE = 0.10;           // Überblenden, wenn die Bewegung wechselt
+// --- Gehen beim Seitenwechsel: Hier kannst du einstellen, wie locker die Figur geht ---
+// (Gibt es in mocap/bewegungen.json eine Aufnahme mit dem Namen 'walk', wird stattdessen die Aufnahme abgespielt.)
+const GANG = {
+  schritt: 0.66,      // Länge eines Schritts in Metern (größer = längere, langsamere Schritte)
+  fussHoch: 0.07,     // so hoch hebt der Fuß beim Schritt ab (Meter) – zu viel sieht nach Marschieren aus
+  wippen: 0.02,       // so weit sinkt die Hüfte, wenn beide Füße weit auseinander sind (Meter)
+  huefte: 0.16,       // die Hüfte dreht mit dem vorderen Bein mit (Bogenmaß)
+  schulter: 0.13,     // die Schultern drehen dagegen – das macht den Gang locker (Bogenmaß)
+  wiegen: 0.02,       // der Körper wiegt sich über das Bein, das gerade steht (Meter)
+  armFrei: 0.19,      // so weit schwingt der freie Arm vor und zurück (Meter)
+  armSchlaeger: 0.10, // der Schlägerarm schwingt weniger – der Schläger ist ja schwer
+  ferse: 0.5,         // so stark rollt der Fuß ab: hinten geht die Ferse hoch, vorn zeigen die Zehen hoch (Bogenmaß)
+};
 const UP = new THREE.Vector3(0, 1, 0);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const smooth = (s) => { s = clamp(s, 0, 1); return s * s * (3 - 2 * s); };
@@ -362,11 +375,16 @@ export class Avatar {
     // darüber hinweggeht. Gehen = kurze Schritte, Sprint = lange Schritte.
     const sp = Math.hypot(st.vx || 0, st.vz || 0);
     const moving = sp > 0.3;
-    const stepLen = 0.5 + 0.18 * sp;
     a.walkK = clamp((a.walkK || 0) + (st.walk ? dt : -dt) / 0.35, 0, 1);
     const walkK = smooth(a.walkK);
-    // Beim Gehen dreht sich der ganze Körper in Laufrichtung (sonst schaut die Figur immer zum Netz)
-    const faceTo = st.walk && moving ? Math.atan2(st.vx * d, -st.vz * d) : 0;
+    // Gibt es eine Aufnahme vom Gehen? Dann bestimmt sie auch die Schrittlänge (weg = Meter für zwei Schritte).
+    const gang = this.real && walkK > 0 ? mocapClip('walk') : null;
+    const stepRun = 0.5 + 0.18 * sp, stepWalk = gang && gang.weg > 0.6 ? gang.weg / 2 : GANG.schritt;
+    const stepLen = stepRun + (stepWalk - stepRun) * walkK;
+    // Beim Gehen dreht sich der ganze Körper in Laufrichtung (sonst schaut die Figur immer zum Netz).
+    // An der Bank angekommen, dreht sie sich zum Platz um.
+    if (st.walk && moving) a.walked = true; else if (!st.walk) a.walked = false;
+    const faceTo = !st.walk ? 0 : moving ? Math.atan2(st.vx * d, -st.vz * d) : a.walked ? Math.atan2(-Math.sign(st.x || -1) * d, 0.5) : (a.face || 0);
     let turn = faceTo - (a.face || 0);
     turn = Math.atan2(Math.sin(turn), Math.cos(turn));
     a.face = (a.face || 0) + turn * Math.min(1, dt * 6);
@@ -389,42 +407,70 @@ export class Avatar {
     if (!st.mood && a.moodK < 0.01) a.mood = null;
 
     let pose = this.currentPose(dt, st);
+    // --- Gehen (Seitenwechsel) ---
+    // gehK = wie stark gerade gegangen wird (0…1), stehK = die Figur steht locker an der Bank (0…1)
+    const sinS = Math.sin(a.step), cosS = Math.cos(a.step);
+    const gehK = walkK * Math.min(1, a.amp * 3), stehK = walkK - gehK;
+    const armS = Math.sin(a.step - 0.35);                 // die Arme schwingen einen Moment später als die Beine
     if (walkK > 0.001) {
-      // Gehen: aufrecht, die Arme schwingen gegengleich zu den Beinen
-      const wp = namedPose('walk'), sw = Math.sin(a.step) * Math.min(1, a.amp * 3);
-      pose = mixPose(pose, { ...wp, r: [wp.r[0] - sw * 0.10, wp.r[1], wp.r[2]], l: [wp.l[0] + sw * 0.16, wp.l[1], wp.l[2]] }, walkK);
+      // aufrecht, der Schläger hängt locker nach vorn unten und pendelt ein wenig mit
+      const wp = namedPose('walk');
+      pose = mixPose(pose, { ...wp, d: [wp.d[0] - 0.08 * armS * gehK, wp.d[1], wp.d[2]] }, walkK);
     }
     const run = a.run, still = 1 - run;
     const bob = Math.sin(a.time * 4) * 0.012 * still;
-    const hipH = 0.90 - pose.cr + pose.jp + bob + run * Math.abs(Math.sin(a.step)) * 0.035;
+    // Beim Rennen hebt der Körper ab, wenn die Beine auseinander sind. Beim Gehen ist es umgekehrt:
+    // Die Hüfte ist am höchsten, wenn ein Bein gerade unter dem Körper steht.
+    const hipH = 0.90 - pose.cr + pose.jp + bob + run * Math.abs(sinS) * 0.035 * (1 - walkK) - gehK * GANG.wippen * (1 - Math.cos(2 * a.step));
     const dm = this.dim;
     const shH = hipH + dm.shUp;
     const lean = (0.05 + 0.07 * run) * (1 - 0.7 * walkK) + pose.ln;
+    // Der Körper wiegt sich über das Standbein; im Stehen verlagert er ab und zu gemütlich das Gewicht
+    const wiegen = -cosS * GANG.wiegen * gehK + Math.sin(a.time * 0.8) * 0.03 * stehK;
 
-    // Schultern und Hüfte drehen sich mit dem Schlag (die Hüfte etwa halb so weit)
-    const twist = pose.tw, hipTw = pose.tw * 0.45;
-    let shR = [lean + dm.shW * Math.sin(twist), dm.shW * Math.cos(twist), shH];
-    let shL = [lean - dm.shW * Math.sin(twist), -dm.shW * Math.cos(twist), shH];
-    let neck = [lean, 0, shH + dm.neckUp];
-    let headP = [lean + 0.03, 0, shH + dm.headUp - (a.mood === 'sad' ? 0.03 * a.moodK : 0)];
-    let hipMid = [0, 0, hipH];
-    let hipR = [dm.hipW * Math.sin(hipTw), dm.hipW * Math.cos(hipTw), hipH];
-    let hipL = [-dm.hipW * Math.sin(hipTw), -dm.hipW * Math.cos(hipTw), hipH];
+    // Schultern und Hüfte drehen sich mit dem Schlag (die Hüfte etwa halb so weit).
+    // Beim Gehen dreht die Hüfte mit dem vorderen Bein, die Schultern drehen dagegen.
+    const twist = pose.tw - GANG.schulter * sinS * gehK + Math.sin(a.time * 0.5) * 0.06 * stehK;
+    const hipTw = pose.tw * 0.45 + GANG.huefte * sinS * gehK;
+    const obenSeite = wiegen * 0.4;
+    let shR = [lean + dm.shW * Math.sin(twist), obenSeite + dm.shW * Math.cos(twist), shH];
+    let shL = [lean - dm.shW * Math.sin(twist), obenSeite - dm.shW * Math.cos(twist), shH];
+    let neck = [lean, obenSeite, shH + dm.neckUp];
+    let headP = [lean + 0.03, obenSeite, shH + dm.headUp - (a.mood === 'sad' ? 0.03 * a.moodK : 0)];
+    let hipMid = [0, wiegen, hipH];
+    let hipR = [dm.hipW * Math.sin(hipTw), wiegen + dm.hipW * Math.cos(hipTw), hipH];
+    let hipL = [-dm.hipW * Math.sin(hipTw), wiegen - dm.hipW * Math.cos(hipTw), hipH];
 
     // Füße: Schrittstellung beim Schlag (st), Schritte beim Laufen, Abheben beim Sprung
     const stance = (0.17 + 0.25 * Math.max(0, pose.cr)) * (1 - 0.45 * walkK);
     const stepR = -pose.st * 0.14 * still, stepL = pose.st * 0.20 * still, air = pose.jp * 0.85;
-    const swingLeg = Math.sin(a.step) * a.amp;
-    const lift = Math.cos(a.step) * (0.07 + 0.17 * run) * Math.min(1, a.amp * 4);
-    let footR = [stepR + a.dir[0] * swingLeg, stance + a.dir[1] * swingLeg, 0.07 + dm.ankle + air + Math.max(0, lift)];
-    let footL = [stepL - a.dir[0] * swingLeg, -stance - a.dir[1] * swingLeg, 0.07 + dm.ankle + air + Math.max(0, -lift)];
+    // Beim Gehen bleibt der Fuß am Boden wirklich stehen (gerade Linie statt Welle), sonst rutscht er.
+    const schwung = sinS + (2 / Math.PI * Math.asin(sinS) - sinS) * 0.8 * walkK;      // −1 = Fuß hinten … +1 = Fuß vorn
+    const swingLeg = schwung * a.amp;
+    const liftH = 0.07 + 0.17 * run;
+    const lift = cosS * (liftH + (GANG.fussHoch - liftH) * walkK) * Math.min(1, a.amp * 4);
+    // Abrollen: Ist der Fuß hinten, geht die Ferse hoch; ist er vorn, zeigen die Zehen nach oben.
+    const hintenR = Math.max(0, -schwung) ** 2 * gehK, hintenL = Math.max(0, schwung) ** 2 * gehK;
+    let footR = [stepR + a.dir[0] * swingLeg, stance + a.dir[1] * swingLeg, 0.07 + dm.ankle + air + Math.max(0, lift) + 0.05 * hintenR];
+    let footL = [stepL - a.dir[0] * swingLeg, -stance - a.dir[1] * swingLeg, 0.07 + dm.ankle + air + Math.max(0, -lift) + 0.05 * hintenL];
     let kneeR = ik(hipR, footR, dm.thigh, dm.shin, [1, 0.15, 0.2]);
     let kneeL = ik(hipL, footL, dm.thigh, dm.shin, [1, -0.15, 0.2]);
 
     let handR = limitReach(shR, pose.r, dm.reach);
     let handL = limitReach(shL, pose.l, dm.reach);
-    let elR = ik(shR, handR, dm.upper, dm.fore, ARM_BEND);
-    let elL = ik(shL, handL, dm.upper, dm.fore, mirror(ARM_BEND));
+    if (walkK > 0.001) {
+      // Gehen: Die Arme hängen an den Schultern und pendeln wie ein Pendel – der freie Arm vor, wenn das andere Bein vor geht.
+      // Vorn beugt sich der Ellbogen etwas (die Hand kommt höher).
+      const vorL = armS * gehK, vorR = -armS * gehK;
+      const gehL = add3(shL, [0.03 + GANG.armFrei * vorL, -0.05, -0.555 + 0.06 * Math.max(0, vorL)]);
+      const gehR = add3(shR, [0.06 + GANG.armSchlaeger * vorR, 0.04, -0.52 + 0.03 * Math.max(0, vorR)]);
+      handL = mix3(handL, limitReach(shL, gehL, dm.reach), walkK);
+      handR = mix3(handR, limitReach(shR, gehR, dm.reach), walkK);
+    }
+    // (beim Gehen zeigen die Ellbogen nach hinten statt nach außen – sonst sieht es nach Muskelprotz aus)
+    const beuge = mix3(ARM_BEND, [-1, 0.12, -0.3], walkK);
+    let elR = ik(shR, handR, dm.upper, dm.fore, beuge);
+    let elL = ik(shL, handL, dm.upper, dm.fore, mirror(beuge));
 
     // --- Aufgezeichnete Bewegung: Gibt es für diesen Schlag eine Aufnahme, ersetzen ihre Gelenke die berechneten ---
     const mName = a.swing || (a.pre !== null ? a.art : null), mT = a.swing ? a.t : a.pre;
@@ -469,15 +515,19 @@ export class Avatar {
     a.iw = clamp((a.iw || 0) + (idleOn ? dt : -dt) / 0.25, 0, 1);
     const iw = idle ? smooth(a.iw) * still * (1 - smooth(a.prep)) * (1 - smooth(a.moodK)) * (1 - walkK) : 0;
     if (iw > 0.001) a.idf = mocapLoop(idle, a.time);
-    let footYawR = 0, footYawL = 0, footNodR = 0, footNodL = 0, headF = null, headU = null;
+    let footYawR = 0, footYawL = 0, headF = null, headU = null;
+    let footNodR = GANG.ferse * (hintenR - 0.55 * Math.max(0, schwung) ** 2 * gehK);
+    let footNodL = GANG.ferse * (hintenL - 0.55 * Math.max(0, -schwung) ** 2 * gehK);
     const look = st.ball ? clamp(Math.atan2((st.ball.x - this.pos.x) * d, Math.abs(st.ball.z - this.pos.z) + 2), -0.7, 0.7) * hand : 0;
     const layers = [];
     if (iw > 0.001 && a.idf) layers.push([a.idf, iw, false]);
     if (mw > 0.001) layers.push([a.mf, mw, true]);
-    for (const [m, w, head] of layers) {
+    // Aufnahme vom Gehen (falls vorhanden): ersetzt den gebauten Gang, Beine inklusive. Der Schläger bleibt, wie er ist.
+    if (gang && gehK > 0.001) layers.push([mocapGang(gang, a.step), gehK, false, true]);
+    for (const [m, w, head, gehen] of layers) {
       // Läuft der Spieler, kommen die Beine weiter aus der Laufbewegung – nur Oberkörper, Arme und Schläger folgen der Aufnahme.
-      // (Sonst würde die Figur mit den Beinen der Aufnahme über den Platz rutschen.)
-      const wl = w * (1 - a.legK);
+      // (Sonst würde die Figur mit den Beinen der Aufnahme über den Platz rutschen.) Die Geh-Aufnahme bringt ihre Beine selbst mit.
+      const wl = gehen ? w : w * (1 - a.legK);
       const hipNew = mix3(hipMid, m.hip, wl);
       const up = (q) => [hipNew[0] + q[0] - m.hip[0], hipNew[1] + q[1] - m.hip[1], hipNew[2] + q[2] - m.hip[2]];
       const L = (p, q) => mix3(p, up(q), w), B = (p, q) => mix3(p, q, wl), K = (x, y) => x + (y - x) * wl;
@@ -513,6 +563,8 @@ export class Avatar {
     const M = this.m;
     let yaw = 0;
     if (st.ball) yaw = clamp(Math.atan2((st.ball.x - px) * d, Math.abs(st.ball.z - pz) + 2), -0.7, 0.7);
+    // Beim Seitenwechsel schaut niemand dem Ball nach: Der Kopf schaut geradeaus und sieht sich gemütlich etwas um.
+    yaw = yaw * (1 - walkK) + Math.sin(a.time * 0.6 + a.rnd * 6) * 0.22 * walkK;
     if (this.real) {
       // Realistisches Modell: nur die Knochen einstellen, die Oberfläche folgt von allein
       const F = boneFrames({
@@ -573,7 +625,8 @@ export class Avatar {
     const Y = D(r1).normalize();
     const X = D(r2).normalize();
     const Z = new THREE.Vector3().crossVectors(X, Y).normalize();
-    for (const [m, w] of layers) {
+    for (const [m, w, , gehen] of layers) {
+      if (gehen) continue;
       // Schläger aus der Aufnahme: Richtung des Griffs (d) und der Schlagfläche (n)
       const Zm = D(m.n);
       if (Zm.dot(Z) < 0) Zm.negate();

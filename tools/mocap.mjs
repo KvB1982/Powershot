@@ -40,6 +40,10 @@ const CLIPS = {
   fh_vo: { file: 'Defending_a_Right_Side_Attack_in_Tennis', vor: 0.8, nach: 0.7, treff: 4.75, brust: true, spiegeln: true },
   // Warten auf den Ball: läuft als Schleife. 'ganz' = die ganze Aufnahme.
   ready: { file: 'Getting_Ready_in_Place_for_Tennis', ganz: true },
+  // Gehen beim Seitenwechsel: Lege eine Aufnahme als mocap/Gehen.FBX ab (z. B. aus einem Video, mit Unreal-Skelett exportiert).
+  // 'gang' = das Werkzeug sucht selbst die Schritte heraus und schneidet eine Schleife aus ganzen Doppelschritten.
+  // Fehlt die Datei, geht die Figur mit dem gebauten Gang aus js/avatar.js (GANG).
+  walk:  { file: 'Gehen', gang: true },
 };
 
 // three.js läuft auch ohne Browser, braucht aber ein paar Platzhalter
@@ -60,6 +64,8 @@ const JOINTS = ['pelvis', 'neck_01', 'head', 'upperarm_r', 'upperarm_l', 'lowera
   'thigh_r', 'thigh_l', 'calf_r', 'calf_l', 'foot_r', 'foot_l', 'ball_r', 'ball_l',
   'middle_01_r', 'middle_01_l', 'index_01_r', 'pinky_01_r'];
 
+const FINGER = ['middle_01_r', 'middle_01_l', 'index_01_r', 'pinky_01_r'];
+
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const add = (a, b, k = 1) => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
 const len = (a) => Math.hypot(a[0], a[1], a[2]);
@@ -75,7 +81,11 @@ function read(file) {
   const mixer = new THREE.AnimationMixer(obj);
   mixer.clipAction(clip).play();
   const bones = {};
-  for (const n of JOINTS) { bones[n] = obj.getObjectByName(n); if (!bones[n]) throw new Error('Knochen fehlt: ' + n); }
+  for (const n of JOINTS) {
+    bones[n] = obj.getObjectByName(n);
+    // Finger dürfen fehlen (Aufnahmen aus Videos haben oft keine) – dann wird die Hand aus dem Unterarm geschätzt
+    if (!bones[n] && !FINGER.includes(n)) throw new Error('Knochen fehlt: ' + n);
+  }
   obj.updateMatrixWorld(true);
   const q = new THREE.Quaternion(), inv = bones.head.getWorldQuaternion(new THREE.Quaternion()).invert();
   const headFwd = new THREE.Vector3(0, -1, 0).applyQuaternion(inv), headUp = new THREE.Vector3(0, 0, 1).applyQuaternion(inv);
@@ -85,7 +95,14 @@ function read(file) {
     mixer.setTime(i / FPS);
     obj.updateMatrixWorld(true);
     const f = {};
-    for (const k of JOINTS) { bones[k].getWorldPosition(v); f[k] = [-v.y / 100, -v.x / 100, v.z / 100]; }
+    for (const k of JOINTS) { if (!bones[k]) continue; bones[k].getWorldPosition(v); f[k] = [-v.y / 100, -v.x / 100, v.z / 100]; }
+    // Fehlende Finger: 8 cm in Verlängerung des Unterarms, Knöchel quer dazu
+    for (const s of ['r', 'l']) {
+      if (f['middle_01_' + s]) continue;
+      const dir = norm(sub(f['hand_' + s], f['lowerarm_' + s]));
+      f['middle_01_' + s] = add(f['hand_' + s], dir, 0.08);
+      if (s === 'r') { const quer = norm(cross(dir, [0, 0, 1])); f.index_01_r = add(f.middle_01_r, quer, 0.02); f.pinky_01_r = add(f.middle_01_r, quer, -0.02); }
+    }
     bones.head.getWorldQuaternion(q);
     v.copy(headFwd).applyQuaternion(q); f.hf = [-v.y, -v.x, v.z];
     v.copy(headUp).applyQuaternion(q); f.hu = [-v.y, -v.x, v.z];
@@ -143,13 +160,21 @@ function convert(name, cfg) {
     yaw = Math.atan2(fy, fx);
     if (cfg.ganz) best = 0;
   }
+  // Gehen: Blickrichtung = die Richtung, in die die Hüfte wandert (bei einer Aufnahme auf der Stelle: die Brust, siehe unten)
+  const weit = sub(D[D.length - 1].hip, D[0].hip);
+  if (cfg.gang) {
+    let fx = 0, fy = 0;
+    for (const o of D) { fx += o.shR[1] - o.shL[1]; fy += -(o.shR[0] - o.shL[0]); }
+    yaw = Math.hypot(weit[0], weit[1]) > 0.5 ? Math.atan2(weit[1], weit[0]) : Math.atan2(fy, fx);
+    best = 0;
+  }
   yaw += (cfg.yaw || 0) * Math.PI / 180;
   const c = Math.cos(-yaw), s = Math.sin(-yaw);
   const rot = (p) => [p[0] * c - p[1] * s, p[0] * s + p[1] * c, p[2]];
   // Schlagfläche: In der Aufnahme hält der Spieler keinen echten Schläger, deshalb ist unbekannt, wie der Griff in der
   // Hand gedreht ist. Wir drehen die Fläche um den Griff so, dass sie im Treffpunkt zum Netz zeigt – und zwar in
   // jedem Bild um denselben Winkel (der Griff ändert sich während des Schlags ja nicht).
-  if (!cfg.ganz) {
+  if (!cfg.ganz && !cfg.gang) {
     const o = D[best], fwd = [Math.cos(yaw), Math.sin(yaw), Math.tan((NEIGUNG[name] || 0) * Math.PI / 180)];
     const k = fwd[0] * o.d[0] + fwd[1] * o.d[1] + fwd[2] * o.d[2];
     const want = norm([fwd[0] - k * o.d[0], fwd[1] - k * o.d[1], fwd[2] - k * o.d[2]]);
@@ -177,7 +202,23 @@ function convert(name, cfg) {
     }
   }
   // Ausschnitt um den Treffpunkt
-  const i0 = cfg.ganz ? 0 : Math.max(0, best - Math.round(cfg.vor * FPS)), i1 = cfg.ganz ? D.length - 1 : Math.min(D.length - 1, best + Math.round(cfg.nach * FPS));
+  let i0 = cfg.ganz ? 0 : Math.max(0, best - Math.round(cfg.vor * FPS)), i1 = cfg.ganz ? D.length - 1 : Math.min(D.length - 1, best + Math.round(cfg.nach * FPS));
+  let schritte = 0, weg = 0;
+  if (cfg.gang) {
+    // Schritte finden: Wann ist der rechte Fuß am weitesten vor dem linken? Von einem solchen Moment bis zum
+    // letzten wird ausgeschnitten – das sind lauter ganze Doppelschritte, die sich als Schleife wiederholen lassen.
+    const vorn = D.map((o) => rot(sub(o.footR, o.footL))[0]);
+    const max = Math.max(...vorn), gipfel = [];
+    for (let i = 2; i < vorn.length - 2; i++) {
+      if (vorn[i] > 0.5 * max && vorn[i] >= vorn[i - 1] && vorn[i] >= vorn[i - 2] && vorn[i] > vorn[i + 1] && vorn[i] > vorn[i + 2]
+        && (!gipfel.length || i - gipfel[gipfel.length - 1] > 0.5 * FPS)) gipfel.push(i);
+    }
+    if (gipfel.length < 2) { console.log(`  ${name}: zu wenige Schritte gefunden – die Aufnahme braucht mindestens drei Schritte am Stück`); return null; }
+    i0 = gipfel[0]; i1 = gipfel[gipfel.length - 1];
+    schritte = gipfel.length - 1;
+    weg = len(sub(D[i1].hip, D[i0].hip)) / schritte;
+    console.log(`         Gehen: ${schritte} Doppelschritte, je ${weg.toFixed(2)} m in ${((i1 - i0) / FPS / schritte).toFixed(2)} s`);
+  }
   // Die Figur soll auf der Stelle bleiben: geglättete Position der Hüfte abziehen (das Laufen macht das Spiel).
   // Mit anker 'treff' bleibt stattdessen ein fester Punkt stehen: dort, wo die Hüfte im Treffpunkt ist.
   const W = Math.round(0.3 * FPS);
@@ -197,8 +238,15 @@ function convert(name, cfg) {
       for (const k of KEYS) row.push(...rot(sub(o[k], center)));
       for (const k of DIRS) row.push(...rot(o[k]));
     }
-    out.push(row.map((x) => Math.round(x * 1000) / 1000));
+    out.push(row);
   }
+  if (cfg.gang) {
+    // Damit die Schleife keinen Ruck hat: Die letzten Bilder gleiten sanft genau auf das erste Bild zu.
+    const K = Math.min(Math.round(0.2 * FPS), out.length - 1), a0 = out[0], an = out[out.length - 1].slice();
+    for (let j = 0; j <= K; j++) { const row = out[out.length - 1 - K + j], u = j / K; for (let q = 0; q < row.length; q++) row[q] += (a0[q] - an[q]) * u; }
+  }
+  for (let j = 0; j < out.length; j++) out[j] = out[j].map((x) => Math.round(x * 1000) / 1000);
+  if (cfg.gang) return { t0: 0, fps: FPS, hitY: 0, two: 0, fest: 0, loop: 1, ik: 0, gang: 1, schritte, weg: Math.round(weg * 1000) / 1000, datei: cfg.file, yaw: Math.round(yaw * 10000) / 10000, hit: 0, frames: out };
   return { t0: (i0 - best) / FPS, fps: FPS, hitY: Math.round(tip[best][2] * 1000) / 1000, two: hands < 0.2 ? 1 : 0, fest: fix ? 1 : 0, loop: cfg.ganz ? 1 : 0, ik: cfg.spiegeln ? 1 : 0,
     datei: cfg.file, yaw: Math.round(yaw * 10000) / 10000, hit: best / FPS, frames: out };
 }
