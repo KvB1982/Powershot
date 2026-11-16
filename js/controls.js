@@ -21,6 +21,11 @@ const SWING_START = 1.6;               // ab dieser Beschleunigung (in g, 1 g = 
 const SWING_VOLL = 5.0;                // so stark muss man schwingen für volle Kraft
 const SWING_PAUSE = 0.4;               // Sekunden Ruhe nach einem Schwung (sonst zählt einer doppelt)
 const PAD_HALTBAR = 0.7;               // so lange "gilt" ein Schwung oder Tastendruck, bis der Ball da sein muss
+// --- Controller: Das Timing bestimmt die Richtung, wie beim echten Tennis. ---
+// Früh geschwungen (lange bevor der Ball da ist) = Ball geht nach links, spät = nach rechts.
+const TIMING_MITTE = 0.15;             // so viele Sekunden vor dem Treffen schwingen = genau geradeaus
+const TIMING_FRUEH = 0.55;             // so früh (Sekunden vor dem Treffen) = ganz nach links
+export const TIMING_SPAET = 0.20;      // so spät (Sekunden nach dem besten Moment) = ganz nach rechts, danach "Zu spät!"
 const tot = (v) => (Math.abs(v) < 0.18 ? 0 : v);     // kleine Stick-Wackler ignorieren
 
 export class Controls {
@@ -41,7 +46,7 @@ export class Controls {
     this.pad = { connected: false, name: '', x: 0, f: 0, btn: {}, motion: false };
     this.schwung = { aktiv: false, t0: 0, peak: 0, hoch: 0, ende: -9 };
     this.padAt = -9;              // wann der letzte Controller-Schlag ausgelöst wurde
-    this.daumen = { id: null, x: 0 };   // Zielen mit dem Daumen, wenn das iPhone der Schläger ist
+    this.onHint = null;           // wird von app.js gesetzt: kurzer Hinweis-Text auf dem Bildschirm
     this.nativePad = false;       // true, sobald die iOS-App den Controller meldet
     this.onPause = null;          // wird von app.js gesetzt: Pause-Taste am Controller
     this.onMenu = null;           // wird von app.js gesetzt: Controller im Menü ('links', 'rechts', 'hoch', 'runter', 'ok', 'zurueck')
@@ -126,7 +131,6 @@ export class Controls {
     P.connected = true; P.name = s.name || 'Controller';
     P.x = tot(s.lx || 0); P.f = tot(s.ly || 0);
     P.motion = !!s.motion;
-    if (typeof s.ziel === 'number') this.daumen = { id: 'fern', x: clamp(s.ziel, -1, 1) };   // Zielen kommt vom Schläger-iPhone
     const neu = { a: !!s.a, b: !!s.b, x: !!s.x, y: !!s.y, pause: !!s.pause };
     P.btn = neu;
     if (neu.pause && !alt.pause && this.onPause) this.onPause();
@@ -143,14 +147,15 @@ export class Controls {
     }
     if (!this.enabled || this.mode !== 'controller') return;
     // Tasten wie auf der Switch: A = Topspin, B = Slice, X = Lob, Y = Stoppball
-    if (neu.a && !alt.a) this.commitPad('drive', 0.75);
-    if (neu.b && !alt.b) this.commitPad('slice', 0.6);
-    if (neu.x && !alt.x) this.commitPad('lob', 0.6);
-    if (neu.y && !alt.y) this.commitPad('drop', 0.4);
+    // (Mit einer Taste darf man immer aufschlagen und schmettern – dafür steht das "true" am Ende.)
+    if (neu.a && !alt.a) this.commitPad('drive', 0.75, true);
+    if (neu.b && !alt.b) this.commitPad('slice', 0.6, true);
+    if (neu.x && !alt.x) this.commitPad('lob', 0.6, true);
+    if (neu.y && !alt.y) this.commitPad('drop', 0.4, true);
     if (s.motion) this.fuehleSchwung(s.motion);
   }
 
-  padWeg() { this.pad = { connected: false, name: '', x: 0, f: 0, btn: {}, motion: false }; this.daumen = { id: null, x: 0 }; }
+  padWeg() { this.pad = { connected: false, name: '', x: 0, f: 0, btn: {}, motion: false }; }
 
   // Aus den Bewegungsdaten einen Schwung erkennen:
   // Wird die Hand stark beschleunigt, beginnt ein Schwung. Wir merken uns kurz den stärksten Wert
@@ -168,24 +173,40 @@ export class Controls {
     if (this.time - S.t0 < 0.12) return;                         // 0,12 Sekunden lang den stärksten Wert suchen
     S.aktiv = false; S.ende = this.time;
     const kraft = clamp((S.peak - SWING_START) / (SWING_VOLL - SWING_START), 0, 1);
+    // Ging der Schwung senkrecht (von oben nach unten oder umgekehrt) oder eher seitlich?
+    // Aufschlag und Schmetterball brauchen einen senkrechten Schwung – wie beim echten Tennis über dem Kopf.
+    const senkrecht = Math.abs(S.hoch) > 0.35 * S.peak;
+    if (this.ctx === 'serve' && !senkrecht) {
+      if (this.onHint) this.onHint('Aufschlag: von oben nach unten schwingen!');
+      return;
+    }
     // Von oben nach unten geschwungen = Slice, sonst Topspin
     const type = S.hoch < -0.35 * S.peak ? 'slice' : 'drive';
-    this.commitPad(type, 0.3 + 0.7 * kraft);
+    this.commitPad(type, 0.3 + 0.7 * kraft, senkrecht);
   }
 
-  commitPad(type, power) {
-    this.committed = { type, power };
+  // vonOben: true, wenn der Schwung senkrecht war (oder eine Taste gedrückt wurde)
+  commitPad(type, power, vonOben) {
+    this.committed = { type, power, vonOben };
     this.padAt = this.time;
-    if (this.ctx === 'serve') this.serveOut = this.padRaw(this.committed);
+    if (this.ctx === 'serve') this.serveOut = this.padRaw(this.committed, 0);
+  }
+
+  // Aus dem Zeitpunkt des Schwungs wird die Richtung: -1 = ganz links (sehr früh), 0 = Mitte, +1 = ganz rechts (sehr spät).
+  //   spaet = wie viele Sekunden nach dem besten Moment geschwungen wurde (0 = rechtzeitig)
+  timingZiel(spaet) {
+    if (spaet > 0) return clamp(spaet / TIMING_SPAET, 0, 1);
+    const vorher = this.time - this.padAt;                 // so lange ist der Schwung schon her
+    return -clamp((vorher - TIMING_MITTE) / (TIMING_FRUEH - TIMING_MITTE), 0, 1);
   }
 
   // Wie bei "profi": Die Richtung, in die der Stick beim Treffen zeigt, bestimmt das Ziel.
-  padRaw(c) {
-    // Richtung: der Stick – oder, wenn das iPhone der Schläger ist, der Daumen auf dem Bildschirm
-    // (links halten = nach links, rechts halten = nach rechts, loslassen = Mitte).
-    const lr = this.pad.x || this.daumen.x, ud = this.pad.f;
-    if (this.ctx === 'serve') return { type: 'serve', aim: lr * 0.85, power: Math.min(1.05, c.power + 0.1), committed: true };
-    return { type: c.type, aimMode: 'abs', aim: lr * 0.88, depth: 0.78 + ud * 0.16, power: clamp(c.power, 0.2, 1), committed: true };
+  padRaw(c, spaet = 0) {
+    // Richtung: Wer einen Stick hat und ihn drückt, zielt damit. Sonst entscheidet das Timing.
+    const ud = this.pad.f;
+    if (this.ctx === 'serve') return { type: 'serve', aim: this.pad.x * 0.85, power: Math.min(1.05, c.power + 0.1), committed: true };
+    const lr = this.pad.x || this.timingZiel(spaet);
+    return { type: c.type, aimMode: 'abs', aim: lr * 0.88, depth: 0.78 + ud * 0.16, power: clamp(c.power, 0.2, 1), committed: true, vonOben: !!c.vonOben };
   }
 
   // Im Browser (ohne iOS-App) fragen wir den Controller selbst ab. Dort gibt es nur Stick und Tasten.
@@ -215,7 +236,6 @@ export class Controls {
       this.lastClick = this.time;
       return;
     }
-    if (this.mode === 'controller') { this.daumenSetzen(e, true); return; }
     if (this.mode !== 'touch') return;
     e.preventDefault();
     const r = this.el.getBoundingClientRect();
@@ -228,17 +248,7 @@ export class Controls {
     }
   }
 
-  // Wo liegt der Daumen? Ganz links = -1, Mitte = 0, ganz rechts = +1
-  daumenSetzen(e, neu) {
-    if (e.pointerType !== 'touch') return;
-    if (neu) this.daumen.id = e.pointerId;
-    if (e.pointerId !== this.daumen.id) return;
-    const r = this.el.getBoundingClientRect();
-    this.daumen.x = clamp(((e.clientX - r.left) / r.width - 0.5) * 2.4, -1, 1);
-  }
-
   onMove(e) {
-    if (this.enabled && this.mode === 'controller') { this.daumenSetzen(e, false); return; }
     if (!this.enabled || this.mode !== 'touch') return;
     const r = this.el.getBoundingClientRect();
     const x = e.clientX - r.left, y = e.clientY - r.top;
@@ -261,7 +271,6 @@ export class Controls {
       this.commitClassic('drive');
       return;
     }
-    if (e.pointerId === this.daumen.id) this.daumen = { id: null, x: 0 };
     if (this.mode !== 'touch') return;
     if (e.pointerId === this.stick.id) {
       this.stick = { id: null, x0: 0, y0: 0, x: 0, f: 0 };
@@ -369,7 +378,8 @@ export class Controls {
     return this.committed || this.live;
   }
 
-  consume() {
+  // spaet: nur für den Controller – wie viele Sekunden nach dem besten Moment (0 = rechtzeitig)
+  consume(spaet = 0) {
     let raw = null;
     if (this.mode === 'klassik') {
       if (this.committed || this.charging) raw = this.classicRaw(true);
@@ -377,7 +387,7 @@ export class Controls {
       if (this.committed) raw = this.profiRaw(this.committed);
       else if (this.charging) raw = this.profiRaw({ type: this.type, power: this.power });
     } else if (this.mode === 'controller') {
-      if (this.committed) raw = this.padRaw(this.committed);
+      if (this.committed) raw = this.padRaw(this.committed, spaet);
     } else {
       raw = this.committed;
     }

@@ -1,7 +1,7 @@
 // Powershot – der Schläger-Bildschirm.
 //
 // Diesen Bildschirm zeigt das iPhone, wenn es als Schläger für ein anderes Gerät benutzt wird.
-// Schwingen = Schlag. Die große Fläche ist zum Zielen (Daumen links, Mitte oder rechts halten).
+// Schwingen = Schlag. Die Richtung kommt vom Timing: früh = links, spät = rechts.
 // Unten gibt es Tasten für die besonderen Schläge – und "Schlag", falls man nicht schwingen möchte.
 
 import Combine
@@ -9,7 +9,6 @@ import SwiftUI
 
 struct SchlaegerView: View {
     @ObservedObject private var funk = Funk.shared
-    @State private var ziel = 0.0                       // -1 = links, 0 = Mitte, +1 = rechts
     @State private var tasten: Set<String> = []         // gerade gedrückte Tasten: "a", "b", "x", "y"
     private let takt = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
 
@@ -23,20 +22,12 @@ struct SchlaegerView: View {
                     .buttonStyle(.bordered)
             }
 
-            // Fläche zum Zielen
-            GeometryReader { flaeche in
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.08))
-                    Text(ziel < -0.3 ? "⬅︎ links" : ziel > 0.3 ? "rechts ➡︎" : "Daumen hier halten zum Zielen\nSchwingen = Schlag")
-                        .multilineTextAlignment(.center)
-                        .font(.title3)
-                }
-                .contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 0)
-                    .onChanged { finger in
-                        ziel = min(1, max(-1, (finger.location.x / flaeche.size.width - 0.5) * 2.4))
-                    }
-                    .onEnded { _ in ziel = 0 })
+            // Erklärung in der Mitte (die Richtung kommt vom Timing, nicht vom Finger)
+            ZStack {
+                RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.08))
+                Text("Schwingen = Schlag\nfrüh = nach links · spät = nach rechts\nAufschlag und Smash: von oben nach unten")
+                    .multilineTextAlignment(.center)
+                    .font(.title3)
             }
 
             HStack(spacing: 10) {
@@ -65,9 +56,9 @@ struct SchlaegerView: View {
                 .onEnded { _ in tasten.remove(name) })
     }
 
-    // 60-mal pro Sekunde: Bewegung, Ziel und Tasten an das Spiel schicken
+    // 60-mal pro Sekunde: Bewegung und Tasten an das Spiel schicken
     private func senden() {
-        var zustand: [String: Any] = ["ziel": ziel]
+        var zustand: [String: Any] = [:]
         for name in tasten { zustand[name] = true }
         if let bewegung = ControllerBruecke.geraeteBewegung() { zustand["motion"] = bewegung }
         Funk.shared.schicken(zustand)

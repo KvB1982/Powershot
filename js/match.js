@@ -8,6 +8,7 @@ import { DIFFICULTY } from './data.js';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const NOFX = new Proxy({}, { get: () => () => {} });
+const SPAET_FENSTER = 0.20;  // Controller: so lange (Sekunden) darf man nach dem besten Moment noch schlagen (= Ball geht nach rechts)
 const REACH = 1.4;          // so weit reicht man mit dem Schläger (Meter)
 export const TOSS_TIME = 1.4;      // Dauer der Aufschlagbewegung vom Stand bis zum Treffpunkt
 const WALK_SPEED = 2.0;            // Gehen beim Seitenwechsel (m/s) – zügiges Gehen, kein Laufen
@@ -336,6 +337,7 @@ export class Match {
     this.predIn = !!f && !this.pred.net && this.inArea(f.x, f.z, p.side, isServe);
     const opp = this.P[1 - p.side];
     opp.plan = null; opp.planAge = 9; opp.missed = false; opp.lastDist = 99;
+    opp.spaetSeit = null;        // Controller: ab wann der beste Moment zum Schlagen vorbei ist
     opp.react = opp.isHuman ? 0.04 : this.diff.aiReact * (1.15 - 0.3 * opp.t) * (isServe ? 0.65 : 1);
     p.plan = null; p.prep = 0;
     p.homeX = f ? clamp(f.x * 0.2, -1.2, 1.2) : 0;
@@ -485,13 +487,16 @@ export class Match {
     if (!this.pred) return null;
     const now = this.sinceHit, b = this.ball;
     const nearNet = Math.abs(p.z) < 6.5 || p.netRush;
+    const lob = !!this.lastShot && this.lastShot.type === 'lob';
     let best = null, bs = 1e9;
     for (const s of this.pred.pts) {
       if (s.t < now + 0.03) continue;
       if (s.b >= 2) break;
       if (s.z * p.dz < 0.4 || s.y > 2.5) continue;
       const volley = s.b === 0;
-      if (volley && (b.isServe || !this.predIn || !nearNet)) continue;
+      // Kommt ein Lob, darf man ihn überall über dem Kopf nehmen (Schmetterball) – nicht nur am Netz.
+      const ueberKopf = lob && s.y >= 2.05 && s.y <= 2.5;
+      if (volley && (b.isServe || !this.predIn || !(nearNet || ueberKopf))) continue;
       const fh = (s.x - p.x) * p.dz * p.hand >= -0.35;
       const side = (fh ? 1 : -1) * p.hand * p.dz;
       let sx = s.x - side * 0.62, sz = s.z + p.dz * 0.12;
@@ -507,6 +512,7 @@ export class Match {
       let score = lack * 50 + Math.abs(s.y - 0.95) * 1.5 + time * 0.4 + (volley ? 0.2 : 0);
       if (s.y < 0.3) score += 1.5;
       score += Math.max(0, s.z * p.dz - (C.L + 3.5)) * 2;
+      if (ueberKopf) score = lack * 50 + time * 0.4 - 1;       // erreichbarer Schmetterball ist die beste Wahl
       if (fixedZ) score = lack * 50 + Math.abs((s.z - p.z)) * 3;
       if (score < bs) {
         bs = score;
@@ -531,9 +537,13 @@ export class Match {
     const receding = dist > p.lastDist + 1e-5;
     p.lastDist = dist;
     const reach = b.isServe ? REACH + 0.3 : REACH;      // beim Return streckt man sich weiter
-    if (dist > reach || b.pos.y > 2.75 || b.pos.y < 0.1) return;
+    // Controller: Der beste Moment ist vorbei, aber für einen kurzen Augenblick darf man noch (zu spät) schlagen.
+    const pad = p.isHuman && this.cfg.controlMode === 'controller';
+    const spaet = pad && p.spaetSeit != null ? this.sinceHit - p.spaetSeit : 0;
+    const nachzuegler = pad && p.spaetSeit != null && b.pos.y >= 0.1;     // läuft, bis getroffen oder endgültig verpasst
+    if (!nachzuegler && (dist > reach || b.pos.y > 2.75 || b.pos.y < 0.1)) return;
     const passed = (b.pos.z - p.z) * p.dz > 0.15;
-    if (!(dist <= 0.85 || receding || passed)) return;
+    if (!nachzuegler && !(dist <= 0.85 || receding || passed)) return;
 
     const from = { x: b.pos.x, y: Math.max(b.pos.y, 0.25), z: b.pos.z };
     let stretch = clamp((dist - 0.75) / (reach - 0.75), 0, 1);
@@ -543,7 +553,16 @@ export class Match {
 
     let intent;
     if (p.isHuman) {
-      let raw = this.controls ? this.controls.consume() : null;
+      let raw = this.controls ? this.controls.consume(spaet) : null;
+      if (!raw && pad && (p.spaetSeit == null || spaet < SPAET_FENSTER)) {
+        if (p.spaetSeit == null) p.spaetSeit = this.sinceHit;      // ab jetzt läuft die kurze Frist für "spät"
+        return;
+      }
+      // Controller und Ball über dem Kopf: Schmettern geht nur mit einem Schwung von oben nach unten.
+      if (raw && pad && from.y > 2.0 && (raw.type === 'drive' || raw.type === 'slice')) {
+        if (raw.vonOben) raw = { ...raw, type: 'drive' };
+        else { raw = { ...raw, type: 'lob' }; this.fx.message('Für den Smash von oben schwingen!', 'warn'); }
+      }
       if (!raw && this.diff.autoReturn) raw = { type: 'drive', aimMode: 'abs', aim: 0, depth: 0.7, power: 0.5 };
       if (!raw) {
         p.missed = true;

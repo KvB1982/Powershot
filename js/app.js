@@ -197,7 +197,8 @@ const HELP = `
     <li><b>iPhone als Schläger fürs iPad</b> (in der App): Auf dem iPad „Controller / iPhone-Schläger“ wählen.
       Auf dem iPhone Powershot öffnen → Einstellungen → „Dieses Gerät als Schläger … benutzen“. Die Geräte finden sich von selbst.</li>
     <li><b>iPhone als Schläger</b> (in der App): Halte das iPhone fest in der Hand und schwing es wie einen Schläger.
-      Der Daumen auf dem Bildschirm zielt: links halten = nach links, rechts = nach rechts, loslassen = Mitte.
+      <b>Timing = Richtung:</b> früh schwingen = Ball nach links, genau richtig = Mitte, spät = nach rechts.
+      Aufschlag und Schmetterball (hoher Ball): von oben nach unten schwingen.
       Lass am besten die Laufhilfe auf „Voll“. Achtung: gut festhalten, am besten mit Hülle!</li></ul></div>
   <p class="dim"><kbd>P</kbd> oder <kbd>Esc</kbd> = Pause. Der gelbe Ring zeigt, wo der Ball des Gegners landet. Der orange Ring ist dein Ziel.</p>`;
 let helpBack = 'home';
@@ -656,7 +657,7 @@ function startMatch(o) {
   $('#hint').textContent = {
     touch: 'Links: laufen · Rechts: nach oben wischen = Schlag · unten = Stopp · Doppeltipp = Lob',
     klassik: 'Mausrad/←→ zielen · Linke Taste halten = Kraft · Doppelklick = Lob · ↑↓ laufen',
-    controller: 'Schwingen oder A = Schlag · B Slice · X Lob · Y Stopp · Stick oder Daumen = zielen',
+    controller: 'Schwingen oder A = Schlag · B Slice · X Lob · Y Stopp · früh = links, spät = rechts',
     profi: 'WASD laufen · Leertaste Topspin · K Slice · L Lob · I Stopp · Richtung beim Treffen halten',
   }[settings.control];
   // Auf dem Handy blendet sich der Hinweis nach ein paar Sekunden aus (siehe style.css). Dafür die Klasse neu setzen.
@@ -852,6 +853,7 @@ function menuTaste(was) {
   sound.click();
 }
 controls.onMenu = menuTaste;
+controls.onHint = (text) => hud.message(text, 'warn');
 
 // Nur in der iOS-App: Dieses Gerät wird zum Schläger für ein anderes (z. B. iPhone für das Spiel auf dem iPad).
 actions.schlaeger = () => window.webkit.messageHandlers.powershot.postMessage('schlaeger');
