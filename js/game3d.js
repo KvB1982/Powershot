@@ -320,7 +320,12 @@ export class Game3D {
 
     // Kamera hinter dir, folgt dir leicht
     const narrow = this.aspect < 1;
-    const tp = new THREE.Vector3(me.x * 0.35, narrow ? 9.5 : 6.4, narrow ? 29 : 23.5 + Math.max(0, me.z - 13) * 0.6);
+    // Sehr breite Bildschirme (iPhone quer) zeigen oben und unten weniger. Damit deine Figur nicht
+    // am unteren Rand abgeschnitten wird, geht die Kamera dort etwas höher und weiter zurück.
+    // breit = 0 bei normalen Bildschirmen (16:9 und schmaler), 1 bei sehr breiten.
+    const breit = clamp((this.aspect - 1.78) / 0.4, 0, 1);
+    const tp = new THREE.Vector3(me.x * 0.35, narrow ? 9.5 : 6.4 + 0.6 * breit,
+      narrow ? 29 : 23.5 + 3 * breit + Math.max(0, me.z - 13) * 0.6);
     const tl = new THREE.Vector3(me.x * 0.2 + b.x * 0.08, 0.8, narrow ? -1 : 1.5);
     const k = Math.min(1, dt * 3);
     this.camPos.lerp(tp, k); this.camLook.lerp(tl, k);
