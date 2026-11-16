@@ -5,6 +5,7 @@
 // Unten gibt es Tasten für die besonderen Schläge – und "Schlag", falls man nicht schwingen möchte.
 
 import Combine
+import MultipeerConnectivity
 import SwiftUI
 
 struct SchlaegerView: View {
@@ -24,6 +25,21 @@ struct SchlaegerView: View {
                 Spacer()
                 Button("Beenden") { Spiel.shared.schlaegerModus = false }
                     .buttonStyle(.bordered)
+            }
+
+            // Gibt es mehrere Geräte mit Powershot in der Nähe? Dann das richtige antippen.
+            if funk.gefunden.count > 1 || (funk.partner == nil && !funk.gefunden.isEmpty) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        Text("Spiel auf:").font(.footnote).foregroundStyle(.secondary)
+                        ForEach(funk.gefunden, id: \.self) { geraet in
+                            Button(geraet.displayName) { funk.verbinden(mit: geraet, gewaehlt: true) }
+                                .buttonStyle(.borderedProminent)
+                                .tint(geraet.displayName == funk.partner ? Color(red: 0.91, green: 0.94, blue: 0.29) : Color.white.opacity(0.2))
+                                .foregroundStyle(geraet.displayName == funk.partner ? .black : .white)
+                        }
+                    }
+                }
             }
 
             // Erklärung in der Mitte (die Richtung kommt vom Timing, nicht vom Finger)

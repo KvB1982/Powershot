@@ -7,6 +7,8 @@
 	<array>
 		<string>_powershot._tcp</string>
 		<string>_powershot._udp</string>
+		<string>_powershot-sim._tcp</string>
+		<string>_powershot-sim._udp</string>
 	</array>
 </dict>
 </plist>

@@ -17,7 +17,18 @@ final class Funk: NSObject, ObservableObject {
     @Published var partner: String?
 
     private let ich = MCPeerID(displayName: UIDevice.current.name)
+    /// Alle Geräte in der Nähe, auf denen Powershot läuft (nur im Schläger-Modus gefüllt)
+    @Published var gefunden: [MCPeerID] = []
+
+    // Der Name des Funkkanals. Simulatoren auf dem Mac bekommen einen eigenen Kanal,
+    // damit sich ein echtes iPhone nie versehentlich mit einem Simulator verbindet.
+    #if targetEnvironment(simulator)
+    private let dienst = "powershot-sim"
+    #else
     private let dienst = "powershot"
+    #endif
+    // Mit welchem Gerät waren wir zuletzt verbunden? Das nehmen wir beim nächsten Mal wieder.
+    private let merkSchluessel = "schlaegerZiel"
     private lazy var sitzung: MCSession = neueSitzung()
 
     /// Eine frische Verbindung. Nach einem Abbruch nehmen wir immer eine neue – die alte lässt sich nicht gut wiederverwenden.
@@ -49,6 +60,7 @@ final class Funk: NSObject, ObservableObject {
         sitzung.disconnect()
         sitzung = neueSitzung()
         eingeladen = nil
+        gefunden = []
         sucher.delegate = self
         sucher.startBrowsingForPeers()
     }
@@ -85,6 +97,7 @@ extension Funk: MCSessionDelegate {
             self.sitzung = self.neueSitzung()
             self.eingeladen = nil
             if Spiel.shared.schlaegerModus {                     // Schläger: neu suchen
+                self.gefunden = []
                 self.sucher.stopBrowsingForPeers()
                 self.sucher.startBrowsingForPeers()
             } else {                                             // Spiel: wieder auf einen Schläger warten
@@ -117,14 +130,40 @@ extension Funk: MCNearbyServiceAdvertiserDelegate {
 }
 
 extension Funk: MCNearbyServiceBrowserDelegate {
-    // (Schläger) Ein Spiel gefunden: verbinden.
+    // (Schläger) Ein Spiel gefunden: in die Liste aufnehmen und – wenn klar ist, welches gemeint ist – verbinden.
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
-        guard sitzung.connectedPeers.isEmpty, eingeladen == nil else { return }
-        eingeladen = peerID
-        browser.invitePeer(peerID, to: sitzung, withContext: nil, timeout: 15)
+        DispatchQueue.main.async {
+            if !self.gefunden.contains(peerID) { self.gefunden.append(peerID) }
+            // Das Gerät vom letzten Mal nehmen wir sofort wieder.
+            if peerID.displayName == UserDefaults.standard.string(forKey: self.merkSchluessel) {
+                self.verbinden(mit: peerID)
+                return
+            }
+            // Sonst kurz warten: Gibt es nur ein einziges Gerät, verbinden wir uns von selbst.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                if self.gefunden.count == 1, let einziges = self.gefunden.first { self.verbinden(mit: einziges) }
+            }
+        }
+    }
+
+    /// (Schläger) Mit genau diesem Gerät verbinden – von selbst oder weil es angetippt wurde.
+    func verbinden(mit peer: MCPeerID, gewaehlt: Bool = false) {
+        if gewaehlt { UserDefaults.standard.set(peer.displayName, forKey: merkSchluessel) }
+        if sitzung.connectedPeers.contains(peer) { return }
+        if eingeladen != nil && !gewaehlt { return }               // es läuft schon eine Einladung
+        if !sitzung.connectedPeers.isEmpty || eingeladen != nil {   // erst die alte Verbindung lösen
+            sitzung.disconnect()
+            sitzung = neueSitzung()
+            partner = nil
+        }
+        eingeladen = peer
+        sucher.invitePeer(peer, to: sitzung, withContext: nil, timeout: 15)
     }
 
     func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
-        if peerID == eingeladen { eingeladen = nil }
+        DispatchQueue.main.async {
+            self.gefunden.removeAll { $0 == peerID }
+            if peerID == self.eingeladen, self.sitzung.connectedPeers.isEmpty { self.eingeladen = nil }
+        }
     }
 }
