@@ -15,11 +15,21 @@ import WatchKit
 
 /// Die Schlagarten, die man aufnehmen kann: (Kürzel für den Dateinamen, Name auf dem Bildschirm)
 let schlagarten: [(kuerzel: String, name: String)] = [
-    ("vorhand-topspin", "Vorhand Topspin"), ("vorhand-slice", "Vorhand Slice"),
-    ("rueckhand-topspin", "Rückhand Topspin"), ("rueckhand-slice", "Rückhand Slice"),
-    ("volley", "Volley"), ("smash", "Schmetterball"), ("lob", "Lob"), ("stopp", "Stoppball"),
+    // Grundschläge
+    ("vorhand-topspin", "Vorhand Topspin"), ("vorhand-flach", "Vorhand flach"), ("vorhand-slice", "Vorhand Slice"),
+    ("rueckhand-topspin", "Rückhand Topspin"), ("rueckhand-flach", "Rückhand flach"), ("rueckhand-slice", "Rückhand Slice"),
+    // Am Netz
+    ("vorhand-volley", "Vorhand-Volley"), ("rueckhand-volley", "Rückhand-Volley"),
+    ("halbvolley", "Halbvolley"), ("stopp-volley", "Stopp-Volley"),
+    ("smash", "Schmetterball"), ("rueckhand-smash", "Rückhand-Schmetterball"),
+    // Besondere Schläge
+    ("topspin-lob", "Topspin-Lob"), ("slice-lob", "Slice-Lob"),
+    ("vorhand-stopp", "Vorhand-Stopp"), ("rueckhand-stopp", "Rückhand-Stopp"),
+    ("tweener", "Tweener (zwischen den Beinen)"),
+    // Aufschläge
     ("aufschlag-gerade", "Aufschlag gerade"), ("aufschlag-slice", "Aufschlag Slice"),
     ("aufschlag-kick", "Aufschlag Kick"), ("aufschlag-unten", "Aufschlag von unten"),
+    // Kein Schlag
     ("doppelklopfen", "Doppelklopfen (Hände aneinander)"),
     ("kein-schlag", "Kein Schlag (laufen, jubeln …)"),
 ]

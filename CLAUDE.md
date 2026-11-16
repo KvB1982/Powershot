@@ -64,8 +64,17 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
   `window.__powershotPad({...})` auf; das landet in `Controls.setPad`. Im Browser fragt `Controls.pollPad` die Gamepad-Schnittstelle ab (nur Tasten/Stick).
 - Schwingen mit echtem Joy-Con ist noch nicht am Gerät erprobt; die Schwellen sind geschätzt.
 
+## Apple Watch, iPhone-Schläger, Aufnahmen
+
+- `ios/PowershotWatch/`: Watch-App. Erkennt Schwünge und Doppelklopfen selbst und meldet sie dem iPhone (`ios/Powershot/Uhr.swift`);
+  von dort gehen sie ins Spiel oder per Funk ans iPad (`Funk.swift`, `SchlaegerView.swift`). Im Spiel: `Controls.setPad` (`schwung`, `geste`).
+- Aufnahme-Modus auf der Uhr schreibt Serien als `schlag_<schlagart>_<zeit>.json`. Zum Ansehen: Dateien in den Ordner `aufnahmen/`
+  legen (wird nicht ins Repository übernommen), `python3 tools/server.py`, dann `http://localhost:8765/tools/aufnahmen.html`.
+- Simulatoren funken auf einem eigenen Kanal (`powershot-sim`). Trotzdem Simulator-Apps nach dem Testen beenden.
+
 ## Was nicht ins Repository darf
 
+- `aufnahmen/` – eure eigenen Bewegungsaufnahmen von der Apple Watch.
 - `mocap/` – gekaufte Bewegungsaufnahmen (Fab, Lizenz „Privat“, „Verwendung mit KI: Nein“ beachten) und die daraus erzeugte
   `bewegungen.json`. Bleibt lokal; auf GitHub Pages laufen deshalb die handgebauten Bewegungen.
 - `3d models/` – eine 41-MB-Vorlage des Nutzers.

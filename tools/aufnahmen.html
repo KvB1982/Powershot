@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Powershot – Aufnahmen ansehen</title>
+  <!--
+    Powershot – Aufnahmen der Apple Watch ansehen.
+
+    Die Uhr nimmt Schläge auf (Watch-App → "Schläge aufnehmen"). Jede Serie ist eine Datei
+    schlag_<schlagart>_<zeit>.json. Diese Seite zeigt, was in so einer Datei steckt:
+      • links eine 3D-Ansicht: So war das Handgelenk im Raum gedreht (die Uhr misst die Drehung, nicht den Ort!)
+      • rechts Kurven: wie stark die Hand beschleunigt und wie schnell sie sich gedreht hat
+      • alle Schläge der geladenen Dateien übereinander, damit man Schlagarten vergleichen kann
+
+    Starten:  python3 tools/server.py   und dann   http://localhost:8765/tools/aufnahmen.html
+    Liegen die Dateien im Ordner "aufnahmen" im Projekt, werden sie von selbst geladen.
+    Sonst oben auf "Dateien wählen" klicken. Die Aufnahmen bleiben auf deinem Rechner.
+  -->
+  <style>
+    :root { --bg: #0b1020; --panel: #16203a; --line: rgba(255,255,255,.14); --text: #f2f5fb; --dim: #9fb0cc; --gelb: #e8f04a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    header { padding: 12px 16px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+    h1 { font-size: 20px; margin: 0; color: var(--gelb); font-style: italic; }
+    main { display: grid; grid-template-columns: 260px minmax(280px, 1fr) minmax(320px, 1.2fr); gap: 12px; padding: 12px; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; min-width: 0; }
+    h2 { font-size: 14px; margin: 0 0 8px; color: var(--gelb); }
+    .dim { color: var(--dim); font-size: 12px; }
+    #liste { max-height: 70vh; overflow-y: auto; font-size: 13px; }
+    #liste .datei { margin: 8px 0 3px; font-weight: 700; }
+    #liste button { font: inherit; color: var(--text); background: rgba(255,255,255,.08); border: 1px solid var(--line); border-radius: 6px;
+      padding: 2px 7px; margin: 2px 2px 0 0; cursor: pointer; }
+    #liste button.sel { background: var(--gelb); color: #141a05; }
+    #drei { width: 100%; aspect-ratio: 1 / 1; display: block; border-radius: 8px; background: #0e1630; }
+    canvas.kurve { width: 100%; height: 150px; display: block; background: #0e1630; border-radius: 8px; margin-bottom: 6px; }
+    .zeile { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+    .zeile button, .zeile select { font: inherit; color: var(--text); background: rgba(255,255,255,.1); border: 1px solid var(--line);
+      border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+    input[type=range] { flex: 1; min-width: 120px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+    td { padding: 3px 4px; border-bottom: 1px solid var(--line); }
+    td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+    .farbe { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <header>
+    <h1>Powershot · Aufnahmen</h1>
+    <input type="file" id="dateien" accept=".json" multiple>
+    <span class="dim" id="status">Noch keine Aufnahme geladen.</span>
+  </header>
+  <main>
+    <div class="panel">
+      <h2>Serien und Schläge</h2>
+      <div id="liste" class="dim">Wähle oben Dateien aus – oder lege sie in den Ordner „aufnahmen“ im Projekt.</div>
+    </div>
+    <div class="panel">
+      <h2>Lage des Handgelenks</h2>
+      <canvas id="drei"></canvas>
+      <div class="zeile">
+        <button id="spielen">▶ Abspielen</button>
+        <select id="tempo"><option value="0.2">sehr langsam</option><option value="0.5" selected>langsam</option><option value="1">echt</option></select>
+        <input type="range" id="zeit" min="0" max="1" step="0.001" value="0">
+      </div>
+      <p class="dim">Die Uhr misst, wie das Handgelenk <b>gedreht</b> ist – nicht, <b>wo</b> es im Raum ist. Deshalb bleibt der Arm hier an
+        einer Stelle und dreht sich nur. Der Schläger ist nur ungefähr angesetzt (so, als würde er den Unterarm verlängern).
+        Gelb = Schläger, Grau = Unterarm, der kleine Kasten = die Uhr.</p>
+    </div>
+    <div class="panel">
+      <h2>Beschleunigung der Hand (in g)</h2>
+      <canvas class="kurve" id="kurveA"></canvas>
+      <h2>Drehgeschwindigkeit (rad/s)</h2>
+      <canvas class="kurve" id="kurveR"></canvas>
+      <p class="dim"><span class="farbe" style="background:#e8f04a"></span>Stärke gesamt
+        <span class="farbe" style="background:#ff6b5a;margin-left:8px"></span>x
+        <span class="farbe" style="background:#4ade80;margin-left:8px"></span>y
+        <span class="farbe" style="background:#37c3ff;margin-left:8px"></span>z
+        · graue Linien = alle anderen geladenen Schläge zum Vergleich</p>
+      <h2>Was das Spiel daraus lesen würde</h2>
+      <table id="werte"></table>
+    </div>
+  </main>
+
+  <script type="module">
+    import * as THREE from 'three';
+
+    const $ = (s) => document.querySelector(s);
+    const serien = [];              // geladene Dateien: { name, daten }
+    let wahl = null;                // der gerade gezeigte Schlag: { serie, nr, messungen }
+    let zeit = 0, laeuft = false;
+
+    // ---------------------------------------------------------------
+    // Dateien laden
+    // ---------------------------------------------------------------
+    function aufnehmen(name, daten) {
+      if (!daten || !Array.isArray(daten.schlaege)) return;
+      serien.push({ name, daten });
+      serien.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    $('#dateien').addEventListener('change', async (e) => {
+      for (const datei of e.target.files) {
+        try { aufnehmen(datei.name, JSON.parse(await datei.text())); } catch (err) { console.warn('Nicht lesbar:', datei.name); }
+      }
+      listeZeigen();
+    });
+
+    // Liegt ein Ordner "aufnahmen" im Projekt? Der kleine Server zeigt dessen Inhalt als Liste – die lesen wir aus.
+    async function ordnerLaden() {
+      try {
+        const antwort = await fetch('../aufnahmen/');
+        if (!antwort.ok) return;
+        const namen = [...(await antwort.text()).matchAll(/href="([^"]+\.json)"/g)].map((m) => decodeURIComponent(m[1]));
+        for (const name of namen) {
+          try { aufnehmen(name, await (await fetch('../aufnahmen/' + encodeURIComponent(name))).json()); } catch (err) { /* überspringen */ }
+        }
+        listeZeigen();
+      } catch (err) { /* kein Ordner da – macht nichts */ }
+    }
+
+    function listeZeigen() {
+      const el = $('#liste');
+      const anzahl = serien.reduce((n, s) => n + s.daten.schlaege.length, 0);
+      $('#status').textContent = serien.length ? `${serien.length} Serien, ${anzahl} Schläge geladen.` : 'Noch keine Aufnahme geladen.';
+      if (!serien.length) return;
+      el.classList.remove('dim');
+      el.innerHTML = serien.map((s, i) => `<div class="datei">${s.daten.name || s.daten.schlagart}</div>
+        <div class="dim">${s.name.replace(/^schlag_|\.json$/g, '')} · Uhr am ${s.daten.handgelenk || '?'}en Arm</div>
+        ${s.daten.schlaege.map((_, n) => `<button data-s="${i}" data-n="${n}">${n + 1}</button>`).join('')}`).join('');
+      if (!wahl) waehlen(0, 0);
+    }
+    $('#liste').addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (b) waehlen(+b.dataset.s, +b.dataset.n);
+    });
+
+    // Aus einer Zeile Zahlen wird eine Messung mit Namen (die Namen stehen in der Datei unter "felder")
+    function lesen(serie, nr) {
+      const felder = serie.daten.felder;
+      return serie.daten.schlaege[nr].map((zeile) => Object.fromEntries(felder.map((f, i) => [f, zeile[i]])));
+    }
+
+    function waehlen(s, n) {
+      const serie = serien[s];
+      wahl = { serie, nr: n, messungen: lesen(serie, n), s, n };
+      zeit = wahl.messungen[0].t;
+      $('#zeit').min = wahl.messungen[0].t; $('#zeit').max = wahl.messungen.at(-1).t; $('#zeit').value = zeit;
+      document.querySelectorAll('#liste button').forEach((b) => b.classList.toggle('sel', +b.dataset.s === s && +b.dataset.n === n));
+      werteZeigen();
+      kurvenZeichnen();
+    }
+
+    // ---------------------------------------------------------------
+    // 3D-Ansicht: Unterarm, Uhr und Schläger drehen sich wie aufgenommen
+    // ---------------------------------------------------------------
+    const flaeche = $('#drei');
+    const renderer = new THREE.WebGLRenderer({ canvas: flaeche, antialias: true });
+    const szene = new THREE.Scene();
+    szene.background = new THREE.Color(0x0e1630);
+    const kamera = new THREE.PerspectiveCamera(40, 1, 0.1, 50);
+    kamera.position.set(1.6, 1.1, 2.4);
+    kamera.lookAt(0, 0, 0);
+    szene.add(new THREE.HemisphereLight(0xffffff, 0x223355, 1.6));
+    const sonne = new THREE.DirectionalLight(0xffffff, 1.5); sonne.position.set(2, 4, 3); szene.add(sonne);
+    szene.add(new THREE.GridHelper(4, 8, 0x33446a, 0x223355).translateY(-0.9));
+
+    const arm = new THREE.Group();
+    szene.add(arm);
+    const teil = (geo, farbe) => new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: farbe, roughness: 0.7 }));
+    // Die Uhr rechnet so: x zeigt den Unterarm entlang, z aus dem Zifferblatt heraus.
+    const unterarm = teil(new THREE.CylinderGeometry(0.045, 0.055, 0.5, 12), 0x8a94aa);
+    unterarm.rotation.z = Math.PI / 2;
+    const uhr = teil(new THREE.BoxGeometry(0.09, 0.09, 0.03), 0x111318);
+    uhr.position.z = 0.06;
+    const schlaeger = new THREE.Group();
+    const griff = teil(new THREE.CylinderGeometry(0.018, 0.018, 0.34, 10), 0xe8f04a);
+    griff.rotation.z = Math.PI / 2; griff.position.x = 0.17;
+    const kopf = teil(new THREE.TorusGeometry(0.14, 0.012, 8, 28), 0xe8f04a);
+    kopf.position.x = 0.48; kopf.scale.y = 1.25; kopf.rotation.x = Math.PI / 2;   // die Schlagfläche steht senkrecht zum Zifferblatt
+    schlaeger.add(griff, kopf);
+    arm.add(unterarm, uhr, schlaeger);
+
+    function armStellen(m, serie) {
+      // Die Hand ist auf der Seite der Krone, wenn die Uhr links getragen wird und die Krone rechts sitzt (und umgekehrt).
+      const d = serie.daten;
+      const handRichtung = ((d.handgelenk === 'links') === (d.krone !== 'links')) ? 1 : -1;
+      unterarm.position.x = -0.25 * handRichtung;
+      schlaeger.position.x = 0.08 * handRichtung;
+      schlaeger.scale.x = handRichtung;
+      // Die Uhr misst mit "z = oben". Im Bild ist "y = oben". Deshalb werden die Achsen umsortiert.
+      arm.quaternion.set(m.qx, m.qz, -m.qy, m.qw);
+    }
+
+    // ---------------------------------------------------------------
+    // Kurven
+    // ---------------------------------------------------------------
+    const staerke = (m, a, b, c) => Math.hypot(m[a], m[b], m[c]);
+
+    function kurve(canvas, was, hoechst) {
+      const g = canvas.getContext('2d');
+      const B = canvas.width = canvas.clientWidth * devicePixelRatio, H = canvas.height = canvas.clientHeight * devicePixelRatio;
+      g.clearRect(0, 0, B, H);
+      if (!wahl) return;
+      const t0 = wahl.messungen[0].t, t1 = wahl.messungen.at(-1).t;
+      const X = (t) => (t - t0) / (t1 - t0) * B, Y = (v) => H / 2 - v / hoechst * (H / 2 - 6);
+      g.strokeStyle = 'rgba(255,255,255,.18)'; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(0, H / 2); g.lineTo(B, H / 2); g.moveTo(X(0), 0); g.lineTo(X(0), H); g.stroke();
+      const linie = (messungen, wert, farbe, dick) => {
+        g.strokeStyle = farbe; g.lineWidth = dick * devicePixelRatio; g.beginPath();
+        messungen.forEach((m, i) => { const x = X(m.t), y = Y(wert(m)); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+        g.stroke();
+      };
+      // alle anderen Schläge in Grau (nur die Gesamtstärke)
+      for (const s of serien) s.daten.schlaege.forEach((_, n) => {
+        if (s === wahl.serie && n === wahl.nr) return;
+        linie(lesen(s, n), (m) => staerke(m, ...was), s.daten.schlagart === wahl.serie.daten.schlagart ? 'rgba(255,255,255,.28)' : 'rgba(255,255,255,.09)', 1);
+      });
+      linie(wahl.messungen, (m) => m[was[0]], '#ff6b5a', 1.2);
+      linie(wahl.messungen, (m) => m[was[1]], '#4ade80', 1.2);
+      linie(wahl.messungen, (m) => m[was[2]], '#37c3ff', 1.2);
+      linie(wahl.messungen, (m) => staerke(m, ...was), '#e8f04a', 2.2);
+      g.strokeStyle = '#fff'; g.lineWidth = devicePixelRatio; g.beginPath(); g.moveTo(X(zeit), 0); g.lineTo(X(zeit), H); g.stroke();
+    }
+    function kurvenZeichnen() {
+      kurve($('#kurveA'), ['ax', 'ay', 'az'], 8);
+      kurve($('#kurveR'), ['rx', 'ry', 'rz'], 25);
+    }
+
+    // ---------------------------------------------------------------
+    // Kennzahlen: dieselben Rechnungen wie im Spiel (js/controls.js) und auf der Uhr
+    // ---------------------------------------------------------------
+    function werteZeigen() {
+      const M = wahl.messungen;
+      let spitze = M[0];
+      for (const m of M) if (staerke(m, 'ax', 'ay', 'az') > staerke(spitze, 'ax', 'ay', 'az')) spitze = m;
+      const g = staerke(spitze, 'ax', 'ay', 'az');
+      const drehung = Math.max(...M.map((m) => staerke(m, 'rx', 'ry', 'rz')));
+      const hoch = -(spitze.ax * spitze.gx + spitze.ay * spitze.gy + spitze.az * spitze.gz) / (g || 1);
+      const richtung = hoch < -0.35 ? 'von oben nach unten' : hoch > 0.35 ? 'von unten nach oben' : 'seitlich';
+      const kraft = Math.round(Math.min(1, Math.max(0, (g - 1.6) / (5 - 1.6))) * 100);
+      const zeilen = [
+        ['Stärkste Beschleunigung', g.toFixed(1) + ' g'],
+        ['… zum Zeitpunkt', spitze.t.toFixed(2) + ' s'],
+        ['Kraft im Spiel', kraft + ' %'],
+        ['Richtung des Schwungs', `${richtung} (${hoch.toFixed(2)})`],
+        ['Schnellste Drehung', drehung.toFixed(1) + ' rad/s'],
+        ['Würde zählen als', drehung < 2 ? 'Klopfer (kaum Drehung)' : 'Schlag'],
+        ['Messungen', String(M.length)],
+      ];
+      $('#werte').innerHTML = zeilen.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
+    }
+
+    // ---------------------------------------------------------------
+    // Abspielen
+    // ---------------------------------------------------------------
+    $('#spielen').addEventListener('click', () => {
+      laeuft = !laeuft;
+      if (laeuft && wahl && zeit >= wahl.messungen.at(-1).t - 0.01) zeit = wahl.messungen[0].t;
+      $('#spielen').textContent = laeuft ? '⏸ Pause' : '▶ Abspielen';
+    });
+    $('#zeit').addEventListener('input', (e) => { zeit = +e.target.value; laeuft = false; $('#spielen').textContent = '▶ Abspielen'; });
+
+    let vorher = performance.now();
+    function bild(jetzt) {
+      const dt = Math.min(0.05, (jetzt - vorher) / 1000); vorher = jetzt;
+      const b = flaeche.clientWidth, h = flaeche.clientHeight;
+      if (flaeche.width !== Math.round(b * devicePixelRatio)) { renderer.setPixelRatio(devicePixelRatio); renderer.setSize(b, h, false); }
+      if (wahl) {
+        const M = wahl.messungen;
+        if (laeuft) {
+          zeit += dt * +$('#tempo').value;
+          if (zeit >= M.at(-1).t) { zeit = M.at(-1).t; laeuft = false; $('#spielen').textContent = '▶ Abspielen'; }
+          $('#zeit').value = zeit;
+        }
+        // die Messung suchen, die am nächsten an der gewählten Zeit liegt
+        let m = M[0];
+        for (const x of M) if (Math.abs(x.t - zeit) < Math.abs(m.t - zeit)) m = x;
+        armStellen(m, wahl.serie);
+        kurvenZeichnen();
+      }
+      renderer.render(szene, kamera);
+      requestAnimationFrame(bild);
+    }
+    requestAnimationFrame(bild);
+
+    window.__aufnahmen = { serien, get wahl() { return wahl; }, waehlen };   // zum Testen
+    ordnerLaden();
+  </script>
+</body>
+</html>
