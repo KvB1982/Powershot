@@ -33,7 +33,21 @@ final class Uhr: NSObject, ObservableObject, WCSessionDelegate {
                 "alter": min(0.5, max(0, alter))]
     }
 
-    func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+    // Nachrichten kommen auf drei Wegen an: mit Antwort, ohne Antwort oder als nachgeschicktes Päckchen.
+    func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
+        angekommen(message)
+        replyHandler(["ok": true])
+    }
+
+    func session(_ session: WCSession, didReceiveMessage message: [String: Any]) { angekommen(message) }
+
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) { angekommen(userInfo) }
+
+    private func angekommen(_ message: [String: Any]) {
+        if message["test"] != nil {
+            DispatchQueue.main.async { self.anzeige = "⌚ Test-Nachricht von der Uhr ist angekommen" }
+            return
+        }
         guard message["schwung"] != nil else { return }
         schloss.lock()
         letzter = message
@@ -46,8 +60,18 @@ final class Uhr: NSObject, ObservableObject, WCSessionDelegate {
         }
     }
 
-    // Diese drei braucht Apple, wir benutzen sie nicht.
-    func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {}
+    /// Zum Fehlersuchen: Wie steht es um die Verbindung zur Uhr?
+    func zustand() -> String {
+        guard WCSession.isSupported() else { return "Dieses Gerät kann keine Uhr koppeln" }
+        let s = WCSession.default
+        let bereit = s.activationState == .activated
+        return "Funk \(bereit ? "bereit" : "NICHT bereit") · Uhr \(s.isPaired ? "gekoppelt" : "NICHT gekoppelt") · "
+            + "Watch-App \(s.isWatchAppInstalled ? "installiert" : "FEHLT") · \(s.isReachable ? "erreichbar" : "nicht erreichbar")"
+    }
+
+    func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {
+        if let error { DispatchQueue.main.async { self.anzeige = "⌚ Fehler beim Start: \(error.localizedDescription)" } }
+    }
     func sessionDidBecomeInactive(_ session: WCSession) {}
     func sessionDidDeactivate(_ session: WCSession) { session.activate() }
 }

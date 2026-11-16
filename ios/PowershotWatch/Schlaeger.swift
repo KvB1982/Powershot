@@ -17,6 +17,9 @@ final class Schlaeger: NSObject, ObservableObject {
     @Published var anzahl = 0
     @Published var erreichbar = false
     @Published var fehler: String?
+    /// Zum Fehlersuchen: Was ist mit der letzten Nachricht ans iPhone passiert?
+    @Published var funkStatus = "noch nichts gesendet"
+    private var bestaetigt = 0
 
     private let schwungStart = 1.6      // ab dieser Beschleunigung (in g) zählt es als Schwung
     private let schwungVoll = 5.0       // so stark = volle Kraft
@@ -103,10 +106,32 @@ final class Schlaeger: NSObject, ObservableObject {
     private func melden(_ nachricht: [String: Any]) {
         let funk = WCSession.default
         erreichbar = funk.isReachable
-        guard funk.isReachable else { return }
-        funk.sendMessage(nachricht, replyHandler: nil) { [weak self] _ in
-            DispatchQueue.main.async { self?.erreichbar = false }
+        guard funk.activationState == .activated else { funkStatus = "Funk ist nicht bereit"; funk.activate(); return }
+        guard funk.isReachable else {
+            // Das iPhone ist gerade nicht direkt erreichbar: als Päckchen hinterherschicken (kommt später an).
+            funk.transferUserInfo(nachricht)
+            funkStatus = "iPhone nicht erreichbar"
+            return
         }
+        // Mit Antwort: So wissen wir sicher, dass das iPhone die Nachricht bekommen hat.
+        funk.sendMessage(nachricht, replyHandler: { [weak self] _ in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.bestaetigt += 1
+                self.funkStatus = "iPhone hat \(self.bestaetigt)× bestätigt"
+            }
+        }, errorHandler: { [weak self] fehler in
+            DispatchQueue.main.async {
+                self?.erreichbar = false
+                self?.funkStatus = "Fehler: \(fehler.localizedDescription)"
+            }
+        })
+    }
+
+    /// Zum Fehlersuchen: eine Test-Nachricht ans iPhone schicken (ohne zu schwingen).
+    func testen() {
+        funkStatus = "sende Test …"
+        melden(["test": true, "zeit": Date().timeIntervalSince1970])
     }
 }
 
