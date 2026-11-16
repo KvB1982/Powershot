@@ -17,6 +17,7 @@ python tools/server.py          # http://localhost:8765, ohne Zwischenspeicher
 node tools/sim.mjs 0 1 mittel hard 3    # Computer gegen Computer, ohne Grafik
 node tools/logic.mjs            # Turnier, Karriere und Saison (ATP Race) durchrechnen
 node tools/rookie.mjs           # Neuling gegen Profi auf jeder Schwierigkeit
+node tools/kamera.mjs           # Laufen mit der Kamera: Rechnung prüfen (ohne Kamera, mit künstlichen Körperpunkten)
 node tools/mocap.mjs            # Aufnahmen aus mocap/*.FBX in mocap/bewegungen.json umrechnen (--info zeigt nur an)
 ```
 
@@ -35,6 +36,8 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 | `js/physics.js`, `js/rules.js` | Ballflug, Zählweise – ohne three.js, in node testbar |
 | `js/match.js` | Zustände: intro → serveReady → toss → rally → pointOver → (changeover) → over; Computergegner |
 | `js/controls.js` | Steuerung: `klassik` (Maus), `touch` (iPad), `profi` (Tastatur), `controller` (Switch-Controller; Schwung-Zahlen `SWING_…` oben in der Datei) |
+| `js/kamera.js` | Laufen mit der Kamera: Körperpunkte → Position auf dem Platz, Einmessen, Zahlen zum Einstellen oben – ohne three.js und ohne Browser testbar |
+| `js/kamerabild.js` | Webcam (`getUserMedia`) und Körpererkennung MediaPipe Pose (`@mediapipe/tasks-vision` von jsDelivr, Modell `assets/koerper_lite.task`), Vorschau |
 | `js/figur.js` | Sechs Spielermodelle (`assets/spieler_a…f.glb`), Skinning auf 13 Knochen, Umfärben im Shader |
 | `js/posen.js` | Handgebaute Posen und Schlagbewegungen (Rückfall, wenn es keine Aufnahme gibt) |
 | `js/mocap.js` | Lädt `mocap/bewegungen.json`, falls vorhanden |
@@ -72,6 +75,15 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
   legen (wird nicht ins Repository übernommen), `python3 tools/server.py`, dann `http://localhost:8765/tools/aufnahmen.html`.
 - Simulatoren funken auf einem eigenen Kanal (`powershot-sim`). Trotzdem Simulator-Apps nach dem Testen beenden.
 
+## Laufen mit der Kamera
+
+- Einstellungen → „Laufen mit der Kamera“ (`settings.kamera`: `aus`, `seite`, `voll`). Die Kamera ersetzt nur das Laufen; geschlagen wird mit der gewählten Steuerung.
+  `Controls.kameraZiel()` liefert `{ x, vor }` oder `null`, `match.js` läuft dorthin (`KAMERA_HILFE`: letzter Schritt zum Ball von allein).
+- Die Kamera geht im Browser nur auf https oder localhost – also nicht über `http://192.168…:8765` vom iPad aus, dort GitHub Pages nehmen.
+- In der iOS-App (Adresse `powershot://`) gibt der eingebaute Browser die Kamera vermutlich nicht frei (nicht erprobt). Geplant: Apple Vision in Swift, das die Körperpunkte an `kameraLauf.update` meldet.
+- Bisher nur mit einer künstlichen Kamera geprüft (Foto, das verschoben und vergrößert wird), nicht mit einem echten Menschen vor einer Webcam.
+- Testen ohne Kamera: `__powershot.kameraLauf` und `__powershot.kameraBild`; `?kamera=cpu` erzwingt Rechnen ohne Grafikkarte.
+
 ## Was nicht ins Repository darf
 
 - `aufnahmen/` – eure eigenen Bewegungsaufnahmen von der Apple Watch.
@@ -85,6 +97,7 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 - Die Spielermodelle kommen aus 3D AI Studio (nur starre T-Pose-Modelle); das Skelett rechnet das Spiel selbst. Keine Finger.
 - Gesichter sind erfunden – keine Abbilder echter Spieler erzeugen.
 - Die Seiten werden nicht getauscht; beim Seitenwechsel gehen die Spieler nur zur Bank.
+- Laufen mit der Kamera: nur eine Person im Bild; vor und zurück wird aus der Größe im Bild geschätzt und ist ungenauer als links und rechts.
 - Laufen ist ein gebauter Schrittzyklus, keine Aufnahme. Slice-Topspin-Unterschiede bei einhändigen Spielern fehlen.
 - Spielstärke und Ballwechsel-Länge sind nur grob eingestellt.
 - Punkte: echte ATP-Werte je Runde (Regeln 2026), aber kleinere Felder (Grand Slam 32, Masters 16) und keine ATP-500/250-Turniere.

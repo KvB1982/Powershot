@@ -9,7 +9,7 @@ Stadion, 3D-Spielern, Turnieren und Karriere.
 Das Spiel besteht nur aus HTML, CSS und JavaScript. Es gibt keinen Build-Schritt.
 Es braucht aber einen kleinen Webserver (ein Doppelklick auf `index.html` reicht nicht,
 weil der Browser JavaScript-Module nur über `http` lädt) und beim Start eine Internetverbindung
-(die 3D-Bibliothek three.js wird von jsDelivr geladen).
+(die 3D-Bibliothek three.js wird von jsDelivr geladen; für „Laufen mit der Kamera“ zusätzlich die Körpererkennung MediaPipe von Google, Lizenz Apache 2.0, das Modell liegt in `assets/koerper_lite.task`).
 
 ```bash
 python tools/server.py
