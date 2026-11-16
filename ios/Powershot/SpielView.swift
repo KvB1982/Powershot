@@ -101,7 +101,11 @@ final class SpielDateien: NSObject, WKURLSchemeHandler {
         // Im Browser kommt three.js aus dem Internet. In der App liegt es im Paket (Ordner vendor/three),
         // also tauschen wir in der Startseite die Internet-Adresse gegen den Ordner im Paket.
         if pfad == "/index.html", let text = String(data: daten, encoding: .utf8) {
+            // Außerdem bekommt das Spiel gesagt, welche Version der App läuft (steht dann in den Einstellungen).
+            let info = Bundle.main.infoDictionary
+            let version = "\(info?["CFBundleShortVersionString"] ?? "?") (\(info?["CFBundleVersion"] ?? "?"))"
             let neu = text.replacingOccurrences(of: "https://cdn.jsdelivr.net/npm/three@0.160.0/", with: "./vendor/three/")
+                .replacingOccurrences(of: "<body>", with: "<body><script>window.__powershotVersion = \"\(version)\";</script>")
             daten = Data(neu.utf8)
         }
         let art = arten[datei.pathExtension.lowercased()] ?? "application/octet-stream"

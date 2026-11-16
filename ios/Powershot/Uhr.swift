@@ -17,6 +17,17 @@ final class Uhr: NSObject, ObservableObject, WCSessionDelegate {
     private let schloss = NSLock()
 
     func starten() {
+        #if DEBUG
+        // Nur zum Testen im Simulator (Start mit "-testSchwung"): alle 3 Sekunden so tun, als hätte die Uhr geschwungen.
+        if ProcessInfo.processInfo.arguments.contains("-testSchwung") {
+            var nummer = 0
+            Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in
+                nummer += 1
+                self.angekommen(["schwung": 5000 + nummer, "kraft": 0.7, "hoch": -0.8,
+                                 "zeit": Date().timeIntervalSince1970 - 0.08])
+            }
+        }
+        #endif
         guard WCSession.isSupported() else { return }      // ein iPad hat keine Uhr
         WCSession.default.delegate = self
         WCSession.default.activate()

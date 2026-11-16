@@ -148,6 +148,7 @@ actions.settings = (v) => {
       ${optionRow('Grafik', 'quality', { hoch: 'Schön', niedrig: 'Schnell (ältere Geräte)' })}
       ${optionRow('Spielerfiguren', 'figures', { echt: 'Realistisch', einfach: 'Einfach' })}
     </div>
+    ${window.__powershotVersion ? `<p class="dim" style="font-size:12px">App-Version ${esc(window.__powershotVersion)} – iPad, iPhone und Uhr sollten dieselbe Nummer haben.</p>` : ''}
     <p class="dim">Auf „Leicht“ bleiben deine Bälle immer im Feld, und du schlägst auch ohne Eingabe zurück.
     Auf „Schwer“ und „Profi“ kannst du ins Aus und ins Netz schlagen.</p>`);
 };

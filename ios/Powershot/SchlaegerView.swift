@@ -11,6 +11,7 @@ struct SchlaegerView: View {
     @ObservedObject private var funk = Funk.shared
     @ObservedObject private var uhr = Uhr.shared
     @State private var uhrZustand = ""                  // zum Fehlersuchen: Stand der Verbindung zur Uhr
+    private let version = "\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] ?? "?") (\(Bundle.main.infoDictionary?["CFBundleVersion"] ?? "?"))"
     private let sekunde = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     @State private var tasten: Set<String> = []         // gerade gedrückte Tasten: "a", "b", "x", "y"
     private let takt = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
@@ -34,7 +35,7 @@ struct SchlaegerView: View {
             }
 
             Text(uhr.anzeige).font(.footnote).foregroundStyle(.secondary)
-            Text(uhrZustand).font(.caption2).foregroundStyle(.secondary)
+            Text("\(uhrZustand) · App-Version \(version)").font(.caption2).foregroundStyle(.secondary)
 
             HStack(spacing: 10) {
                 taste("Schlag", "a"); taste("Slice", "b"); taste("Lob", "x"); taste("Stopp", "y")
