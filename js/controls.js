@@ -126,6 +126,7 @@ export class Controls {
     P.connected = true; P.name = s.name || 'Controller';
     P.x = tot(s.lx || 0); P.f = tot(s.ly || 0);
     P.motion = !!s.motion;
+    if (typeof s.ziel === 'number') this.daumen = { id: 'fern', x: clamp(s.ziel, -1, 1) };   // Zielen kommt vom Schläger-iPhone
     const neu = { a: !!s.a, b: !!s.b, x: !!s.x, y: !!s.y, pause: !!s.pause };
     P.btn = neu;
     if (neu.pause && !alt.pause && this.onPause) this.onPause();
@@ -149,7 +150,7 @@ export class Controls {
     if (s.motion) this.fuehleSchwung(s.motion);
   }
 
-  padWeg() { this.pad = { connected: false, name: '', x: 0, f: 0, btn: {}, motion: false }; }
+  padWeg() { this.pad = { connected: false, name: '', x: 0, f: 0, btn: {}, motion: false }; this.daumen = { id: null, x: 0 }; }
 
   // Aus den Bewegungsdaten einen Schwung erkennen:
   // Wird die Hand stark beschleunigt, beginnt ein Schwung. Wir merken uns kurz den stärksten Wert

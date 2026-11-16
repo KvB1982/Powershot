@@ -14,6 +14,9 @@ final class Spiel: ObservableObject {
     /// true, solange das Spiel auf dem Fernseher (AirPlay) zu sehen ist
     @Published var aufFernseher = false
 
+    /// true, solange dieses Gerät nur der Schläger für ein anderes Gerät ist
+    @Published var schlaegerModus = false
+
     let web: WKWebView
     private var controller: ControllerBruecke?
 
@@ -22,6 +25,8 @@ final class Spiel: ObservableObject {
         config.setURLSchemeHandler(SpielDateien(), forURLScheme: "powershot")
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []      // Ton darf sofort spielen
+        // Das Spiel kann der App Bescheid sagen (z. B. der Knopf "Dieses Gerät als Schläger benutzen").
+        config.userContentController.add(Botschaften(), name: "powershot")
 
         web = WKWebView(frame: .zero, configuration: config)
         web.isOpaque = false
@@ -36,6 +41,7 @@ final class Spiel: ObservableObject {
         #endif
         web.load(URLRequest(url: URL(string: "powershot://spiel/index.html")!))
         controller = ControllerBruecke(web: web)                  // Switch-Controller ans Spiel anschließen
+        Funk.shared.alsSpielStarten()                             // auf ein iPhone als Schläger warten
     }
 
     /// Setzt das Spiel-Fenster in eine Fläche ein (auf dem Gerät oder auf dem Fernseher) und füllt sie ganz aus.
@@ -45,6 +51,13 @@ final class Spiel: ObservableObject {
         web.frame = flaeche.bounds
         web.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         flaeche.addSubview(web)
+    }
+}
+
+/// Nimmt Botschaften aus dem Spiel entgegen (JavaScript: window.webkit.messageHandlers.powershot.postMessage("…")).
+final class Botschaften: NSObject, WKScriptMessageHandler {
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.body as? String == "schlaeger" { Spiel.shared.schlaegerModus = true }
     }
 }
 

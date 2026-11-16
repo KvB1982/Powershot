@@ -17,6 +17,7 @@ struct PowershotApp: App {
                 Color(red: 0.043, green: 0.063, blue: 0.125)
                 SpielView(aufFernseher: spiel.aufFernseher)
                 if spiel.aufFernseher { FernseherHinweis() }
+                if spiel.schlaegerModus { SchlaegerView() }       // dieses Gerät ist gerade nur der Schläger
             }
             .ignoresSafeArea()                         // das Spiel füllt den ganzen Bildschirm
             .statusBarHidden(true)                     // keine Uhr und kein Akku über dem Spiel

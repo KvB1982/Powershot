@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Damit sich zwei Geräte im selben WLAN finden dürfen (iPhone als Schläger) -->
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_powershot._tcp</string>
+		<string>_powershot._udp</string>
+	</array>
+</dict>
+</plist>

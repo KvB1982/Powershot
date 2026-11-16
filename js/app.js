@@ -135,6 +135,8 @@ actions.settings = (v) => {
       <p class="dim" style="margin:6px 0 0;font-size:13px">🎮 ${controls.pad.connected
         ? `Verbunden: ${esc(controls.pad.name)} · ${controls.pad.motion ? 'Schwingen wird erkannt' : 'nur Tasten und Stick (kein Schwingen)'}`
         : 'Kein Controller verbunden. Koppeln: iPad-Einstellungen → Bluetooth, am Joy-Con die kleine runde Taste gedrückt halten.'}</p>
+      ${window.webkit?.messageHandlers?.powershot ? `<div class="row" style="margin-top:8px">
+        <button data-a="schlaeger">📱 Dieses Gerät als Schläger für ein anderes benutzen</button></div>` : ''}
       ${optionRow('Laufhilfe', 'assist', ASSIST_NAMES)}
       ${optionRow('Schwierigkeit', 'difficulty', Object.fromEntries(Object.entries(D.DIFFICULTY).map(([k, d]) => [k, d.name])))}
       ${optionRow('Matchlänge', 'length', Object.fromEntries(Object.entries(D.LENGTHS).map(([k, d]) => [k, d.name])))}
@@ -192,6 +194,8 @@ const HELP = `
     <li><kbd>A</kbd>: Topspin · <kbd>B</kbd>: Slice · <kbd>X</kbd>: Lob · <kbd>Y</kbd>: Stoppball.</li>
     <li><b>Stick:</b> laufen. Die Richtung, die du <b>beim Treffen</b> hältst, bestimmt das Ziel.</li>
     <li><b>Aufschlag:</b> schwingen oder <kbd>A</kbd> drücken. <kbd>+</kbd>: Pause.</li>
+    <li><b>iPhone als Schläger fürs iPad</b> (in der App): Auf dem iPad „Controller / iPhone-Schläger“ wählen.
+      Auf dem iPhone Powershot öffnen → Einstellungen → „Dieses Gerät als Schläger … benutzen“. Die Geräte finden sich von selbst.</li>
     <li><b>iPhone als Schläger</b> (in der App): Halte das iPhone fest in der Hand und schwing es wie einen Schläger.
       Der Daumen auf dem Bildschirm zielt: links halten = nach links, rechts = nach rechts, loslassen = Mitte.
       Lass am besten die Laufhilfe auf „Voll“. Achtung: gut festhalten, am besten mit Hülle!</li></ul></div>
@@ -822,9 +826,9 @@ function menuTaste(was) {
     if (z) z.click();
     return;
   }
-  if (was === 'ok') { if (jetzt) jetzt.click(); return; }
+  if (was === 'ok' && jetzt) { jetzt.click(); return; }       // ist noch nichts ausgewählt, wählt A zuerst den wichtigsten Knopf aus
   let ziel = null;
-  if (!jetzt) {
+  if (!jetzt || was === 'ok') {
     ziel = screen.querySelector('button.primary') || knoepfe[0];      // noch nichts ausgewählt: beim wichtigsten Knopf anfangen
   } else {
     // Den nächsten Knopf in der Richtung suchen: Wir vergleichen die Mittelpunkte der Knöpfe.
@@ -848,6 +852,9 @@ function menuTaste(was) {
   sound.click();
 }
 controls.onMenu = menuTaste;
+
+// Nur in der iOS-App: Dieses Gerät wird zum Schläger für ein anderes (z. B. iPhone für das Spiel auf dem iPad).
+actions.schlaeger = () => window.webkit.messageHandlers.powershot.postMessage('schlaeger');
 
 // Controller: Die Pause-Taste hält das Spiel an. Die iOS-App meldet den Controller über diese beiden Funktionen.
 controls.onPause = () => togglePause();

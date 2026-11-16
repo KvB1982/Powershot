@@ -15,6 +15,7 @@ html, body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-user-select: none; user-select: none; overscroll-behavior: none;
   -webkit-touch-callout: none;   /* kein Menü beim langen Drücken (iPad/iPhone) */
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;   /* das iPhone soll kleine Schrift im Querformat nicht von selbst vergrößern */
 }
 #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 #touch { position: fixed; inset: 0; touch-action: none; }

@@ -19,7 +19,7 @@ final class ControllerBruecke: NSObject {
     private var unten = (x: 0.0, y: -1.0, z: 0.0)
     // Die Bewegungssensoren des iPhones/iPads selbst. Damit wird das Gerät zum Schläger,
     // wenn kein Controller da ist oder der Controller (wie der Joy-Con unter iOS) keine Bewegung meldet.
-    private let geraet = CMMotionManager()
+    private static let geraet = CMMotionManager()
 
     init(web: WKWebView) {
         self.web = web
@@ -27,9 +27,9 @@ final class ControllerBruecke: NSObject {
         NotificationCenter.default.addObserver(self, selector: #selector(neuerController(_:)),
                                                name: .GCControllerDidConnect, object: nil)
         GCController.controllers().forEach(einschalten)
-        if geraet.isDeviceMotionAvailable {
-            geraet.deviceMotionUpdateInterval = 1.0 / 60.0
-            geraet.startDeviceMotionUpdates()
+        if Self.geraet.isDeviceMotionAvailable {
+            Self.geraet.deviceMotionUpdateInterval = 1.0 / 60.0
+            Self.geraet.startDeviceMotionUpdates()
         }
         UIApplication.shared.isIdleTimerDisabled = true      // der Bildschirm soll beim Spielen nicht ausgehen
         let takt = CADisplayLink(target: self, selector: #selector(senden))
@@ -38,10 +38,10 @@ final class ControllerBruecke: NSObject {
         self.takt = takt
     }
 
-    deinit { takt?.invalidate(); geraet.stopDeviceMotionUpdates() }
+    deinit { takt?.invalidate() }
 
     /// Die Bewegung des Geräts selbst, in derselben Form wie die eines Controllers.
-    private func geraeteBewegung() -> [String: Double]? {
+    static func geraeteBewegung() -> [String: Double]? {
         guard let m = geraet.deviceMotion else { return nil }
         return ["ax": m.userAcceleration.x, "ay": m.userAcceleration.y, "az": m.userAcceleration.z,
                 "gx": m.gravity.x, "gy": m.gravity.y, "gz": m.gravity.z]
@@ -58,10 +58,20 @@ final class ControllerBruecke: NSObject {
 
     @objc private func senden() {
         guard let web else { return }
+        // Ist ein iPhone als Schläger verbunden? Dann zählt, was es schickt (Schwung, Ziel, Tasten).
+        if let fern = Funk.shared.vomSchlaeger() {
+            warVerbunden = true
+            var nachricht = fern
+            nachricht["name"] = "Schläger: \(Funk.shared.partner ?? "iPhone")"
+            nachricht["lx"] = 0
+            nachricht["ly"] = 0
+            schicken(nachricht, an: web)
+            return
+        }
         // Den Controller nehmen, der zuletzt benutzt wurde (oder irgendeinen verbundenen).
         guard let c = GCController.current ?? GCController.controllers().first else {
             // Kein Controller: Dann ist das Gerät selbst der Schläger (nur Schwingen, keine Tasten).
-            if let bewegung = geraeteBewegung() {
+            if let bewegung = Self.geraeteBewegung() {
                 let name = UIDevice.current.userInterfaceIdiom == .phone ? "iPhone als Schläger" : "iPad als Schläger"
                 schicken(["name": name, "lx": 0, "ly": 0, "motion": bewegung], an: web)
             } else if warVerbunden {
@@ -108,7 +118,7 @@ final class ControllerBruecke: NSObject {
 
         // Meldet der Controller keine Bewegung (Joy-Con unter iOS), nehmen wir die des Geräts:
         // Controller in der einen Hand für die Tasten, iPhone in der anderen als Schläger.
-        if nachricht["motion"] == nil, let bewegung = geraeteBewegung() {
+        if nachricht["motion"] == nil, let bewegung = Self.geraeteBewegung() {
             nachricht["motion"] = bewegung
             nachricht["name"] = "\(c.vendorName ?? "Controller") + Gerät als Schläger"
         }
