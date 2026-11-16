@@ -521,7 +521,7 @@ export class Match {
     if (!b.live || b.lastHitter === p.side || p.missed || p.noHit || b.bounces >= 2) return;
     if (b.pos.z * p.dz <= 0.15) return;
     const volley = b.bounces === 0;
-    const profi = p.isHuman && this.cfg.controlMode === 'profi';
+    const profi = p.isHuman && (this.cfg.controlMode === 'profi' || this.cfg.controlMode === 'controller');
     if (volley) {
       if (b.isServe) return;
       if (!this.predIn && !profi) return;

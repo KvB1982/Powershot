@@ -2,6 +2,7 @@
 //   klassik : wie in der Python-Version (Mausrad/Pfeile zielen, linke Maustaste halten = Kraft)
 //   touch   : für iPad/Handy (links Joystick, rechts wischen)
 //   profi   : Tastatur, selbst laufen, verschiedene Schläge, Richtung beim Treffen
+//   controller : Switch-Controller (Joy-Con, Pro Controller): Stick, Tasten und – in der iOS-App – Schwingen
 //
 // Das Match fragt die Steuerung ab:
 //   move()        -> { x, f }   Laufrichtung (-1..1), f = nach vorne
@@ -14,6 +15,13 @@ export const POWER_MAX = 1.4;
 export const POWER_LIMIT = 1.08;       // darüber fliegt der Ball zu lang
 const CHARGE_TIME = 0.75;              // Sekunden bis volle Kraft (klassik)
 const DOUBLE = 0.32;                   // Zeitfenster für Doppelklick / Doppeltipp
+
+// --- Controller: Schwung-Erkennung. Mit diesen Zahlen kannst du das Schwingen einstellen. ---
+const SWING_START = 1.6;               // ab dieser Beschleunigung (in g, 1 g = Erdanziehung) zählt es als Schwung
+const SWING_VOLL = 5.0;                // so stark muss man schwingen für volle Kraft
+const SWING_PAUSE = 0.4;               // Sekunden Ruhe nach einem Schwung (sonst zählt einer doppelt)
+const PAD_HALTBAR = 0.7;               // so lange "gilt" ein Schwung oder Tastendruck, bis der Ball da sein muss
+const tot = (v) => (Math.abs(v) < 0.18 ? 0 : v);     // kleine Stick-Wackler ignorieren
 
 export class Controls {
   constructor(el, stickEl) {
@@ -29,6 +37,12 @@ export class Controls {
     this.lastTap = -9;
     this.lastClick = -9;
     this.time = 0;
+    // Controller: Stick (x, f), gedrückte Tasten, Name und ob er Bewegungen (Schwingen) meldet
+    this.pad = { connected: false, name: '', x: 0, f: 0, btn: {}, motion: false };
+    this.schwung = { aktiv: false, t0: 0, peak: 0, hoch: 0, ende: -9 };
+    this.padAt = -9;              // wann der letzte Controller-Schlag ausgelöst wurde
+    this.nativePad = false;       // true, sobald die iOS-App den Controller meldet
+    this.onPause = null;          // wird von app.js gesetzt: Pause-Taste am Controller
     this.bind();
   }
 
@@ -95,6 +109,75 @@ export class Controls {
     const ud = (K.ArrowUp || K.w ? 1 : 0) - (K.ArrowDown || K.s ? 1 : 0);
     if (this.ctx === 'serve') return { type: 'serve', aim: lr * 0.85, power: c.power, committed: true };
     return { type: c.type, aimMode: 'abs', aim: lr * 0.88, depth: 0.78 + ud * 0.16, power: clamp(c.power, 0.2, 1), committed: true };
+  }
+
+  // ---------------------------------------------------------------
+  // Controller (Switch Joy-Con, Pro Controller …)
+  // ---------------------------------------------------------------
+  // Der Zustand des Controllers kommt hier an – entweder aus der iOS-App (mit Bewegung) oder aus dem Browser.
+  //   s = { name, lx, ly, a, b, x, y, pause, motion }   lx/ly: Stick von -1 bis 1 (ly: + = nach vorne)
+  //   motion = { ax, ay, az, gx, gy, gz } oder null       a: Beschleunigung der Hand in g, g: Richtung "unten"
+  setPad(s) {
+    const P = this.pad, alt = P.btn;
+    P.connected = true; P.name = s.name || 'Controller';
+    P.x = tot(s.lx || 0); P.f = tot(s.ly || 0);
+    P.motion = !!s.motion;
+    const neu = { a: !!s.a, b: !!s.b, x: !!s.x, y: !!s.y, pause: !!s.pause };
+    P.btn = neu;
+    if (neu.pause && !alt.pause && this.onPause) this.onPause();
+    if (!this.enabled || this.mode !== 'controller') return;
+    // Tasten wie auf der Switch: A = Topspin, B = Slice, X = Lob, Y = Stoppball
+    if (neu.a && !alt.a) this.commitPad('drive', 0.75);
+    if (neu.b && !alt.b) this.commitPad('slice', 0.6);
+    if (neu.x && !alt.x) this.commitPad('lob', 0.6);
+    if (neu.y && !alt.y) this.commitPad('drop', 0.4);
+    if (s.motion) this.fuehleSchwung(s.motion);
+  }
+
+  padWeg() { this.pad = { connected: false, name: '', x: 0, f: 0, btn: {}, motion: false }; }
+
+  // Aus den Bewegungsdaten einen Schwung erkennen:
+  // Wird die Hand stark beschleunigt, beginnt ein Schwung. Wir merken uns kurz den stärksten Wert
+  // und ob die Bewegung dabei nach oben oder nach unten ging.
+  fuehleSchwung(m) {
+    const S = this.schwung;
+    const stark = Math.hypot(m.ax, m.ay, m.az);
+    const hoch = -(m.ax * m.gx + m.ay * m.gy + m.az * m.gz);     // > 0: nach oben, < 0: nach unten
+    if (!S.aktiv) {
+      if (stark < SWING_START || this.time - S.ende < SWING_PAUSE) return;
+      S.aktiv = true; S.t0 = this.time; S.peak = stark; S.hoch = hoch;
+      return;
+    }
+    if (stark > S.peak) { S.peak = stark; S.hoch = hoch; }
+    if (this.time - S.t0 < 0.12) return;                         // 0,12 Sekunden lang den stärksten Wert suchen
+    S.aktiv = false; S.ende = this.time;
+    const kraft = clamp((S.peak - SWING_START) / (SWING_VOLL - SWING_START), 0, 1);
+    // Von oben nach unten geschwungen = Slice, sonst Topspin
+    const type = S.hoch < -0.35 * S.peak ? 'slice' : 'drive';
+    this.commitPad(type, 0.3 + 0.7 * kraft);
+  }
+
+  commitPad(type, power) {
+    this.committed = { type, power };
+    this.padAt = this.time;
+    if (this.ctx === 'serve') this.serveOut = this.padRaw(this.committed);
+  }
+
+  // Wie bei "profi": Die Richtung, in die der Stick beim Treffen zeigt, bestimmt das Ziel.
+  padRaw(c) {
+    const lr = this.pad.x, ud = this.pad.f;
+    if (this.ctx === 'serve') return { type: 'serve', aim: lr * 0.85, power: Math.min(1.05, c.power + 0.1), committed: true };
+    return { type: c.type, aimMode: 'abs', aim: lr * 0.88, depth: 0.78 + ud * 0.16, power: clamp(c.power, 0.2, 1), committed: true };
+  }
+
+  // Im Browser (ohne iOS-App) fragen wir den Controller selbst ab. Dort gibt es nur Stick und Tasten.
+  pollPad() {
+    if (this.nativePad || !navigator.getGamepads) return;
+    const gp = [...navigator.getGamepads()].find((g) => g && g.connected);
+    if (!gp) { if (this.pad.connected) this.padWeg(); return; }
+    const B = (i) => !!(gp.buttons[i] && gp.buttons[i].pressed);
+    // Nummern nach dem Standard-Aufbau: 0 = unten, 1 = rechts, 2 = links, 3 = oben, 9 = Start/Plus
+    this.setPad({ name: gp.id, lx: gp.axes[0] || 0, ly: -(gp.axes[1] || 0), a: B(1), b: B(0), x: B(3), y: B(2), pause: B(9), motion: null });
   }
 
   // ---------------------------------------------------------------
@@ -226,6 +309,9 @@ export class Controls {
       if (this.charging) this.power = Math.min(POWER_MAX, this.power + dt / CHARGE_TIME);
     } else if (this.mode === 'profi') {
       if (this.charging) this.power = Math.min(this.ctx === 'serve' ? 1.25 : 1, this.power + dt / 0.5);
+    } else if (this.mode === 'controller') {
+      // Zu früh geschwungen? Dann verfällt der Schlag wieder – wie beim echten Tennis muss das Timing stimmen.
+      if (this.committed && this.ctx === 'rally' && this.time - this.padAt > PAD_HALTBAR) this.committed = null;
     }
   }
 
@@ -238,6 +324,7 @@ export class Controls {
         f: (K.ArrowUp || K.w ? 1 : 0) - (K.ArrowDown || K.s ? 1 : 0),
       };
     }
+    if (this.mode === 'controller') return { x: this.pad.x, f: this.pad.f };
     return { x: this.stick.x, f: this.stick.f };
   }
 
@@ -248,6 +335,7 @@ export class Controls {
       if (this.charging) return { ...this.profiRaw({ type: this.type, power: this.power }), committed: false };
       return null;
     }
+    if (this.mode === 'controller') return this.committed ? this.padRaw(this.committed) : null;
     return this.committed || this.live;
   }
 
@@ -258,6 +346,8 @@ export class Controls {
     } else if (this.mode === 'profi') {
       if (this.committed) raw = this.profiRaw(this.committed);
       else if (this.charging) raw = this.profiRaw({ type: this.type, power: this.power });
+    } else if (this.mode === 'controller') {
+      if (this.committed) raw = this.padRaw(this.committed);
     } else {
       raw = this.committed;
     }
@@ -274,7 +364,7 @@ export class Controls {
 
   // Für den Kraftbalken auf dem Bildschirm
   hud() {
-    const show = this.mode !== 'touch' && (this.charging || !!this.committed);
+    const show = this.mode !== 'touch' && this.mode !== 'controller' && (this.charging || !!this.committed);
     const p = this.committed ? this.committed.power : this.power;
     return { show, power: p, max: POWER_MAX, limit: POWER_LIMIT, charging: this.charging, type: this.committed ? this.committed.type : this.type };
   }
