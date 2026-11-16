@@ -195,6 +195,7 @@ export class Game3D {
         else say += sc.callText(names);
         if (info.rally >= 9) strength = Math.min(1, strength + 0.25);
         snd.applause(strength, strength > 0.7);
+        self.stadium.jubel(strength);
         snd.setCrowd(0.06);
         setTimeout(() => snd.say(say), 500);
         call('point', head, sub, info);
@@ -234,6 +235,7 @@ export class Game3D {
       mk.material.opacity = clamp(mk.userData.life / 1.2, 0, 0.8);
       if (mk.userData.life <= 0) mk.visible = false;
     }
+    this.stadium.update(dt);
     this.renderer.render(this.scene, this.camera);
   }
 

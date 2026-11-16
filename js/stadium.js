@@ -190,7 +190,7 @@ export class Stadium {
     const rows = quality === 'niedrig' ? 9 : 14;
     const stepD = 0.95, stepH = 0.5;
     const seatCol = th.seats;
-    const seats = [];   // Sitzplätze für Zuschauer: {x,y,z}
+    const seats = [];   // Sitzplätze für Zuschauer: {x,y,z} und die Blickrichtung zum Platz {nx,nz}
     for (let r = 0; r < rows; r++) {
       const y = wallH + r * stepH;
       const off = 0.6 + r * stepD;
@@ -198,11 +198,11 @@ export class Stadium {
         // Längsseiten
         const lenZ = (RUN_Z + off) * 2;
         box(stepD, y, lenZ, shade(seatCol, 0.85 + (r % 2) * 0.1), s * (RUN_X + off), y / 2, 0);
-        for (let z = -RUN_Z; z <= RUN_Z; z += 0.62) seats.push({ x: s * (RUN_X + off), y, z });
+        for (let z = -RUN_Z; z <= RUN_Z; z += 0.62) seats.push({ x: s * (RUN_X + off), y, z, nx: -s, nz: 0 });
         // Kopfseiten
         const lenX = (RUN_X + off) * 2;
         box(lenX, y, stepD, shade(seatCol, 0.85 + (r % 2) * 0.1), 0, y / 2, s * (RUN_Z + off));
-        for (let x = -RUN_X; x <= RUN_X; x += 0.62) seats.push({ x, y, z: s * (RUN_Z + off) });
+        for (let x = -RUN_X; x <= RUN_X; x += 0.62) seats.push({ x, y, z: s * (RUN_Z + off), nx: 0, nz: -s });
       }
     }
     const topY = wallH + rows * stepH, topOff = 0.6 + rows * stepD;
@@ -215,23 +215,7 @@ export class Stadium {
     // --- Zuschauer ---
     const fill = quality === 'niedrig' ? 0.45 : 0.86;
     const people = seats.filter(() => Math.random() < fill);
-    const bodyGeo = new THREE.BoxGeometry(0.4, 0.5, 0.3);
-    const headGeo = new THREE.SphereGeometry(0.13, 6, 5);
-    const bodies = new THREE.InstancedMesh(bodyGeo, new THREE.MeshLambertMaterial(), people.length);
-    const heads = new THREE.InstancedMesh(headGeo, new THREE.MeshLambertMaterial(), people.length);
-    const mtx = new THREE.Matrix4(), col = new THREE.Color();
-    const shirts = [0xffffff, 0xe84a3a, 0x2e6fd8, 0xf2e85c, 0x1fb87a, 0xff9a2a, 0x9a3ad8, 0xd8d8d8, 0x303844, 0x7ac8ff];
-    const skins = [0xf0c8a0, 0xe2b48c, 0xc99872, 0x9a6a48, 0x7a4a30];
-    people.forEach((p, i) => {
-      const jx = (Math.random() - 0.5) * 0.12, jy = Math.random() * 0.08;
-      mtx.makeTranslation(p.x + jx, p.y + 0.3 + jy, p.z);
-      bodies.setMatrixAt(i, mtx);
-      bodies.setColorAt(i, col.setHex(shirts[Math.floor(Math.random() * shirts.length)]).multiplyScalar(night ? 0.75 : 1));
-      mtx.makeTranslation(p.x + jx, p.y + 0.7 + jy, p.z);
-      heads.setMatrixAt(i, mtx);
-      heads.setColorAt(i, col.setHex(skins[Math.floor(Math.random() * skins.length)]).multiplyScalar(night ? 0.75 : 1));
-    });
-    G.add(bodies, heads);
+    this.zuschauerBauen(G, people, night);
 
     // --- Große Anzeigetafel am hinteren Ende ---
     this.boardTex = new THREE.CanvasTexture(this.boardCanvas);
@@ -279,6 +263,123 @@ export class Stadium {
       this.lights.push(fillL);
     }
     this.topY = topY;
+  }
+
+  // ---------------------------------------------------------------
+  // Zuschauer
+  // ---------------------------------------------------------------
+  // Jeder Zuschauer ist nur eine flache Bildtafel (2 Dreiecke) mit einem Bild aus assets/zuschauer.webp.
+  // In diesem Bild sitzen 32 erfundene Leute nebeneinander (8 pro Reihe, 4 Reihen) – jede Tafel zeigt eine davon.
+  // Das ist für iPad und iPhone viel leichter als echte 3D-Figuren: alle Zuschauer zusammen
+  // werden in einem einzigen Schritt gezeichnet.
+  zuschauerBauen(G, people, night) {
+    const SPALTEN = 8, REIHEN = 4;            // so viele Leute sind im Bild neben- und übereinander
+    const BREITE = 0.70, HOEHE = 1.05;        // Größe einer Bildtafel in Metern
+    const geo = new THREE.PlaneGeometry(1, 1);
+    geo.translate(0, 0.5, 0);                 // Nullpunkt an die Unterkante: dort "sitzt" die Person
+    const n = people.length;
+    const bild = new Float32Array(n * 4);     // pro Person: Spalte, Reihe, gespiegelt (0/1), Größe
+    const richtung = new Float32Array(n * 2); // pro Person: wohin sie schaut (zum Platz)
+    const mesh = new THREE.InstancedMesh(geo, null, n);
+    const mtx = new THREE.Matrix4(), col = new THREE.Color();
+    people.forEach((p, i) => {
+      const jx = (Math.random() - 0.5) * 0.12;
+      // ein kleines Stück zur Seite gewürfelt, damit nicht alle wie am Lineal sitzen
+      mtx.makeTranslation(p.x + (p.nx ? 0 : jx), p.y - 0.04, p.z + (p.nz ? 0 : jx));
+      mesh.setMatrixAt(i, mtx);
+      bild[i * 4] = Math.floor(Math.random() * SPALTEN);
+      bild[i * 4 + 1] = Math.floor(Math.random() * REIHEN);
+      bild[i * 4 + 2] = Math.random() < 0.5 ? 1 : 0;
+      bild[i * 4 + 3] = 0.92 + Math.random() * 0.14;
+      richtung[i * 2] = p.nx; richtung[i * 2 + 1] = p.nz;
+      // Jede Person etwas heller oder dunkler und mit einem Hauch Farbe – so fallen Doppelgänger weniger auf
+      const hell = (night ? 0.7 : 0.95) * (0.82 + Math.random() * 0.18);
+      mesh.setColorAt(i, col.setRGB(hell * (0.94 + Math.random() * 0.06), hell * (0.94 + Math.random() * 0.06), hell * (0.94 + Math.random() * 0.06)));
+    });
+    geo.setAttribute('aBild', new THREE.InstancedBufferAttribute(bild, 4));
+    geo.setAttribute('aRichtung', new THREE.InstancedBufferAttribute(richtung, 2));
+
+    const mat = new THREE.MeshBasicMaterial({ alphaTest: 0.4, side: THREE.DoubleSide });
+    // Zwei Werte, die das Zeichenprogramm der Grafikkarte ("Shader") jedes Bild neu bekommt:
+    // die Uhrzeit und wie stark gerade gejubelt wird (0 = alle sitzen still, 1 = alle hüpfen)
+    this.zuschauerWerte = { uZeit: { value: 0 }, uJubel: { value: 0 } };
+    mat.onBeforeCompile = (sh) => {
+      sh.uniforms.uZeit = this.zuschauerWerte.uZeit;
+      sh.uniforms.uJubel = this.zuschauerWerte.uJubel;
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', `#include <common>
+          attribute vec4 aBild;
+          attribute vec2 aRichtung;
+          uniform float uZeit;
+          uniform float uJubel;`)
+        // Welcher Ausschnitt des großen Bildes? (Spalte und Reihe der Person, vielleicht gespiegelt)
+        .replace('#include <uv_vertex>', `#include <uv_vertex>
+          vMapUv = vec2((aBild.x + (aBild.z > 0.5 ? 1.0 - uv.x : uv.x)) / ${SPALTEN}.0,
+                        (${REIHEN - 1}.0 - aBild.y + uv.y) / ${REIHEN}.0);`)
+        // Die Tafel dreht sich um ihre Hochachse zur Kamera – aber höchstens 60 Grad weg vom Platz.
+        // So sieht man die Leute nie "von der Kante", und trotzdem schauen alle ungefähr zum Spiel.
+        .replace('#include <project_vertex>', `
+          vec4 mitte = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+          vec2 zurKamera = normalize(cameraPosition.xz - mitte.xz + vec2(0.0001));
+          vec2 blick = zurKamera;
+          if (dot(aRichtung, zurKamera) < 0.5) {
+            float seite = aRichtung.x * zurKamera.y - aRichtung.y * zurKamera.x < 0.0 ? -1.0 : 1.0;
+            float c = 0.5, s = 0.866 * seite;
+            blick = vec2(aRichtung.x * c - aRichtung.y * s, aRichtung.x * s + aRichtung.y * c);
+          }
+          vec3 welt = mitte.xyz + vec3(blick.y, 0.0, -blick.x) * (position.x * ${BREITE.toFixed(2)} * aBild.w);
+          welt.y += position.y * ${HOEHE.toFixed(2)} * aBild.w;
+          // Jubel: die meisten hüpfen kurz auf ihrem Platz, jeder in seinem eigenen Takt
+          float takt = mitte.x * 3.1 + mitte.z * 5.7 + mitte.y * 9.0;
+          welt.y += uJubel * 0.13 * max(0.0, sin(uZeit * 9.0 + takt)) * step(0.25, fract(takt * 0.37));
+          vec4 mvPosition = viewMatrix * vec4(welt, 1.0);
+          gl_Position = projectionMatrix * mvPosition;`);
+    };
+    mesh.material = mat;
+    mesh.frustumCulled = false;   // die Tafeln stehen überall im Stadion – immer zeichnen
+    mesh.visible = false;         // erst zeigen, wenn das Bild geladen ist
+    G.add(mesh);
+    new THREE.TextureLoader().load('assets/zuschauer.webp', (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      mat.map = tex; mat.needsUpdate = true;
+      mesh.visible = true;
+    }, undefined, () => {
+      // Das Bild konnte nicht geladen werden: dann wenigstens die einfachen Klötzchen-Zuschauer
+      G.remove(mesh);
+      this.klotzZuschauer(G, people, night);
+    });
+  }
+
+  // Notlösung ohne Bild: ein Kasten als Körper und eine Kugel als Kopf
+  klotzZuschauer(G, people, night) {
+    const bodies = new THREE.InstancedMesh(new THREE.BoxGeometry(0.4, 0.5, 0.3), new THREE.MeshLambertMaterial(), people.length);
+    const heads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.13, 6, 5), new THREE.MeshLambertMaterial(), people.length);
+    const mtx = new THREE.Matrix4(), col = new THREE.Color();
+    const shirts = [0xffffff, 0xe84a3a, 0x2e6fd8, 0xf2e85c, 0x1fb87a, 0xff9a2a, 0x9a3ad8, 0xd8d8d8, 0x303844, 0x7ac8ff];
+    const skins = [0xf0c8a0, 0xe2b48c, 0xc99872, 0x9a6a48, 0x7a4a30];
+    people.forEach((p, i) => {
+      mtx.makeTranslation(p.x, p.y + 0.3, p.z);
+      bodies.setMatrixAt(i, mtx);
+      bodies.setColorAt(i, col.setHex(shirts[Math.floor(Math.random() * shirts.length)]).multiplyScalar(night ? 0.75 : 1));
+      mtx.makeTranslation(p.x, p.y + 0.7, p.z);
+      heads.setMatrixAt(i, mtx);
+      heads.setColorAt(i, col.setHex(skins[Math.floor(Math.random() * skins.length)]).multiplyScalar(night ? 0.75 : 1));
+    });
+    G.add(bodies, heads);
+  }
+
+  // Die Zuschauer jubeln: staerke 0..1 (bei einem tollen Punkt mehr). Klingt von selbst wieder ab.
+  jubel(staerke) {
+    this.jubelStaerke = Math.max(this.jubelStaerke || 0, staerke);
+  }
+
+  // Jedes Bild aufrufen: lässt den Jubel langsam ausklingen
+  update(dt) {
+    if (!this.zuschauerWerte) return;
+    this.jubelStaerke = Math.max(0, (this.jubelStaerke || 0) - dt * 0.35);
+    this.zuschauerWerte.uZeit.value += dt;
+    this.zuschauerWerte.uJubel.value = Math.min(1, this.jubelStaerke);
   }
 
   // Text auf der großen Anzeigetafel: lines = ['Zeile 1', 'Zeile 2'], big = große Zeile
