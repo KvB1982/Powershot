@@ -28,6 +28,15 @@ export function mocapLoop(clip, time) {
   return out;
 }
 
+// Eine Geh-Aufnahme im Takt der Schritte abspielen. phase zählt die Schritte der Figur (2π = zwei Schritte);
+// die Aufnahme beginnt mit dem Schlaghand-Fuß ganz vorn und enthält clip.schritte Doppelschritte.
+export function mocapGang(clip, phase) {
+  const n = clip.schritte || 1;
+  let u = ((phase - Math.PI / 2) / (2 * Math.PI)) % n;
+  if (u < 0) u += n;
+  return mocapFrame(clip, clip.t0 + u / n * (clip.tEnd - clip.t0));
+}
+
 export const mocapNames = () => (data ? Object.keys(data.clips) : []);
 
 // Alle Gelenke zur Zeit t (0 = Treffpunkt). Ergebnis: { hip:[vor,seite,hoch], shR:…, d:…, n:… }
