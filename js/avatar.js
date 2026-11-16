@@ -93,8 +93,10 @@ const GANG = {
   fussHoch: 0.07,     // so hoch hebt der Fuß beim Schritt ab (Meter) – zu viel sieht nach Marschieren aus
   wippen: 0.02,       // so weit sinkt die Hüfte, wenn beide Füße weit auseinander sind (Meter)
   huefte: 0.16,       // die Hüfte dreht mit dem vorderen Bein mit (Bogenmaß)
-  schulter: 0.13,     // die Schultern drehen dagegen – das macht den Gang locker (Bogenmaß)
-  wiegen: 0.02,       // der Körper wiegt sich über das Bein, das gerade steht (Meter)
+  schulter: 0.30,     // die Schultern drehen dagegen – das macht den Gang locker (Bogenmaß; 0.30 sind etwa 17 Grad)
+  kippen: 0.022,      // die Schulter über dem Standbein sinkt etwas, die andere hebt sich (Meter)
+  nicken: 0.012,      // der Oberkörper pendelt bei jedem Schritt ein wenig vor und zurück (Meter)
+  wiegen: 0.03,       // der Körper wiegt sich über das Bein, das gerade steht (Meter)
   armFrei: 0.19,      // so weit schwingt der freie Arm vor und zurück (Meter)
   armSchlaeger: 0.10, // der Schlägerarm schwingt weniger – der Schläger ist ja schwer
   ferse: 0.5,         // so stark rollt der Fuß ab: hinten geht die Ferse hoch, vorn zeigen die Zehen hoch (Bogenmaß)
@@ -424,7 +426,7 @@ export class Avatar {
     const hipH = 0.90 - pose.cr + pose.jp + bob + run * Math.abs(sinS) * 0.035 * (1 - walkK) - gehK * GANG.wippen * (1 - Math.cos(2 * a.step));
     const dm = this.dim;
     const shH = hipH + dm.shUp;
-    const lean = (0.05 + 0.07 * run) * (1 - 0.7 * walkK) + pose.ln;
+    const lean = (0.05 + 0.07 * run) * (1 - 0.7 * walkK) + pose.ln + GANG.nicken * Math.cos(2 * a.step) * gehK;
     // Der Körper wiegt sich über das Standbein; im Stehen verlagert er ab und zu gemütlich das Gewicht
     const wiegen = -cosS * GANG.wiegen * gehK + Math.sin(a.time * 0.8) * 0.03 * stehK;
 
@@ -432,14 +434,16 @@ export class Avatar {
     // Beim Gehen dreht die Hüfte mit dem vorderen Bein, die Schultern drehen dagegen.
     const twist = pose.tw - GANG.schulter * sinS * gehK + Math.sin(a.time * 0.5) * 0.06 * stehK;
     const hipTw = pose.tw * 0.45 + GANG.huefte * sinS * gehK;
-    const obenSeite = wiegen * 0.4;
-    let shR = [lean + dm.shW * Math.sin(twist), obenSeite + dm.shW * Math.cos(twist), shH];
-    let shL = [lean - dm.shW * Math.sin(twist), obenSeite - dm.shW * Math.cos(twist), shH];
+    // Die Schultern wiegen sich noch etwas weiter als die Hüfte, der Kopf bleibt ruhiger.
+    // Die Schulter über dem Standbein sinkt, die Hüfte dort hebt sich – so "schlendert" die Figur.
+    const obenSeite = wiegen * 1.3, kippen = cosS * GANG.kippen * gehK;
+    let shR = [lean + dm.shW * Math.sin(twist), obenSeite + dm.shW * Math.cos(twist), shH + kippen];
+    let shL = [lean - dm.shW * Math.sin(twist), obenSeite - dm.shW * Math.cos(twist), shH - kippen];
     let neck = [lean, obenSeite, shH + dm.neckUp];
-    let headP = [lean + 0.03, obenSeite, shH + dm.headUp - (a.mood === 'sad' ? 0.03 * a.moodK : 0)];
+    let headP = [lean + 0.03, wiegen * 0.8, shH + dm.headUp - (a.mood === 'sad' ? 0.03 * a.moodK : 0)];
     let hipMid = [0, wiegen, hipH];
-    let hipR = [dm.hipW * Math.sin(hipTw), wiegen + dm.hipW * Math.cos(hipTw), hipH];
-    let hipL = [-dm.hipW * Math.sin(hipTw), wiegen - dm.hipW * Math.cos(hipTw), hipH];
+    let hipR = [dm.hipW * Math.sin(hipTw), wiegen + dm.hipW * Math.cos(hipTw), hipH - kippen * 0.5];
+    let hipL = [-dm.hipW * Math.sin(hipTw), wiegen - dm.hipW * Math.cos(hipTw), hipH + kippen * 0.5];
 
     // Füße: Schrittstellung beim Schlag (st), Schritte beim Laufen, Abheben beim Sprung
     const stance = (0.17 + 0.25 * Math.max(0, pose.cr)) * (1 - 0.45 * walkK);
