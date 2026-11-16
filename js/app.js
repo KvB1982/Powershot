@@ -708,8 +708,23 @@ const hud = {
   },
 };
 
+// Zum Fehlersuchen bei Controller, iPhone-Schläger und Apple Watch: Einmal pro Sekunde steht unten im Spiel,
+// was gerade ankommt. "Meldungen/s" sollte um die 60 liegen, wenn ein Schläger verbunden ist.
+let diagZeit = 0, diagPakete = 0;
+function diagFrame(dt) {
+  if (settings.control !== 'controller') return;
+  diagZeit += dt;
+  if (diagZeit < 1) return;
+  const d = controls.diag, proSek = Math.round((d.pakete - diagPakete) / diagZeit);
+  diagZeit = 0; diagPakete = d.pakete;
+  const el = $('#hint');
+  el.classList.remove('kurz');
+  el.textContent = `🎮 ${controls.pad.connected ? controls.pad.name : 'nichts verbunden'} · ${proSek} Meldungen/s · ⌚ ${d.uhr} Uhr-Schwünge (letzter: ${d.letzter})`;
+}
+
 function hudFrame(dt) {
   if (hudEl.hidden) return;
+  diagFrame(dt);
   const off = (t, el) => { if (t > 0 && t - dt <= 0) el.classList.remove('on'); return t - dt; };
   msgTimer = off(msgTimer, $('#msg'));
   toastTimer = off(toastTimer, $('#toast'));

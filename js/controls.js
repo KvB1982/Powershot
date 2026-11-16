@@ -47,6 +47,8 @@ export class Controls {
     this.schwung = { aktiv: false, t0: 0, peak: 0, hoch: 0, ende: -9 };
     this.padAt = -9;              // wann der letzte Controller-Schlag ausgelöst wurde
     this.onHint = null;           // wird von app.js gesetzt: kurzer Hinweis-Text auf dem Bildschirm
+    // Zum Fehlersuchen: Wie viele Meldungen kommen vom Controller/Schläger an, wie viele Schwünge von der Uhr?
+    this.diag = { pakete: 0, uhr: 0, letzter: '–' };
     this.nativePad = false;       // true, sobald die iOS-App den Controller meldet
     this.onPause = null;          // wird von app.js gesetzt: Pause-Taste am Controller
     this.onMenu = null;           // wird von app.js gesetzt: Controller im Menü ('links', 'rechts', 'hoch', 'runter', 'ok', 'zurueck')
@@ -128,6 +130,7 @@ export class Controls {
   //   motion = { ax, ay, az, gx, gy, gz } oder null       a: Beschleunigung der Hand in g, g: Richtung "unten"
   setPad(s) {
     const P = this.pad, alt = P.btn;
+    this.diag.pakete++;
     P.connected = true; P.name = s.name || 'Controller';
     P.x = tot(s.lx || 0); P.f = tot(s.ly || 0);
     P.motion = !!s.motion;
@@ -137,6 +140,7 @@ export class Controls {
     // Ein fertig erkannter Schwung von der Apple Watch? Jeder hat eine Nummer, damit er nur einmal zählt.
     const uhr = s.schwung && s.schwung.id !== this.schwungId ? s.schwung : null;
     if (s.schwung) this.schwungId = s.schwung.id;
+    if (uhr) { this.diag.uhr++; this.diag.letzter = `Kraft ${Math.round((uhr.kraft || 0) * 100)} %, ${(uhr.hoch || 0) < -0.35 ? 'von oben' : (uhr.hoch || 0) > 0.35 ? 'von unten' : 'seitlich'}`; }
     // Zum Einstellen: kurz anzeigen, dass ein Schwung von der Uhr angekommen ist und wie lange er unterwegs war.
     if (uhr && this.onHint) {
       const ms = Math.round((uhr.alter || 0) * 1000);

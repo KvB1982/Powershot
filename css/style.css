@@ -248,6 +248,9 @@ tr.cut td { text-align: center; font-size: 11px; font-weight: 700; color: var(--
   #pauseBtn { width: 44px; height: 44px; min-height: 0; }
   #speed { top: 62px; font-size: 14px; }
   #hint { font-size: 11px; }
+  #toast { font-size: 15px; top: 20%; }
+  #msgHead { font-size: 30px; }
+  #msgSub { font-size: 15px; }
   #hint.kurz { animation: hinweisWeg 1s 9s forwards; }   /* der Hinweis verschwindet nach 9 Sekunden */
   /* Menüs: kleinere Schrift und flachere Knöpfe, damit alles auf den Bildschirm passt */
   #screen { padding-top: max(10px, env(safe-area-inset-top)); padding-bottom: 14px; }
