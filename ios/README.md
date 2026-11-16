@@ -13,6 +13,8 @@ von `index.html`, `css/`, `js/`, `assets/`, `sounds/` und `icons/` in die App. t
 | `Powershot/Fernseher.swift` | Zieht das Spiel auf den Fernseher um (AirPlay), wenn ein Controller gekoppelt ist |
 | `Powershot/Funk.swift` | Funkverbindung zwischen zwei Geräten (iPhone als Schläger für das iPad) |
 | `Powershot/SchlaegerView.swift` | Der Schläger-Bildschirm auf dem iPhone |
+| `Powershot/Uhr.swift` | Nimmt Schwünge von der Apple Watch entgegen |
+| `PowershotWatch/` | Die App auf der Apple Watch: erkennt den Schwung und meldet ihn dem iPhone |
 | `spiel-kopieren.sh` | Kopiert das Spiel beim Bauen in die App (ohne `mocap/`) |
 
 ## Im Simulator starten
@@ -34,6 +36,10 @@ xcrun simctl launch "iPhone 18 Pro" com.von-bleichert.powershot
 - **iPhone als Schläger:** Auf dem iPad bei Steuerung „Controller / iPhone-Schläger“ wählen und ein Match starten. Auf dem iPhone
   Powershot öffnen → Einstellungen → „Dieses Gerät als Schläger für ein anderes benutzen“. Beide Geräte brauchen WLAN oder Bluetooth
   und müssen beim ersten Mal „Lokales Netzwerk“ erlauben. Der Joy-Con liefert unter iOS keine Bewegung, nur Tasten und Stick.
+- **Apple Watch als Schläger:** Auf der Uhr Powershot öffnen und „Start“ drücken (beim ersten Mal die Health-Frage erlauben – es wird
+  nichts gespeichert, das „Training“ hält die Uhr nur wach). Auf dem iPhone muss Powershot offen sein: entweder mit dem Spiel selbst
+  oder im Schläger-Bildschirm, wenn das Spiel auf dem iPad läuft. Im Spiel die Steuerung „Controller / iPhone-Schläger“ wählen.
+  Die Uhr erkennt den Schwung selbst; die Zahlen dafür stehen in `PowershotWatch/Schlaeger.swift` (gleich wie in `js/controls.js`).
 - **Fernseher:** Kontrollzentrum → Bildschirmsynchronisierung → Apple TV wählen. Ist ein Controller gekoppelt, füllt das Spiel
   den Fernseher ganz aus und das iPad zeigt nur einen Hinweis. Ohne Controller spiegelt der Fernseher einfach das iPad.
 - Noch nicht am echten Gerät erprobt: Schwingen mit dem Joy-Con und der Umzug auf den Fernseher.

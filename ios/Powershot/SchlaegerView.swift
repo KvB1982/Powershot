@@ -25,7 +25,7 @@ struct SchlaegerView: View {
             // Erklärung in der Mitte (die Richtung kommt vom Timing, nicht vom Finger)
             ZStack {
                 RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.08))
-                Text("Schwingen = Schlag\nfrüh = nach links · spät = nach rechts\nAufschlag und Smash: von oben nach unten")
+                Text("iPhone oder Apple Watch schwingen = Schlag\nfrüh = nach links · spät = nach rechts\nAufschlag und Smash: von oben nach unten")
                     .multilineTextAlignment(.center)
                     .font(.title3)
             }
@@ -61,6 +61,7 @@ struct SchlaegerView: View {
         var zustand: [String: Any] = [:]
         for name in tasten { zustand[name] = true }
         if let bewegung = ControllerBruecke.geraeteBewegung() { zustand["motion"] = bewegung }
+        if let schwung = Uhr.shared.aktuell() { zustand["schwung"] = schwung }      // Schwung von der Apple Watch
         Funk.shared.schicken(zustand)
     }
 }

@@ -134,6 +134,9 @@ export class Controls {
     const neu = { a: !!s.a, b: !!s.b, x: !!s.x, y: !!s.y, pause: !!s.pause };
     P.btn = neu;
     if (neu.pause && !alt.pause && this.onPause) this.onPause();
+    // Ein fertig erkannter Schwung von der Apple Watch? Jeder hat eine Nummer, damit er nur einmal zählt.
+    const uhr = s.schwung && s.schwung.id !== this.schwungId ? s.schwung : null;
+    if (s.schwung) this.schwungId = s.schwung.id;
     // Im Menü (kein Ballwechsel): Stick wählt einen Knopf aus, A drückt ihn, B geht zurück.
     if (!this.enabled && this.onMenu) {
       const dir = Math.abs(P.x) > Math.abs(P.f) ? (P.x > 0.6 ? 'rechts' : P.x < -0.6 ? 'links' : '')
@@ -152,10 +155,14 @@ export class Controls {
     if (neu.b && !alt.b) this.commitPad('slice', 0.6, true);
     if (neu.x && !alt.x) this.commitPad('lob', 0.6, true);
     if (neu.y && !alt.y) this.commitPad('drop', 0.4, true);
-    if (s.motion) this.fuehleSchwung(s.motion);
+    // Sobald die Uhr einmal einen Schwung gemeldet hat, zählt nur noch sie –
+    // sonst würde das iPhone in der Hosentasche auch Schläge auslösen.
+    if (s.schwung) this.uhrAktiv = true;
+    if (uhr) this.schwungFertig(uhr.kraft, uhr.hoch, clamp(uhr.alter || 0, 0, 0.5));
+    else if (s.motion && !this.uhrAktiv) this.fuehleSchwung(s.motion);
   }
 
-  padWeg() { this.pad = { connected: false, name: '', x: 0, f: 0, btn: {}, motion: false }; }
+  padWeg() { this.pad = { connected: false, name: '', x: 0, f: 0, btn: {}, motion: false }; this.uhrAktiv = false; }
 
   // Aus den Bewegungsdaten einen Schwung erkennen:
   // Wird die Hand stark beschleunigt, beginnt ein Schwung. Wir merken uns kurz den stärksten Wert
@@ -172,17 +179,24 @@ export class Controls {
     if (stark > S.peak) { S.peak = stark; S.hoch = hoch; }
     if (this.time - S.t0 < 0.12) return;                         // 0,12 Sekunden lang den stärksten Wert suchen
     S.aktiv = false; S.ende = this.time;
-    const kraft = clamp((S.peak - SWING_START) / (SWING_VOLL - SWING_START), 0, 1);
+    this.schwungFertig(clamp((S.peak - SWING_START) / (SWING_VOLL - SWING_START), 0, 1), S.hoch / S.peak, 0);
+  }
+
+  // Ein Schwung ist erkannt – hier wird daraus ein Schlag.
+  //   kraft: 0 bis 1 · hochAnteil: +1 = ganz nach oben, -1 = ganz nach unten, 0 = seitlich
+  //   alter: so viele Sekunden ist der Schwung schon her (bei der Apple Watch dauert die Meldung einen Moment)
+  schwungFertig(kraft, hochAnteil, alter) {
     // Ging der Schwung senkrecht (von oben nach unten oder umgekehrt) oder eher seitlich?
     // Aufschlag und Schmetterball brauchen einen senkrechten Schwung – wie beim echten Tennis über dem Kopf.
-    const senkrecht = Math.abs(S.hoch) > 0.35 * S.peak;
+    const senkrecht = Math.abs(hochAnteil) > 0.35;
     if (this.ctx === 'serve' && !senkrecht) {
       if (this.onHint) this.onHint('Aufschlag: von oben nach unten schwingen!');
       return;
     }
     // Von oben nach unten geschwungen = Slice, sonst Topspin
-    const type = S.hoch < -0.35 * S.peak ? 'slice' : 'drive';
+    const type = hochAnteil < -0.35 ? 'slice' : 'drive';
     this.commitPad(type, 0.3 + 0.7 * kraft, senkrecht);
+    this.padAt = this.time - alter;
   }
 
   // vonOben: true, wenn der Schwung senkrecht war (oder eine Taste gedrückt wurde)

@@ -6,8 +6,38 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C10000000000000000000001 /* PowershotWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* PowershotWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C30000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B90000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B60000000000000000000002;
+			remoteInfo = PowershotWatch;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		C50000000000000000000001 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				C10000000000000000000001 /* PowershotWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		B20000000000000000000001 /* Powershot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Powershot.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000000000000000000003 /* PowershotWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PowershotWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000000000000000000004 /* PowershotWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PowershotWatch.entitlements; sourceTree = "<group>"; };
 		B20000000000000000000002 /* spiel-kopieren.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "spiel-kopieren.sh"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -17,10 +47,22 @@
 			path = Powershot;
 			sourceTree = "<group>";
 		};
+		B40000000000000000000002 /* PowershotWatch */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PowershotWatch;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		B50000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C50000000000000000000003 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -34,6 +76,8 @@
 			isa = PBXGroup;
 			children = (
 				B40000000000000000000001 /* Powershot */,
+				B40000000000000000000002 /* PowershotWatch */,
+				B20000000000000000000004 /* PowershotWatch.entitlements */,
 				B20000000000000000000002 /* spiel-kopieren.sh */,
 				B70000000000000000000002 /* Products */,
 			);
@@ -43,6 +87,7 @@
 			isa = PBXGroup;
 			children = (
 				B20000000000000000000001 /* Powershot.app */,
+				B20000000000000000000003 /* PowershotWatch.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -58,10 +103,12 @@
 				B50000000000000000000002 /* Frameworks */,
 				B50000000000000000000003 /* Resources */,
 				B50000000000000000000004 /* Spiel in die App kopieren */,
+				C50000000000000000000001 /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				C30000000000000000000002 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				B40000000000000000000001 /* Powershot */,
@@ -69,6 +116,26 @@
 			name = Powershot;
 			productName = Powershot;
 			productReference = B20000000000000000000001 /* Powershot.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B60000000000000000000002 /* PowershotWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB0000000000000000000003 /* Build configuration list for PBXNativeTarget "PowershotWatch" */;
+			buildPhases = (
+				C50000000000000000000002 /* Sources */,
+				C50000000000000000000003 /* Frameworks */,
+				C50000000000000000000004 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B40000000000000000000002 /* PowershotWatch */,
+			);
+			name = PowershotWatch;
+			productName = PowershotWatch;
+			productReference = B20000000000000000000003 /* PowershotWatch.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -82,6 +149,9 @@
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					B60000000000000000000001 = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					B60000000000000000000002 = {
 						CreatedOnToolsVersion = 26.2;
 					};
 				};
@@ -101,12 +171,20 @@
 			projectRoot = "";
 			targets = (
 				B60000000000000000000001 /* Powershot */,
+				B60000000000000000000002 /* PowershotWatch */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		B50000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C50000000000000000000004 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -145,7 +223,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C50000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C30000000000000000000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B60000000000000000000002 /* PowershotWatch */;
+			targetProxy = C30000000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		BA0000000000000000000001 /* Debug */ = {
@@ -156,7 +249,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -182,7 +275,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -258,6 +351,62 @@
 			};
 			name = Release;
 		};
+		CA0000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = PowershotWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = AX2SZQVU9L;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Powershot;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Powershot startet ein Training, damit die Uhr beim Schwingen wach bleibt. Es wird nichts gelesen.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Powershot startet ein Training, damit die Uhr beim Schwingen wach bleibt. Es wird nichts gespeichert.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Powershot erkennt, wenn du den Arm wie beim Tennis schwingst.";
+				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_FILE = "PowershotWatch-Info.plist";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "com.von-bleichert.powershot";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.von-bleichert.powershot.watchkitapp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		CA0000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = PowershotWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = AX2SZQVU9L;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Powershot;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Powershot startet ein Training, damit die Uhr beim Schwingen wach bleibt. Es wird nichts gelesen.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Powershot startet ein Training, damit die Uhr beim Schwingen wach bleibt. Es wird nichts gespeichert.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Powershot erkennt, wenn du den Arm wie beim Tennis schwingst.";
+				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_FILE = "PowershotWatch-Info.plist";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "com.von-bleichert.powershot";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.von-bleichert.powershot.watchkitapp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -275,6 +424,15 @@
 			buildConfigurations = (
 				BA0000000000000000000003 /* Debug */,
 				BA0000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BB0000000000000000000003 /* Build configuration list for PBXNativeTarget "PowershotWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA0000000000000000000001 /* Debug */,
+				CA0000000000000000000002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -126,6 +126,9 @@ final class ControllerBruecke: NSObject {
     }
 
     private func schicken(_ nachricht: [String: Any], an web: WKWebView) {
+        var nachricht = nachricht
+        // Hat die Apple Watch gerade einen Schwung gemeldet? Dann kommt er mit.
+        if nachricht["schwung"] == nil, let schwung = Uhr.shared.aktuell() { nachricht["schwung"] = schwung }
         guard let daten = try? JSONSerialization.data(withJSONObject: nachricht),
               let text = String(data: daten, encoding: .utf8) else { return }
         web.evaluateJavaScript("window.__powershotPad && window.__powershotPad(\(text))")

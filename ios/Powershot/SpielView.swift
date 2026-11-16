@@ -42,6 +42,7 @@ final class Spiel: ObservableObject {
         web.load(URLRequest(url: URL(string: "powershot://spiel/index.html")!))
         controller = ControllerBruecke(web: web)                  // Switch-Controller ans Spiel anschließen
         Funk.shared.alsSpielStarten()                             // auf ein iPhone als Schläger warten
+        Uhr.shared.starten()                                      // auf Schwünge von der Apple Watch hören
     }
 
     /// Setzt das Spiel-Fenster in eine Fläche ein (auf dem Gerät oder auf dem Fernseher) und füllt sie ganz aus.
