@@ -77,6 +77,27 @@ const P = {
   // Jubel: kurz die Faust ballen (die freie Hand vor der Brust), Schläger unten, leicht in die Knie
   cheer:      { r: [0.22, 0.30, 0.82], d: [0.45, 0.15, -0.88], l: [0.30, -0.14, 1.36], tw: 0.25, cr: 0.11, ln: 0.05 },
   sad:        { r: [0.10, 0.25, 0.75], d: [0.2, 0.1, -1], l: [0.05, -0.25, 0.80], tw: 0, cr: 0.09 },
+  // Weitere Arten zu jubeln (wer welche benutzt, steht in data.js unter STIL)
+  cheer_ruhig:    { r: [0.18, 0.28, 0.82], d: [0.40, 0.12, -0.90], l: [0.26, -0.22, 1.06], tw: 0.10, cr: 0.04 },                 // kleine Faust auf Hüfthöhe
+  cheer_bruellen: { r: [0.10, 0.40, 0.98], d: [0.25, 0.75, -0.60], l: [0.10, -0.40, 1.00], tw: 0, cr: 0.15, ln: -0.12 },        // beide Fäuste unten, Oberkörper zurück
+  cheer_ohr:      { r: [0.14, 0.30, 0.82], d: [0.40, 0.15, -0.90], l: [0.05, -0.20, 1.60], tw: -0.30, cr: 0.02, ln: -0.02 },    // freie Hand ans Ohr
+  cheer_arme:     { r: [0.02, 0.44, 1.86], d: [0.0, 0.35, 0.94], l: [0.02, -0.44, 1.86], tw: 0, cr: -0.02, ln: -0.06 },         // beide Arme hoch
+  cheer_muskel:   { r: [0.10, 0.34, 0.84], d: [0.40, 0.20, -0.90], l: [0.04, -0.44, 1.62], tw: 0.15, cr: 0.06, ln: -0.04 },     // Arm anwinkeln: „Schaut, meine Muskeln!“
+
+  // Vor dem Aufschlag: leicht vorgebeugt, die freie Hand prellt den Ball auf den Boden
+  sv_prell:   { r: [0.24, 0.16, 0.86], d: [0.80, -0.25, 0.10], l: [0.44, -0.04, 0.92], tw: -0.5, cr: 0.07, ln: 0.14, st: 1 },
+};
+
+// Arten zu jubeln: pose = Name der Pose oben · dauer = Sekunden · pumpen = die Faust geht zweimal kurz hoch und runter ·
+// auflegen = am Ende saust die Hand nach unten, als würde man einen Telefonhörer auflegen
+export const JUBEL = {
+  faust:    { pose: 'cheer', dauer: 0.95, pumpen: true },
+  ruhig:    { pose: 'cheer_ruhig', dauer: 0.8, pumpen: true },
+  bruellen: { pose: 'cheer_bruellen', dauer: 1.5 },
+  ohr:      { pose: 'cheer_ohr', dauer: 1.7 },
+  telefon:  { pose: 'cheer_ohr', dauer: 1.6, auflegen: true },
+  arme:     { pose: 'cheer_arme', dauer: 1.7 },
+  muskel:   { pose: 'cheer_muskel', dauer: 1.5 },
 };
 
 // Schlagbewegungen: [Zeit in Sekunden, Pose]

@@ -16,6 +16,7 @@ export const TOSS_TIME = 1.4;      // Dauer der Aufschlagbewegung vom Stand bis 
 const WALK_SPEED = 2.0;            // Gehen beim Seitenwechsel (m/s) – zügiges Gehen, kein Laufen
 const CHANGEOVER_TIME = 6.4;       // Dauer des Seitenwechsels (s)
 export const TOSS_FLIGHT = 0.85;   // so lange fliegt der Ball frei, bevor er getroffen wird (davor ist er in der Hand)
+const PRELL_TIME = 0.42;           // Ball prellen vor dem Aufschlag: so lange dauert einmal Boden und zurück (s)
 export const UNTEN_TIME = 0.75;    // Aufschlag von unten: so lange dauert es vom Loslassen des Balls bis zum Treffen
 
 export class Match {
@@ -48,6 +49,8 @@ export class Match {
     const dz = side === 0 ? 1 : -1;
     return {
       side, data, isHuman, dz, hand: data.hand || 1,
+      gross: clamp(((data.look && data.look.groesse) || 183) / 183, 0.9, 1.12),   // Körpergröße im Vergleich zu 1,83 m
+      prellen: data.stil ? data.stil.prellen : 2,                                // so oft prellt er den Ball vor dem Aufschlag
       s: q(st.s), p: q(st.p), t: q(st.t), c: q(st.c), v: q(st.v),
       maxSpeed: 4.1 + 2.6 * q(st.t), accel: 11 + 8 * q(st.t),
       x: 0, z: dz * (C.L + 0.6), vx: 0, vz: 0,
@@ -182,7 +185,10 @@ export class Match {
     this.netHit = false;
     this.serveUnten = false; this.tossDauer = TOSS_TIME;
     this.state = 'serveReady';
-    this.timer = srv.isHuman ? 0 : 1.3;
+    // Der Computer prellt den Ball erst ein paar Mal auf den Boden – jeder Spieler so oft, wie es zu ihm passt
+    this.prellDauer = srv.isHuman || this.mode === 'ballmaschine' ? 0 : srv.prellen * PRELL_TIME;
+    this.prellK = null; this.prellNr = 0;
+    this.timer = srv.isHuman ? 0 : 0.45 + this.prellDauer + 0.4;
     if (srv.isHuman && this.controls) this.controls.begin('serve');
     this.fx.serveSetup({ server: s, serveNo: this.score.serveNo, box: this.serveBox });
     if (this.mode === 'aufschlag') this.makeServeZones();
@@ -194,8 +200,15 @@ export class Match {
     if (srv.isHuman) {
       const raw = this.controls && this.controls.takeServe();
       if (raw) this.startToss(this.humanIntent(srv, raw, true));
-    } else if (this.timer <= 0) {
-      this.startToss(this.aiServe(srv));
+    } else {
+      // Ball prellen: prellK sagt, wo der Ball gerade ist (1 = in der Hand, 0 = am Boden, null = es wird nicht geprellt)
+      const t = 0.45 + this.prellDauer + 0.4 - this.timer - 0.45;
+      if (t >= 0 && t < this.prellDauer) {
+        const u = (t / PRELL_TIME) % 1, nr = Math.floor(t / PRELL_TIME) + (u >= 0.5 ? 1 : 0);
+        this.prellK = (2 * u - 1) ** 2;
+        if (nr > this.prellNr) { this.prellNr = nr; this.fx.prell(srv.side); }
+      } else this.prellK = null;
+      if (this.timer <= 0) this.startToss(this.aiServe(srv));
     }
   }
 
@@ -204,6 +217,7 @@ export class Match {
     // Beim Aufschlag von unten wird der Ball nicht hochgeworfen, sondern nur fallen gelassen
     this.serveUnten = intent.art === 'unten';
     this.tossDauer = this.serveUnten ? UNTEN_TIME : TOSS_TIME;
+    this.prellK = null;
     this.tossT = 0;
     this.state = 'toss';
   }
@@ -220,7 +234,8 @@ export class Match {
     const lift = clamp((t - 0.15) / (tr - 0.15), 0, 1);
     const up = s < 0 ? 0.8 + 0.86 * lift * lift : 1.66 + 5.45 * s - 4.905 * s * s;
     const k = clamp(t / TOSS_TIME, 0, 1);
-    return { x: p.x - p.hand * p.dz * 0.22 * (1 - k), y: up, z: p.z - p.dz * (0.3 + 0.1 * k) };
+    // (große Spieler werfen höher und treffen den Ball weiter oben)
+    return { x: p.x - p.hand * p.dz * 0.22 * (1 - k), y: up * p.gross, z: p.z - p.dz * (0.3 + 0.1 * k) };
   }
 
   doServe() {

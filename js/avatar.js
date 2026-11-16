@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { figureReady, makeFigure, REST, BONES } from './figur.js';
 import { mocapClip, mocapFrame, mocapLoop } from './mocap.js';
-import { pose as namedPose, mixPose, strokePose, prepPose, strokeName, strokeFamily, strokeStart, strokeEnd } from './posen.js';
+import { JUBEL, pose as namedPose, mixPose, strokePose, prepPose, strokeName, strokeFamily, strokeStart, strokeEnd } from './posen.js';
 
 // Maße des Skeletts: einmal für die einfache Figur aus Kapseln, einmal für das realistische Modell
 const DIM_SIMPLE = { upper: 0.30, fore: 0.28, reach: 0.57, thigh: 0.45, shin: 0.45, shW: 0.2, hipW: 0.1, shUp: 0.55, neckUp: 0.06, headUp: 0.21, ankle: 0 };
@@ -137,6 +137,10 @@ export class Avatar {
     this.real = real && figureReady();
     this.dim = this.real ? DIM_REAL : DIM_SIMPLE;
     this.bh = look.bh === 1 ? 1 : 2;      // Rückhand: 1 = einhändig, 2 = beidhändig
+    // Größe und Statur: Das Modell ist 1,83 m groß. gross = 1.08 heißt 8 % größer, breit = 1.06 heißt 6 % kräftiger.
+    this.gross = clamp((look.groesse || 183) / 183, 0.9, 1.12);
+    this.breit = look.statur === 'schlank' ? 0.95 : look.statur === 'kraeftig' ? 1.06 : 1;
+    this.jubel = JUBEL[look.jubel] || JUBEL.faust;     // so freut sich dieser Spieler
     this.side = side;
     this.d = side === 0 ? 1 : -1;
     this.hand = hand;
@@ -221,6 +225,8 @@ export class Avatar {
       head.add(band);
     }
 
+    // Einfache Figur: alle Teile mit der Körpergröße mitwachsen lassen
+    for (const k in M) M[k].scale.multiplyScalar(this.gross);
     this.buildRacket(look);
   }
 
@@ -343,10 +349,22 @@ export class Avatar {
     if (a.moodK > 0.001 && a.mood) {
       let mp = namedPose(a.mood);
       if (a.mood === 'cheer') {
-        const pump = Math.sin(Math.min(a.moodT || 0, 0.9) * 14) * 0.07;      // die Faust geht zweimal kurz hoch und runter
-        mp = { ...mp, l: [mp.l[0], mp.l[1], mp.l[2] + pump] };
+        // Jeder Spieler jubelt auf seine Art (siehe JUBEL in posen.js)
+        const j = this.jubel, t = a.moodT || 0;
+        mp = namedPose(j.pose);
+        let dz = 0, dv = 0;
+        if (j.pumpen) dz = Math.sin(Math.min(t, 0.9) * 14) * 0.07;           // die Faust geht zweimal kurz hoch und runter
+        if (j.auflegen) { const s = smooth((t - 1.0) / 0.22); dz = -0.62 * s; dv = 0.22 * s; }   // „Hörer auflegen“
+        if (dz || dv) mp = { ...mp, l: [mp.l[0] + dv, mp.l[1], mp.l[2] + dz] };
       }
       p = mixPose(p, mp, smooth(a.moodK));
+    }
+    // Ball prellen vor dem Aufschlag: vorbeugen, die freie Hand geht mit dem Ball ein Stück auf und ab
+    a.pk = clamp((a.pk || 0) + (st.prellK != null ? dt : -dt) / 0.22, 0, 1);
+    if (a.pk > 0.001) {
+      const pp = namedPose('sv_prell'), up = (st.prellK ?? a.prellLast ?? 1) * 0.14;
+      a.prellLast = st.prellK ?? a.prellLast;
+      p = mixPose(p, { ...pp, l: [pp.l[0], pp.l[1], pp.l[2] - 0.14 + up] }, smooth(a.pk));
     }
     return p;
   }
@@ -384,7 +402,7 @@ export class Avatar {
     // Stimmung nach dem Punkt. Der Jubel dauert nur einen Moment: Faust ballen, zweimal kurz pumpen, weiter.
     a.mood = st.mood || a.mood;
     a.moodT = st.mood ? (a.moodT || 0) + dt : 0;
-    const moodOn = st.mood && !(st.mood === 'cheer' && a.moodT > 0.95);
+    const moodOn = st.mood && !(st.mood === 'cheer' && a.moodT > this.jubel.dauer);
     a.moodK += ((moodOn ? 1 : 0) - a.moodK) * Math.min(1, dt * (moodOn ? 9 : 5));
     if (!st.mood && a.moodK < 0.01) a.mood = null;
 
@@ -462,7 +480,7 @@ export class Avatar {
       a.mf = m;
     }
     a.mw = clamp(a.mw + (mOn ? dt / 0.14 : -dt / 0.3), 0, 1);
-    const mw = a.mf ? smooth(a.mw) * (1 - smooth(a.moodK)) : 0;
+    const mw = a.mf ? smooth(a.mw) * (1 - smooth(a.moodK)) * (1 - smooth(a.pk || 0)) : 0;
     // Warten auf den Ball: aufgezeichnete Bereitschaftsstellung als Schleife, solange die Figur steht und nicht ausholt
     const idle = this.real ? mocapClip('ready') : null;
     const idleOn = idle && !a.swing && a.pre === null && (st.serveK === undefined || st.serveK === null);
@@ -508,7 +526,9 @@ export class Avatar {
 
     // --- In die Welt umrechnen und die Körperteile hinsetzen ---
     const px = this.pos.x, pz = this.pos.z;
-    const W = (p) => { const s = p[1] * hand; return new THREE.Vector3(px + d * (p[0] * sf + s * cf), p[2], pz + d * (s * sf - p[0] * cf)); };
+    // (G = Körpergröße: Alle Punkte der Figur rücken von den Füßen aus gesehen um diesen Faktor weiter weg)
+    const G = this.gross, GB = G * this.breit;
+    const W = (p) => { const s = p[1] * hand; return new THREE.Vector3(px + G * d * (p[0] * sf + s * cf), G * p[2], pz + G * d * (s * sf - p[0] * cf)); };
     const D = (p) => { const s = p[1] * hand; return new THREE.Vector3(d * (p[0] * sf + s * cf), p[2], d * (s * sf - p[0] * cf)); };
     const M = this.m;
     let yaw = 0;
@@ -522,7 +542,9 @@ export class Avatar {
       });
       for (let i = 0; i < BONES.length; i++) {
         const fr = F[BONES[i]], b = this.bones[i];
-        b.matrix.makeBasis(D(fr.ex), D(fr.ey), D(fr.ez)).setPosition(W(fr.o));
+        // Jeder Knochen wird so lang wie die Körpergröße verlangt – und je nach Statur etwas dicker oder dünner (Kopf und Füße nicht)
+        const dick = i === 2 || i > 10 ? G : GB;
+        b.matrix.makeBasis(D(fr.ex).multiplyScalar(dick), D(fr.ey).multiplyScalar(G), D(fr.ez).multiplyScalar(dick)).setPosition(W(fr.o));
         b.matrixWorldNeedsUpdate = true;
       }
       this.handLWorld = W(handL);

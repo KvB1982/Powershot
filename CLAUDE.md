@@ -17,11 +17,8 @@ python tools/server.py          # http://localhost:8765, ohne Zwischenspeicher
 node tools/sim.mjs 0 1 mittel hard 3    # Computer gegen Computer, ohne Grafik
 node tools/logic.mjs            # Turnier, Karriere und Saison (ATP Race) durchrechnen
 node tools/rookie.mjs           # Neuling gegen Profi auf jeder Schwierigkeit
-<<<<<<< HEAD
 node tools/kamera.mjs           # Laufen mit der Kamera: Rechnung prüfen (ohne Kamera, mit künstlichen Körperpunkten)
-=======
 node tools/ballflug.mjs hard     # Flugbahn und Absprung jeder Schlag- und Aufschlagart messen und prüfen (auch clay, grass, indoor)
->>>>>>> origin/main
 node tools/mocap.mjs            # Aufnahmen aus mocap/*.FBX in mocap/bewegungen.json umrechnen (--info zeigt nur an)
 ```
 
@@ -36,7 +33,7 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 
 | Datei | Inhalt |
 |---|---|
-| `js/data.js` | Top 100 (Stand 9.11.2026, Werte geschätzt), Turniere, Shop, Schwierigkeit, `EINHAND` |
+| `js/data.js` | Top 100 (Stand 9.11.2026, Werte geschätzt), Turniere, Shop, Schwierigkeit, `EINHAND`, `STIL` (Größe, Statur, Figur, Ball prellen, Jubel der Top 20) |
 | `js/physics.js`, `js/rules.js` | Ballflug (Luftwiderstand, Magnus-Kraft, Reibung beim Aufprall), Zählweise – ohne three.js, in node testbar |
 | `js/schlaege.js` | Tabelle aller Schlagarten (`SCHLAEGE`) und Aufschlagarten (`AUFSCHLAEGE`): Tempo, Drall in U/min (`top`, `seite`, `drall`), Höhe über dem Netz – ohne three.js |
 | `js/match.js` | Zustände: intro → serveReady → toss → rally → pointOver → (changeover) → over; Computergegner |
@@ -44,7 +41,7 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 | `js/kamera.js` | Laufen mit der Kamera: Körperpunkte → Position auf dem Platz, Einmessen, Zahlen zum Einstellen oben – ohne three.js und ohne Browser testbar |
 | `js/kamerabild.js` | Webcam (`getUserMedia`) und Körpererkennung MediaPipe Pose (`@mediapipe/tasks-vision` von jsDelivr, Modell `assets/koerper_lite.task`), Vorschau |
 | `js/figur.js` | Sechs Spielermodelle (`assets/spieler_a…f.glb`), Skinning auf 13 Knochen, Umfärben im Shader |
-| `js/posen.js` | Handgebaute Posen und Schlagbewegungen (Rückfall, wenn es keine Aufnahme gibt) |
+| `js/posen.js` | Handgebaute Posen und Schlagbewegungen (Rückfall, wenn es keine Aufnahme gibt), Jubel-Arten (`JUBEL`), Ball prellen (`sv_prell`) |
 | `js/mocap.js` | Lädt `mocap/bewegungen.json`, falls vorhanden |
 | `js/avatar.js` | Skelett: Posen/Aufnahmen → Gelenke → Knochen; `pickStroke` wählt den Schlag nach Spielsituation |
 | `js/game3d.js`, `js/stadium.js`, `js/audio.js` | Darstellung, Stadion, Sound (Aufnahmen aus `sounds/`) |
@@ -105,6 +102,15 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
   (`gerade`, `slice`, `kick`, `unten`; ohne Angabe: erster gerade, zweiter Kick). Zusätzlich darf sie in `schlag` eigene Zahlen mitgeben,
   die über die Tabelle gelegt werden, z. B. `{ type: 'drive', schlag: { top: 3400, tempo: [28, 28] } }` – gedacht für die Apple Watch.
 - Stoppball und Aufschlag von unten haben kein festes Tempo, sondern `bogen` (Höhe über dem Netz); `solveBogen` sucht das Tempo dazu.
+
+## Stil der Top 20 (Wiedererkennen ohne echte Gesichter)
+
+- `STIL` in `js/data.js`: je Spieler `groesse` (cm), `statur`, `modell` (a–f), `prellen`, `jubel`, `merkmal`, `unsicher`. Die Werte wandern in `look`
+  (`groesse`, `statur`, `jubel`) und in `p.stil`. `avatar.js` zeichnet die Figur entsprechend größer/kräftiger (`gross`, `breit`) und wählt den Jubel.
+- `match.js`: Der Computer prellt den Ball vor dem Aufschlag (`prellK`, `PRELL_TIME`); große Spieler treffen den Aufschlag höher (`gross` in `tossPos`).
+  Der Mensch prellt nicht (er schlägt auf, sobald er drückt).
+- Größen sind öffentliche Angaben; Prell-Zahlen, viele Jubel-Arten und manche Kopfbedeckung sind geschätzt (Feld `unsicher`). Kleiderfarben sind frei gewählt.
+- Weiterhin gilt: keine Gesichter oder Körper echter Spieler nachbauen, keine Fotos als Vorlage.
 
 ## Bekannte Grenzen
 

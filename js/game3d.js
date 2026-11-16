@@ -148,6 +148,7 @@ export class Game3D {
         if (info.serveNo === 2) call('message', '2. Aufschlag', 'info');
       },
       toss(side, k) { self.tossK[side] = k; },
+      prell() { snd.bounce(3, self.venue ? self.venue.surface : 'hard'); },      // Ball prellen vor dem Aufschlag
       swing(side, kind, y, type) { self.tossK[side] = 0; self.avatars[side].swing(kind, y, type); },
       hit(h) {
         snd.hit(clamp((h.speed - 8) / 40, 0.2, 1), h.type === 'serve');
@@ -255,6 +256,7 @@ export class Game3D {
         st.stroke = 'sv';
         st.serveK = m.state === 'toss' ? this.tossK[i] : 0;
         st.serveT = TOSS_TIME;
+        if (m.state === 'serveReady' && m.prellK != null) st.prellK = m.prellK;      // der Ball wird gerade geprellt
       } else if (vonUnten) {
         // Aufschlag von unten: ausholen wie zu einem Vorhand-Slice, der Ball fällt aus der Hand
         st.stroke = 'fh'; st.prep = 1; st.hint = 'slice';
@@ -281,6 +283,8 @@ export class Game3D {
       const h = this.avatars[m.server].handLWorld;
       const u = m.state === 'toss' ? clamp((m.tossT - release) / 0.12, 0, 1) : 0;     // kurzer Übergang Hand → Flug
       this.ball.position.set(h.x + (b.x - h.x) * u, h.y + 0.07 + (b.y - h.y - 0.07) * u, h.z + (b.z - h.z) * u);
+      // Ball prellen: Er fällt aus der Hand bis auf den Boden und springt zurück
+      if (m.state === 'serveReady' && m.prellK != null) this.ball.position.y = 0.033 + (h.y - 0.04 - 0.033) * m.prellK;
     } else {
       this.ball.position.set(b.x, b.y, b.z);
     }

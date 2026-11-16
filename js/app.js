@@ -96,10 +96,19 @@ function statBars(st) {
   return Object.keys(D.STAT_NAMES).map((k) =>
     `<div class="stat"><span>${D.STAT_NAMES[k]}</span><i><b style="width:${st[k]}%"></b></i><span>${st[k]}</span></div>`).join('');
 }
+// Woran erkennt man den Spieler? Größe, Schlaghand, Rückhand und (bei den Stars) sein Markenzeichen
+function stilZeile(p) {
+  const teile = [];
+  if (p.stil) teile.push((p.stil.groesse / 100).toFixed(2).replace('.', ',') + ' m');
+  teile.push(p.hand === -1 ? 'Linkshänder' : 'Rechtshänder');
+  if (p.look && p.look.bh === 1) teile.push('einhändige Rückhand');
+  return `<div class="stil">${teile.join(' · ')}${p.stil ? `<br><i>${esc(p.stil.merkmal)}</i>` : ''}</div>`;
+}
 function playerCard(p, act, sel) {
   return `<button class="pcard ${sel ? 'sel' : ''}" data-a="${act}" data-v="${p.id}">
     <div class="nm">${flag(p.country)} ${esc(p.name)}</div>
     <div class="meta"><span>${p.me ? 'Dein Karriere-Spieler' : 'Nr. ' + p.rank}</span><span>Stärke ${D.overall(p.stats)}</span></div>
+    ${stilZeile(p)}
     ${statBars(p.stats)}</button>`;
 }
 function optionRow(label, key, names) {

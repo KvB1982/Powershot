@@ -12,7 +12,7 @@ const STARS = [
   [4, 'shelton', 'Ben|Shelton', 'USA', 4530, 97, 90, 85, 80, 82, -1, 0xc99872, 0x3a2a1c, 0x2e6fd8, 0xffffff, 'none'],
   [5, 'medvedev', 'Daniil|Medvedev', 'RUS', 3860, 88, 82, 88, 92, 72, 1, 0xf0c8a0, 0x8a6a45, 0x7fd0e8, 0x20304a, 'none'],
   [6, 'cobolli', 'Flavio|Cobolli', 'ITA', 3690, 80, 85, 90, 83, 74, 1, 0xe8bd98, 0x3a2a1c, 0xe84a3a, 0x1a1a1a, 'cap'],
-  [7, 'fils', 'Arthur|Fils', 'FRA', 3525, 86, 91, 88, 80, 76, 1, 0x8a5a3c, 0x1a1410, 0xffffff, 0x1f3f8f, 'band'],
+  [7, 'fils', 'Arthur|Fils', 'FRA', 3525, 86, 91, 88, 80, 76, 1, 0x8a5a3c, 0x1a1410, 0xffffff, 0x1f3f8f, 'none'],
   [8, 'tiafoe', 'Frances|Tiafoe', 'USA', 3430, 84, 86, 90, 79, 85, 1, 0x7a4a30, 0x14100c, 0xff7a2a, 0x1a1a1a, 'band'],
   [9, 'deminaur', 'Alex|de Minaur', 'AUS', 3410, 76, 78, 98, 88, 80, 1, 0xeec4a0, 0x4a3524, 0x1fb87a, 0xffffff, 'cap'],
   [10, 'jodar', 'Rafael|Jodar', 'ESP', 3209, 82, 86, 86, 82, 74, 1, 0xe6ba94, 0x2b1d14, 0xd83a3a, 0xffffff, 'none'],
@@ -23,7 +23,7 @@ const STARS = [
   [15, 'lehecka', 'Jiri|Lehecka', 'CZE', 2580, 88, 90, 84, 80, 76, 1, 0xf0c8a0, 0x5a4028, 0x3a8ad8, 0x1a1a1a, 'cap'],
   [16, 'mensik', 'Jakub|Mensik', 'CZE', 2545, 94, 87, 80, 79, 76, 1, 0xf0c8a0, 0x7a5a38, 0xb8e84a, 0x1a1a1a, 'none'],
   [17, 'davidovich', 'Alejandro|Davidovich Fokina', 'ESP', 2510, 76, 84, 90, 82, 78, 1, 0xeac09a, 0xb89a5c, 0xff9a2a, 0x202020, 'band'],
-  [18, 'nakashima', 'Brandon|Nakashima', 'USA', 2375, 84, 82, 82, 84, 74, 1, 0xe6c09a, 0x1a1410, 0x2ab8b8, 0x1a1a1a, 'none'],
+  [18, 'nakashima', 'Brandon|Nakashima', 'USA', 2375, 84, 82, 82, 84, 74, 1, 0xe6c09a, 0x1a1410, 0x2ab8b8, 0x1a1a1a, 'cap'],
   [19, 'tien', 'Learner|Tien', 'USA', 2345, 76, 80, 88, 88, 76, -1, 0xe6c09a, 0x1a1410, 0xffffff, 0x1f3f8f, 'cap'],
   [20, 'cerundolo', 'Francisco|Cerundolo', 'ARG', 2260, 76, 88, 84, 82, 70, 1, 0xe8bd98, 0x3a2a1c, 0x7ac8ff, 0xffffff, 'band'],
   [23, 'ruud', 'Casper|Ruud', 'NOR', 2035, 82, 88, 84, 86, 70, 1, 0xf2ccaa, 0xb8935a, 0x9a3ad8, 0xffffff, 'cap'],
@@ -165,10 +165,59 @@ export const PLAYERS = [...STARS.map(star), ...REST.split('\n').map(other)].sort
 const OHNE = ['a', 'c', 'd', 'f'];
 const dark = (c) => ((c >> 16) & 255) + ((c >> 8) & 255) + (c & 255) < 300;
 const EINHAND = ['tsitsipas', 'musetti', 'shapovalov', 'altmaier', 'kovacevic'];   // Rückhand mit einer Hand
+
+// ---------------------------------------------------------------
+// Stil der besten Spieler: Woran erkennt man sie auf dem Platz?
+// ---------------------------------------------------------------
+// Die Gesichter im Spiel sind erfunden – niemand soll aussehen wie der echte Spieler.
+// Erkennen kann man die Spieler trotzdem, nämlich an ihrem Stil:
+//   groesse  = Körpergröße in cm (so groß wird die Figur gezeichnet; große Spieler treffen den Aufschlag weiter oben)
+//   statur   = 'schlank', 'normal' oder 'kraeftig'
+//   modell   = welche der sechs Figuren (siehe figur.js): a = kurze Haare · b = längere Haare mit Stirnband ·
+//              c = Locken, ärmelloses Hemd · d = Bart, sehr kurze Haare · e = Kappe · f = Haarknoten
+//   prellen  = so oft tippt er den Ball vor dem Aufschlag auf den Boden
+//   jubel    = so freut er sich über ein gewonnenes Spiel (alle Arten stehen in posen.js unter JUBEL)
+//   merkmal  = kurzer Text für die Spielerkarte im Menü
+//   unsicher = was davon nur geraten ist
+// Die Größen sind die öffentlich bekannten Angaben. Wie oft jemand den Ball prellt, ist nur bei Zverev und
+// Djokovic bekannt (beide sehr oft – im Spiel höchstens 5-mal, sonst dauert es zu lange); der Rest ist geschätzt.
+// Haarfarbe, Hemd und Hose stehen oben in der Liste STARS. Die Kleiderfarben sind frei gewählt.
+export const STIL = {
+  zverev:     { groesse: 198, statur: 'schlank',  modell: 'b', prellen: 5, jubel: 'bruellen', merkmal: 'Sehr groß, Stirnband, prellt den Ball lange' },
+  sinner:     { groesse: 191, statur: 'schlank',  modell: 'e', prellen: 3, jubel: 'ruhig',    merkmal: 'Rote Haare unter der Kappe, bleibt ganz ruhig' },
+  alcaraz:    { groesse: 183, statur: 'kraeftig', modell: 'a', prellen: 3, jubel: 'ohr',      merkmal: 'Kräftig und blitzschnell, Hand ans Ohr: „Ich hör euch nicht!“' },
+  shelton:    { groesse: 193, statur: 'kraeftig', modell: 'c', prellen: 2, jubel: 'telefon',  merkmal: 'Linkshänder, ärmellos, legt beim Jubeln den „Telefonhörer“ auf' },
+  medvedev:   { groesse: 198, statur: 'schlank',  modell: 'a', prellen: 2, jubel: 'ruhig',    merkmal: 'Sehr groß und dünn, jubelt fast gar nicht' },
+  cobolli:    { groesse: 183, statur: 'normal',   modell: 'e', prellen: 3, jubel: 'faust',    merkmal: 'Immer mit Kappe (in echt verkehrt herum)', unsicher: 'Jubel' },
+  fils:       { groesse: 185, statur: 'kraeftig', modell: 'd', prellen: 3, jubel: 'muskel',   merkmal: 'Sehr kräftig, zeigt gern seine Muskeln', unsicher: 'Kopfbedeckung, Jubel' },
+  tiafoe:     { groesse: 188, statur: 'kraeftig', modell: 'b', prellen: 3, jubel: 'arme',     merkmal: 'Stirnband, bunte Hemden, feiert mit dem Publikum', unsicher: 'Jubel' },
+  deminaur:   { groesse: 183, statur: 'schlank',  modell: 'e', prellen: 4, jubel: 'faust',    merkmal: 'Schmal, Kappe, der schnellste Läufer' },
+  jodar:      { groesse: 191, statur: 'schlank',  modell: 'a', prellen: 3, jubel: 'faust',    merkmal: 'Jung, groß und schlank', unsicher: 'Größe, Frisur, Jubel' },
+  djokovic:   { groesse: 188, statur: 'schlank',  modell: 'a', prellen: 5, jubel: 'bruellen', merkmal: 'Prellt den Ball ewig, brüllt nach großen Punkten' },
+  fritz:      { groesse: 196, statur: 'normal',   modell: 'b', prellen: 3, jubel: 'ruhig',    merkmal: 'Sehr groß, lange Haare mit Stirnband' },
+  fauger:     { groesse: 193, statur: 'kraeftig', modell: 'a', prellen: 4, jubel: 'faust',    merkmal: 'Groß und athletisch, gewaltiger Aufschlag', unsicher: 'Jubel' },
+  paul:       { groesse: 185, statur: 'normal',   modell: 'e', prellen: 3, jubel: 'ruhig',    merkmal: 'Kappe, lässig und flink', unsicher: 'Jubel' },
+  lehecka:    { groesse: 185, statur: 'kraeftig', modell: 'e', prellen: 3, jubel: 'faust',    merkmal: 'Kappe, harte Schläge', unsicher: 'Kopfbedeckung, Jubel' },
+  mensik:     { groesse: 196, statur: 'schlank',  modell: 'a', prellen: 4, jubel: 'faust',    merkmal: 'Sehr groß, einer der härtesten Aufschläge', unsicher: 'Kopfbedeckung, Jubel' },
+  davidovich: { groesse: 183, statur: 'normal',   modell: 'b', prellen: 2, jubel: 'faust',    merkmal: 'Blonde Haare, wirft sich nach jedem Ball', unsicher: 'Kopfbedeckung, Jubel' },
+  nakashima:  { groesse: 188, statur: 'normal',   modell: 'e', prellen: 3, jubel: 'ruhig',    merkmal: 'Kappe, zeigt nie Gefühle', unsicher: 'Kopfbedeckung' },
+  tien:       { groesse: 180, statur: 'schlank',  modell: 'e', prellen: 3, jubel: 'ruhig',    merkmal: 'Linkshänder, der Kleinste der Top 20, Kappe' },
+  cerundolo:  { groesse: 185, statur: 'normal',   modell: 'b', prellen: 3, jubel: 'faust',    merkmal: 'Riesige Vorhand', unsicher: 'Kopfbedeckung, Jubel' },
+  ruud:       { groesse: 183, statur: 'normal',   modell: 'e', prellen: 4, jubel: 'faust',    merkmal: 'Viel Topspin mit der Vorhand', unsicher: 'Kopfbedeckung, Jubel' },
+};
+
 PLAYERS.forEach((p, i) => {
   const L = p.look;
   L.bh = EINHAND.includes(p.id) ? 1 : 2;
   L.model = L.head === 'cap' ? 'e' : L.head === 'band' ? 'b' : OHNE[(i * 3 + 1) % 4];
+  // Die Stars bekommen ihren Stil: Figur, Größe, Statur und Jubel wandern ins Aussehen (look)
+  const stil = STIL[p.id];
+  if (stil) {
+    p.stil = stil;
+    L.model = stil.modell;
+    L.head = stil.modell === 'e' ? 'cap' : stil.modell === 'b' ? 'band' : 'none';
+    L.groesse = stil.groesse; L.statur = stil.statur; L.jubel = stil.jubel;
+  }
   L.pattern = (i * 3 + 2) % 5;
   L.trim = L.shirt === L.shorts ? (dark(L.shirt) ? 0xffffff : 0x1a2a4a) : (i % 2 ? L.shorts : (dark(L.shirt) ? 0xf2f2f2 : 0x1a2a4a));
 });
