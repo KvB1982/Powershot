@@ -493,6 +493,14 @@ export class Match {
       p.prep = Math.max(0, p.prep - dt * 4);
     }
 
+    // Controller/Uhr: Doppelklopfen (oder die Taste "Netz") wechselt zwischen Netzangriff und Grundlinie.
+    if (p.isHuman && this.controls && this.controls.takeNetz && this.controls.takeNetz() && this.state === 'rally') {
+      p.netRush = !p.netRush;
+      p.homeZ = p.netRush ? 3.2 : C.L + 0.7;
+      p.plan = null; p.planAge = 9;
+      this.fx.message(p.netRush ? 'Ans Netz!' : 'Zurück an die Grundlinie', 'info');
+    }
+
     let tx = p.homeX, tz = p.dz * p.homeZ;
     if (incoming && p.plan && assist !== 'aus') { tx = p.plan.sx; tz = p.plan.sz; }
     else if (incoming && assist === 'aus') { tx = p.x; tz = p.z; }

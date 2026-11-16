@@ -3,6 +3,11 @@
 <plist version="1.0">
 <dict>
 	<!-- Damit sich zwei Geräte im selben WLAN finden dürfen (iPhone als Schläger) -->
+	<!-- Die aufgenommenen Schlag-Serien sind in der Dateien-App unter „Auf meinem iPhone → Powershot“ zu sehen -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_powershot._tcp</string>

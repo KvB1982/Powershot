@@ -50,11 +50,17 @@ struct SchlaegerView: View {
                     .font(.title3)
             }
 
-            Text(uhr.anzeige).font(.footnote).foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+                Text(uhr.anzeige).font(.footnote).foregroundStyle(.secondary)
+                // Aufgenommene Schlag-Serien von der Uhr weitergeben (AirDrop, „In Dateien sichern“ …)
+                if !uhr.aufnahmen.isEmpty {
+                    ShareLink(items: uhr.aufnahmen) { Text("📁 \(uhr.aufnahmen.count) Aufnahmen teilen").font(.footnote) }
+                }
+            }
             Text("\(uhrZustand) · App-Version \(version)").font(.caption2).foregroundStyle(.secondary)
 
             HStack(spacing: 10) {
-                taste("Schlag", "a"); taste("Slice", "b"); taste("Lob", "x"); taste("Stopp", "y")
+                taste("Schlag", "a"); taste("Slice", "b"); taste("Lob", "x"); taste("Stopp", "y"); taste("Netz ⇄", "netz")
             }
             .frame(height: 64)
         }
@@ -86,6 +92,7 @@ struct SchlaegerView: View {
         for name in tasten { zustand[name] = true }
         if let bewegung = ControllerBruecke.geraeteBewegung() { zustand["motion"] = bewegung }
         if let schwung = Uhr.shared.aktuell() { zustand["schwung"] = schwung }      // Schwung von der Apple Watch
+        if let geste = Uhr.shared.geste() { zustand["geste"] = geste }               // Doppelklopfen von der Apple Watch
         Funk.shared.schicken(zustand)
     }
 }
