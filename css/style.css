@@ -48,6 +48,7 @@ button.primary:hover { background: #f4fb6a; }
 button.ghost { background: transparent; }
 button.sel { outline: 3px solid var(--accent); background: rgba(232, 240, 74, 0.14); }
 button:disabled { opacity: 0.4; cursor: default; }
+button.fokus { outline: 4px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 8px rgba(232, 240, 74, 0.45); }   /* mit dem Controller ausgewählt */
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .row > .grow { flex: 1; }
 .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }

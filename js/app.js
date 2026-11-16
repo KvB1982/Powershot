@@ -804,6 +804,48 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) { if (match && !paused) togglePause(); } else if (sound.ctx) sound.unlock();
 });
 
+// ---------------------------------------------------------------
+// Menüs mit dem Controller bedienen (z. B. wenn das Spiel auf dem Fernseher läuft)
+// ---------------------------------------------------------------
+// Ein Knopf ist "ausgewählt" (gelber Rahmen, Klasse .fokus). Der Stick springt zum nächsten Knopf
+// in der gedrückten Richtung, A drückt den Knopf, B drückt "Zurück".
+function menuTaste(was) {
+  if (!screen.classList.contains('on')) return;
+  const knoepfe = [...screen.querySelectorAll('button:not(:disabled)')];
+  if (!knoepfe.length) return;
+  let jetzt = screen.querySelector('button.fokus');
+  if (was === 'zurueck') {
+    const z = knoepfe.find((b) => b.textContent.includes('Zurück')) || screen.querySelector('[data-a="resume"]');
+    if (z) z.click();
+    return;
+  }
+  if (was === 'ok') { if (jetzt) jetzt.click(); return; }
+  let ziel = null;
+  if (!jetzt) {
+    ziel = screen.querySelector('button.primary') || knoepfe[0];      // noch nichts ausgewählt: beim wichtigsten Knopf anfangen
+  } else {
+    // Den nächsten Knopf in der Richtung suchen: Wir vergleichen die Mittelpunkte der Knöpfe.
+    const mitte = (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+    const a = mitte(jetzt), [rx, ry] = { links: [-1, 0], rechts: [1, 0], hoch: [0, -1], runter: [0, 1] }[was];
+    let best = Infinity;
+    for (const k of knoepfe) {
+      if (k === jetzt) continue;
+      const b = mitte(k), dx = b.x - a.x, dy = b.y - a.y;
+      const vor = dx * rx + dy * ry;                 // wie weit liegt der Knopf in der gewünschten Richtung?
+      const quer = Math.abs(dx * ry) + Math.abs(dy * rx);     // und wie weit daneben?
+      if (vor < 8) continue;
+      const kosten = vor + quer * 2.5;
+      if (kosten < best) { best = kosten; ziel = k; }
+    }
+  }
+  if (!ziel) return;
+  if (jetzt) jetzt.classList.remove('fokus');
+  ziel.classList.add('fokus');
+  ziel.scrollIntoView({ block: 'nearest' });
+  sound.click();
+}
+controls.onMenu = menuTaste;
+
 // Controller: Die Pause-Taste hält das Spiel an. Die iOS-App meldet den Controller über diese beiden Funktionen.
 controls.onPause = () => togglePause();
 window.__powershotPad = (s) => { controls.nativePad = true; controls.setPad(s); };

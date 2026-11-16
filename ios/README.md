@@ -9,6 +9,8 @@ von `index.html`, `css/`, `js/`, `assets/`, `sounds/` und `icons/` in die App. t
 | `Powershot/PowershotApp.swift` | Start der App: ein Fenster, Vollbild |
 | `Powershot/SpielView.swift` | Der eingebaute Browser und der „Datei-Ausgeber“ für die Spieldateien |
 | `Powershot/Assets.xcassets` | App-Symbol und Akzentfarbe |
+| `Powershot/ControllerBruecke.swift` | Liest Switch-Controller (Stick, Tasten, Bewegung) und meldet sie dem Spiel |
+| `Powershot/Fernseher.swift` | Zieht das Spiel auf den Fernseher um (AirPlay), wenn ein Controller gekoppelt ist |
 | `spiel-kopieren.sh` | Kopiert das Spiel beim Bauen in die App (ohne `mocap/`) |
 
 ## Im Simulator starten
@@ -22,6 +24,14 @@ xcodebuild -project Powershot.xcodeproj -scheme Powershot -destination 'platform
 xcrun simctl install "iPhone 18 Pro" ~/Library/Developer/Xcode/DerivedData/Powershot-cli/Build/Products/Debug-iphonesimulator/Powershot.app
 xcrun simctl launch "iPhone 18 Pro" com.von-bleichert.powershot
 ```
+
+## Controller und Fernseher
+
+- **Controller koppeln:** iPad-Einstellungen → Bluetooth, am Joy-Con die kleine runde Taste an der Schiene gedrückt halten.
+  Im Spiel unter Einstellungen → Steuerung „Controller (Switch)“ wählen. Dort steht auch, ob Schwingen erkannt wird.
+- **Fernseher:** Kontrollzentrum → Bildschirmsynchronisierung → Apple TV wählen. Ist ein Controller gekoppelt, füllt das Spiel
+  den Fernseher ganz aus und das iPad zeigt nur einen Hinweis. Ohne Controller spiegelt der Fernseher einfach das iPad.
+- Noch nicht am echten Gerät erprobt: Schwingen mit dem Joy-Con und der Umzug auf den Fernseher.
 
 ## TestFlight (braucht die bezahlte Developer-Mitgliedschaft)
 

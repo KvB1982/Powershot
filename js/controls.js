@@ -43,6 +43,9 @@ export class Controls {
     this.padAt = -9;              // wann der letzte Controller-Schlag ausgelöst wurde
     this.nativePad = false;       // true, sobald die iOS-App den Controller meldet
     this.onPause = null;          // wird von app.js gesetzt: Pause-Taste am Controller
+    this.onMenu = null;           // wird von app.js gesetzt: Controller im Menü ('links', 'rechts', 'hoch', 'runter', 'ok', 'zurueck')
+    this.menuDir = '';            // Richtung, in die der Stick gerade gedrückt ist
+    this.menuAt = 0;              // wann die Richtung zuletzt gemeldet wurde (zum Wiederholen beim Festhalten)
     this.bind();
   }
 
@@ -125,6 +128,17 @@ export class Controls {
     const neu = { a: !!s.a, b: !!s.b, x: !!s.x, y: !!s.y, pause: !!s.pause };
     P.btn = neu;
     if (neu.pause && !alt.pause && this.onPause) this.onPause();
+    // Im Menü (kein Ballwechsel): Stick wählt einen Knopf aus, A drückt ihn, B geht zurück.
+    if (!this.enabled && this.onMenu) {
+      const dir = Math.abs(P.x) > Math.abs(P.f) ? (P.x > 0.6 ? 'rechts' : P.x < -0.6 ? 'links' : '')
+        : (P.f > 0.6 ? 'hoch' : P.f < -0.6 ? 'runter' : '');
+      const jetzt = performance.now();
+      if (dir && (dir !== this.menuDir || jetzt - this.menuAt > 280)) { this.menuAt = jetzt; this.onMenu(dir); }
+      this.menuDir = dir;
+      if (neu.a && !alt.a) this.onMenu('ok');
+      if (neu.b && !alt.b) this.onMenu('zurueck');
+      return;
+    }
     if (!this.enabled || this.mode !== 'controller') return;
     // Tasten wie auf der Switch: A = Topspin, B = Slice, X = Lob, Y = Stoppball
     if (neu.a && !alt.a) this.commitPad('drive', 0.75);

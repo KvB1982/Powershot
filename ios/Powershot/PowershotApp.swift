@@ -8,14 +8,40 @@ import SwiftUI
 
 @main
 struct PowershotApp: App {
+    @UIApplicationDelegateAdaptor(AppStart.self) private var appStart
+    @StateObject private var spiel = Spiel.shared
+
     var body: some Scene {
         WindowGroup {
-            SpielView()
-                .ignoresSafeArea()                         // das Spiel füllt den ganzen Bildschirm
-                .background(Color(red: 0.043, green: 0.063, blue: 0.125))
-                .statusBarHidden(true)                     // keine Uhr und kein Akku über dem Spiel
-                .persistentSystemOverlays(.hidden)         // der Strich am unteren Rand blendet sich aus
-                .defersSystemGestures(on: .all)            // Wischen vom Rand gehört zuerst dem Spiel
+            ZStack {
+                Color(red: 0.043, green: 0.063, blue: 0.125)
+                SpielView(aufFernseher: spiel.aufFernseher)
+                if spiel.aufFernseher { FernseherHinweis() }
+            }
+            .ignoresSafeArea()                         // das Spiel füllt den ganzen Bildschirm
+            .statusBarHidden(true)                     // keine Uhr und kein Akku über dem Spiel
+            .persistentSystemOverlays(.hidden)         // der Strich am unteren Rand blendet sich aus
+            .defersSystemGestures(on: .all)            // Wischen vom Rand gehört zuerst dem Spiel
         }
+    }
+}
+
+/// Das sieht man auf dem iPad/iPhone, während das Spiel auf dem Fernseher läuft.
+struct FernseherHinweis: View {
+    var body: some View {
+        VStack(spacing: 18) {
+            Text("📺").font(.system(size: 80))
+            Text("Powershot läuft auf dem Fernseher").font(.title.bold())
+            Text("Spiele und bediene die Menüs mit dem Controller:\nStick = auswählen · A = drücken · B = zurück")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+            Button("Lieber hier weiterspielen") { Fernseher.zurueckAufsGeraet() }
+                .buttonStyle(.borderedProminent)
+                .tint(Color(red: 0.91, green: 0.94, blue: 0.29))
+                .foregroundStyle(.black)
+                .padding(.top, 8)
+        }
+        .foregroundStyle(.white)
+        .padding()
     }
 }

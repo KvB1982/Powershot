@@ -7,18 +7,23 @@
 import SwiftUI
 import WebKit
 
-struct SpielView: UIViewRepresentable {
-    // Der "Merker" hält die Controller-Brücke fest, solange das Fenster lebt.
-    final class Merker { var controller: ControllerBruecke? }
-    func makeCoordinator() -> Merker { Merker() }
+/// Das Spiel gibt es genau einmal. Es kann auf dem iPad/iPhone gezeigt werden oder auf dem Fernseher.
+final class Spiel: ObservableObject {
+    static let shared = Spiel()
 
-    func makeUIView(context: Context) -> WKWebView {
+    /// true, solange das Spiel auf dem Fernseher (AirPlay) zu sehen ist
+    @Published var aufFernseher = false
+
+    let web: WKWebView
+    private var controller: ControllerBruecke?
+
+    private init() {
         let config = WKWebViewConfiguration()
         config.setURLSchemeHandler(SpielDateien(), forURLScheme: "powershot")
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []      // Ton darf sofort spielen
 
-        let web = WKWebView(frame: .zero, configuration: config)
+        web = WKWebView(frame: .zero, configuration: config)
         web.isOpaque = false
         web.backgroundColor = UIColor(red: 0.043, green: 0.063, blue: 0.125, alpha: 1)
         web.scrollView.isScrollEnabled = false                    // die Seite selbst soll nicht verrutschen
@@ -30,11 +35,28 @@ struct SpielView: UIViewRepresentable {
         web.isInspectable = true                                  // am Mac mit Safari hineinschauen (Entwickler-Menü)
         #endif
         web.load(URLRequest(url: URL(string: "powershot://spiel/index.html")!))
-        context.coordinator.controller = ControllerBruecke(web: web)   // Switch-Controller ans Spiel anschließen
-        return web
+        controller = ControllerBruecke(web: web)                  // Switch-Controller ans Spiel anschließen
     }
 
-    func updateUIView(_ web: WKWebView, context: Context) {}
+    /// Setzt das Spiel-Fenster in eine Fläche ein (auf dem Gerät oder auf dem Fernseher) und füllt sie ganz aus.
+    func einsetzen(in flaeche: UIView) {
+        guard web.superview !== flaeche else { return }
+        web.removeFromSuperview()
+        web.frame = flaeche.bounds
+        web.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        flaeche.addSubview(web)
+    }
+}
+
+/// Die Fläche auf dem iPad/iPhone, in der das Spiel sitzt (wenn es nicht gerade auf dem Fernseher läuft).
+struct SpielView: UIViewRepresentable {
+    let aufFernseher: Bool
+
+    func makeUIView(context: Context) -> UIView { UIView() }
+
+    func updateUIView(_ flaeche: UIView, context: Context) {
+        if !aufFernseher { Spiel.shared.einsetzen(in: flaeche) }
+    }
 }
 
 /// Reicht die Spieldateien aus dem App-Paket (Ordner "web") an das Spiel weiter.
