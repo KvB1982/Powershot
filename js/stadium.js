@@ -269,16 +269,21 @@ export class Stadium {
   // Zuschauer
   // ---------------------------------------------------------------
   // Jeder Zuschauer ist nur eine flache Bildtafel (2 Dreiecke) mit einem Bild aus assets/zuschauer.webp.
-  // In diesem Bild sitzen 32 erfundene Leute nebeneinander (8 pro Reihe, 4 Reihen) – jede Tafel zeigt eine davon.
+  // In diesem Bild sitzen 48 erfundene Leute (8 pro Reihe, 6 Reihen): die ersten 32 sieht man von vorn,
+  // die letzten 16 von der Seite – sie schauen im Bild nach links.
+  // Steht die Kamera vor einer Person, bekommt sie ein Bild von vorn. Steht die Kamera schräg daneben
+  // (so wie bei den Seitentribünen), bekommt sie ein Bild von der Seite – und zwar so herum,
+  // dass sie zum Spielfeld schaut und nicht in die Kamera.
   // Das ist für iPad und iPhone viel leichter als echte 3D-Figuren: alle Zuschauer zusammen
   // werden in einem einzigen Schritt gezeichnet.
   zuschauerBauen(G, people, night) {
-    const SPALTEN = 8, REIHEN = 4;            // so viele Leute sind im Bild neben- und übereinander
+    const SPALTEN = 8, REIHEN = 6;            // so viele Leute sind im Bild neben- und übereinander
+    const VORN = 32, SEITE = 16;              // so viele davon von vorn und von der Seite
     const BREITE = 0.70, HOEHE = 1.05;        // Größe einer Bildtafel in Metern
     const geo = new THREE.PlaneGeometry(1, 1);
     geo.translate(0, 0.5, 0);                 // Nullpunkt an die Unterkante: dort "sitzt" die Person
     const n = people.length;
-    const bild = new Float32Array(n * 4);     // pro Person: Spalte, Reihe, gespiegelt (0/1), Größe
+    const bild = new Float32Array(n * 4);     // pro Person: Bild von vorn, Bild von der Seite, gespiegelt (0/1), Größe
     const richtung = new Float32Array(n * 2); // pro Person: wohin sie schaut (zum Platz)
     const mesh = new THREE.InstancedMesh(geo, null, n);
     const mtx = new THREE.Matrix4(), col = new THREE.Color();
@@ -287,8 +292,8 @@ export class Stadium {
       // ein kleines Stück zur Seite gewürfelt, damit nicht alle wie am Lineal sitzen
       mtx.makeTranslation(p.x + (p.nx ? 0 : jx), p.y - 0.04, p.z + (p.nz ? 0 : jx));
       mesh.setMatrixAt(i, mtx);
-      bild[i * 4] = Math.floor(Math.random() * SPALTEN);
-      bild[i * 4 + 1] = Math.floor(Math.random() * REIHEN);
+      bild[i * 4] = Math.floor(Math.random() * VORN);
+      bild[i * 4 + 1] = Math.floor(Math.random() * SEITE);
       bild[i * 4 + 2] = Math.random() < 0.5 ? 1 : 0;
       bild[i * 4 + 3] = 0.92 + Math.random() * 0.14;
       richtung[i * 2] = p.nx; richtung[i * 2 + 1] = p.nz;
@@ -312,19 +317,25 @@ export class Stadium {
           attribute vec2 aRichtung;
           uniform float uZeit;
           uniform float uJubel;`)
-        // Welcher Ausschnitt des großen Bildes? (Spalte und Reihe der Person, vielleicht gespiegelt)
+        // Wo steht die Kamera – vor der Person oder seitlich? Danach wird das Bild ausgesucht.
         .replace('#include <uv_vertex>', `#include <uv_vertex>
-          vMapUv = vec2((aBild.x + (aBild.z > 0.5 ? 1.0 - uv.x : uv.x)) / ${SPALTEN}.0,
-                        (${REIHEN - 1}.0 - aBild.y + uv.y) / ${REIHEN}.0);`)
-        // Die Tafel dreht sich um ihre Hochachse zur Kamera – aber höchstens 60 Grad weg vom Platz.
-        // So sieht man die Leute nie "von der Kante", und trotzdem schauen alle ungefähr zum Spiel.
-        .replace('#include <project_vertex>', `
           vec4 mitte = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
           vec2 zurKamera = normalize(cameraPosition.xz - mitte.xz + vec2(0.0001));
+          float vorn = dot(aRichtung, zurKamera);     // 1 = Kamera genau vor der Person, 0 = genau daneben
+          float seite = aRichtung.x * zurKamera.y - aRichtung.y * zurKamera.x;   // links oder rechts daneben?
+          // Die Grenze ist bei jedem ein bisschen anders, damit man keine harte Linie in der Tribüne sieht
+          bool vonDerSeite = vorn < 0.62 + 0.25 * fract(aBild.x * 0.618);
+          float nr = vonDerSeite ? ${VORN}.0 + aBild.y : aBild.x;
+          float spalte = mod(nr, ${SPALTEN}.0), reihe = floor(nr / ${SPALTEN}.0);
+          bool gespiegelt = vonDerSeite ? seite > 0.0 : aBild.z > 0.5;
+          vMapUv = vec2((spalte + (gespiegelt ? 1.0 - uv.x : uv.x)) / ${SPALTEN}.0,
+                        (${REIHEN - 1}.0 - reihe + uv.y) / ${REIHEN}.0);`)
+        // Die Tafel dreht sich um ihre Hochachse zur Kamera – aber höchstens 60 Grad weg vom Platz.
+        // So sieht man die Tafeln nie "von der Kante".
+        .replace('#include <project_vertex>', `
           vec2 blick = zurKamera;
-          if (dot(aRichtung, zurKamera) < 0.5) {
-            float seite = aRichtung.x * zurKamera.y - aRichtung.y * zurKamera.x < 0.0 ? -1.0 : 1.0;
-            float c = 0.5, s = 0.866 * seite;
+          if (vorn < 0.5) {
+            float c = 0.5, s = seite < 0.0 ? -0.866 : 0.866;
             blick = vec2(aRichtung.x * c - aRichtung.y * s, aRichtung.x * s + aRichtung.y * c);
           }
           vec3 welt = mitte.xyz + vec3(blick.y, 0.0, -blick.x) * (position.x * ${BREITE.toFixed(2)} * aBild.w);
