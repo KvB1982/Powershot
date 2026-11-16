@@ -8,7 +8,7 @@ import { DIFFICULTY } from './data.js';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const NOFX = new Proxy({}, { get: () => () => {} });
-const SPAET_FENSTER = 0.20;  // Controller: so lange (Sekunden) darf man nach dem besten Moment noch schlagen (= Ball geht nach rechts)
+const SPAET_FENSTER = 0.12;  // Controller: so lange (Sekunden) darf man nach dem besten Moment noch schlagen (= Ball geht nach rechts)
 const REACH = 1.4;          // so weit reicht man mit dem Schläger (Meter)
 export const TOSS_TIME = 1.4;      // Dauer der Aufschlagbewegung vom Stand bis zum Treffpunkt
 const WALK_SPEED = 2.0;            // Gehen beim Seitenwechsel (m/s) – zügiges Gehen, kein Laufen

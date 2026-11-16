@@ -20,12 +20,26 @@ const DOUBLE = 0.32;                   // Zeitfenster für Doppelklick / Doppelt
 const SWING_START = 1.6;               // ab dieser Beschleunigung (in g, 1 g = Erdanziehung) zählt es als Schwung
 const SWING_VOLL = 5.0;                // so stark muss man schwingen für volle Kraft
 const SWING_PAUSE = 0.4;               // Sekunden Ruhe nach einem Schwung (sonst zählt einer doppelt)
-const PAD_HALTBAR = 0.7;               // so lange "gilt" ein Schwung oder Tastendruck, bis der Ball da sein muss
+const PAD_HALTBAR = 0.5;               // so lange "gilt" ein Schwung oder Tastendruck, bis der Ball da sein muss
 // --- Controller: Das Timing bestimmt die Richtung, wie beim echten Tennis. ---
-// Früh geschwungen (lange bevor der Ball da ist) = Ball geht nach links, spät = nach rechts.
-const TIMING_MITTE = 0.15;             // so viele Sekunden vor dem Treffen schwingen = genau geradeaus
-const TIMING_FRUEH = 0.55;             // so früh (Sekunden vor dem Treffen) = ganz nach links
-export const TIMING_SPAET = 0.20;      // so spät (Sekunden nach dem besten Moment) = ganz nach rechts, danach "Zu spät!"
+// Triffst du den Ball früh (noch vor dem Körper), geht er nach links. Triffst du ihn spät (neben dem Körper), nach rechts.
+// Das ganze Fenster ist kurz und liegt direkt vor dem Moment, in dem der Ball bei dir ankommt:
+//
+//   0,32 s vorher        0,16 s vorher        Ball ist da
+//   ganz links  ───────────  Mitte  ───────────  ganz rechts
+//
+const TIMING_FRUEH = 0.32;             // so viele Sekunden vor dem Treffen = ganz nach links
+const TIMING_MITTE = 0.16;             // so viele Sekunden vor dem Treffen = genau geradeaus
+export const TIMING_SPAET = 0.12;      // so lange nach dem Treffmoment darf man noch schlagen (bleibt ganz rechts), danach "Zu spät!"
+// Ein Schwung wird erst erkannt, wenn er schon einen Moment läuft. Diese Zeit rechnen wir zurück.
+const SCHWUNG_VERZUG = 0.08;           // iPhone oder Controller in der Hand
+const UHR_VERZUG = 0.04;               // Apple Watch (zusätzlich zur gemessenen Funkzeit)
+
+// Aus "so viele Sekunden vor dem Treffen" wird die Richtung: -1 = ganz links, 0 = Mitte, +1 = ganz rechts
+function richtungAusZeit(vorher) {
+  if (vorher >= TIMING_MITTE) return -clamp((vorher - TIMING_MITTE) / (TIMING_FRUEH - TIMING_MITTE), 0, 1);
+  return clamp((TIMING_MITTE - vorher) / TIMING_MITTE, 0, 1);
+}
 const tot = (v) => (Math.abs(v) < 0.18 ? 0 : v);     // kleine Stick-Wackler ignorieren
 
 export class Controls {
@@ -167,7 +181,7 @@ export class Controls {
     // Sobald die Uhr einmal einen Schwung gemeldet hat, zählt nur noch sie –
     // sonst würde das iPhone in der Hosentasche auch Schläge auslösen.
     if (s.schwung) this.uhrAktiv = true;
-    if (uhr) this.schwungFertig(uhr.kraft, uhr.hoch, clamp(uhr.alter || 0, 0, 0.5));
+    if (uhr) this.schwungFertig(uhr.kraft, uhr.hoch, clamp((uhr.alter || 0) + UHR_VERZUG, 0, 0.5));
     else if (s.motion && !this.uhrAktiv) this.fuehleSchwung(s.motion);
   }
 
@@ -188,7 +202,7 @@ export class Controls {
     if (stark > S.peak) { S.peak = stark; S.hoch = hoch; }
     if (this.time - S.t0 < 0.12) return;                         // 0,12 Sekunden lang den stärksten Wert suchen
     S.aktiv = false; S.ende = this.time;
-    this.schwungFertig(clamp((S.peak - SWING_START) / (SWING_VOLL - SWING_START), 0, 1), S.hoch / S.peak, 0);
+    this.schwungFertig(clamp((S.peak - SWING_START) / (SWING_VOLL - SWING_START), 0, 1), S.hoch / S.peak, SCHWUNG_VERZUG);
   }
 
   // Ein Schwung ist erkannt – hier wird daraus ein Schlag.
@@ -218,9 +232,8 @@ export class Controls {
   // Aus dem Zeitpunkt des Schwungs wird die Richtung: -1 = ganz links (sehr früh), 0 = Mitte, +1 = ganz rechts (sehr spät).
   //   spaet = wie viele Sekunden nach dem besten Moment geschwungen wurde (0 = rechtzeitig)
   timingZiel(spaet) {
-    if (spaet > 0) return clamp(spaet / TIMING_SPAET, 0, 1);
-    const vorher = this.time - this.padAt;                 // so lange ist der Schwung schon her
-    return -clamp((vorher - TIMING_MITTE) / (TIMING_FRUEH - TIMING_MITTE), 0, 1);
+    if (spaet > 0) return 1;                               // nach dem Treffmoment: ganz rechts
+    return richtungAusZeit(this.time - this.padAt);        // so lange ist der Schwung schon her
   }
 
   // Wie bei "profi": Die Richtung, in die der Stick beim Treffen zeigt, bestimmt das Ziel.
@@ -402,9 +415,8 @@ export class Controls {
       if (this.committed) return this.padRaw(this.committed);
       // Noch nicht geschwungen: Die Ziellinie zeigt, wohin der Ball ginge, wenn du GENAU JETZT schwingst.
       // Sie wandert von links (früh) über die Mitte nach rechts (spät).
-      if (this.ctx !== 'rally' || bisTreffen === null || bisTreffen > 1.5) return null;
-      const ziel = bisTreffen < 0 ? clamp(-bisTreffen / TIMING_SPAET, 0, 1)
-        : -clamp((bisTreffen - TIMING_MITTE) / (TIMING_FRUEH - TIMING_MITTE), 0, 1);
+      if (this.ctx !== 'rally' || bisTreffen === null || bisTreffen > 1.0) return null;
+      const ziel = bisTreffen < 0 ? 1 : richtungAusZeit(bisTreffen);
       return { type: 'drive', aimMode: 'abs', aim: (this.pad.x || ziel) * 0.88, depth: 0.78, power: 0.6, committed: false };
     }
     return this.committed || this.live;
