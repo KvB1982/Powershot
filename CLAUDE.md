@@ -18,6 +18,7 @@ node tools/sim.mjs 0 1 mittel hard 3    # Computer gegen Computer, ohne Grafik
 node tools/logic.mjs            # Turnier, Karriere und Saison (ATP Race) durchrechnen
 node tools/rookie.mjs           # Neuling gegen Profi auf jeder Schwierigkeit
 node tools/seitenwechsel.mjs hard 10   # Seitenwechsel prüfen: nur nach ungeraden Spielen, nie nach einem Aufschlagfehler
+node tools/wichtig.mjs          # Hinweise Breakball, Satzball, Matchball, Championship Point prüfen (`wichtigerPunkt` in `js/rules.js`)
 node tools/kamera.mjs           # Laufen mit der Kamera: Rechnung prüfen (ohne Kamera, mit künstlichen Körperpunkten)
 node tools/ballflug.mjs hard     # Flugbahn und Absprung jeder Schlag- und Aufschlagart messen und prüfen (auch clay, grass, indoor)
 node tools/mocap.mjs            # Aufnahmen aus mocap/*.FBX in mocap/bewegungen.json umrechnen (--info zeigt nur an)

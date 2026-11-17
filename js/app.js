@@ -512,6 +512,7 @@ actions.tourPlay = () => {
   const roundIdx = T.rounds.length;
   startMatch({
     me: getPlayer(T.humanId), opp: getPlayer(oppId), def, title: def.cat === 'LIGA' ? def.name : `${def.name} · ${D.ROUND_NAMES[TN.currentLabel(T)]}`,
+    finale: def.cat !== 'LIGA' && TN.currentLabel(T) === 'F',
     onEnd: (res) => {
       TN.playRound(T, { winner: res.won ? T.humanId : oppId, score: res.score, setDiff: res.setDiff });
       if (ctxT.season) SE.saveSeason(season);
@@ -938,6 +939,7 @@ function startMatch(o) {
   match = new Match({
     players: [o.me, o.opp], human: 0, surface: o.def.surface, difficulty: settings.difficulty,
     sets: len.sets, games: len.games, mode, assist: settings.assist, controlMode: settings.control,
+    finale: !!o.finale,      // im Endspiel heißt der Matchball "Championship Point"
   }, game.makeFx(names), controls);
   game.attach(match, hud);
   paused = false;
@@ -976,7 +978,7 @@ const hud = {
     if (!text) return;
     const t = $('#toast');
     t.textContent = text; t.className = 'on ' + (kind || '');
-    toastTimer = 1.6;
+    toastTimer = kind === 'wichtig' ? 2.6 : 1.6;     // wichtige Hinweise bleiben etwas länger stehen
   },
   serveSpeed(kmh, side, art) {
     const s = $('#speed');

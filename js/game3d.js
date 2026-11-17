@@ -190,7 +190,10 @@ export class Game3D {
         self.landing.visible = self.landingDot.visible = false;
         snd.setCrowd(0.035);
         call('update');
-        if (info.serveNo === 2) call('message', '2. Aufschlag', 'info');
+        // Wichtiger Punkt? Dann steht es oben: Breakball, Satzball, Matchball (im Finale: Championship Point)
+        const wichtig = self.match && self.match.mode === 'match' ? self.match.score.wichtigText(names, self.match.cfg.finale) : '';
+        if (wichtig) call('message', wichtig + (info.serveNo === 2 ? ' · 2. Aufschlag' : ''), 'wichtig');
+        else if (info.serveNo === 2) call('message', '2. Aufschlag', 'info');
       },
       toss(side, k) { self.tossK[side] = k; },
       prell() { snd.bounce(3, self.venue ? self.venue.surface : 'hard'); },      // Ball prellen vor dem Aufschlag
@@ -238,7 +241,12 @@ export class Game3D {
         if (info.events.includes('match')) { sub = 'Spiel, Satz und Sieg ' + w; strength = 1; say += sub; }
         else if (info.events.includes('set')) { sub = 'Satz ' + w; strength = 0.95; say += sub; }
         else if (info.events.includes('game')) { sub = 'Spiel ' + w; strength = 0.8; say += sub + (info.events.includes('tiebreak') ? '. Tiebreak' : ''); }
-        else say += sc.callText(names);
+        else {
+          say += sc.callText(names);
+          // Der Schiedsrichter sagt auch an, wenn jetzt ein wichtiger Punkt kommt
+          const wichtig = sc.wichtigText(names, self.match.cfg.finale);
+          if (wichtig) say += '. ' + wichtig;
+        }
         if (info.rally >= 9) strength = Math.min(1, strength + 0.25);
         snd.applause(strength, strength > 0.7);
         self.stadium.jubel(strength);
