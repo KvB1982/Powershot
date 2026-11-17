@@ -45,6 +45,7 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 | `js/mocap.js` | Lädt `mocap/bewegungen.json`, falls vorhanden |
 | `js/avatar.js` | Skelett: Posen/Aufnahmen → Gelenke → Knochen; `pickStroke` wählt den Schlag nach Spielsituation |
 | `js/game3d.js`, `js/stadium.js`, `js/audio.js` | Darstellung, Stadion, Sound (Aufnahmen aus `sounds/`) |
+| `js/requisiten.js` | Fertige 3D-Modelle aus 3D AI Studio (`assets/*.glb`): Schiedsrichterstuhl, Bank, Ballkind, Linienrichter, Ballmaschine, drei Pokale, Schläger. Einmal laden, mehrfach hinstellen; `requisit(name, { farbe })` färbt graue Stellen um |
 | `assets/zuschauer.webp` | 48 erfundene Zuschauer in einem Bild (8 × 6, je 128 × 192 Pixel; 32 von vorn, 16 von der Seite); `stadium.js` zeigt sie als flache Bildtafeln |
 | `js/tournament.js`, `js/career.js`, `js/app.js` | Turnierbaum, Karriere (localStorage), Menüs |
 | `js/kleinetour.js` | Kleine Tour für die Karriere: Stufen (`STUFEN`: ITF M15/M25, Challenger, ATP 250/500), 56 kleine Turniere, Flugpreise, Liga-Spiel, 40 erfundene Nachwuchsspieler – ohne three.js |
@@ -122,6 +123,16 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
   Der Mensch prellt nicht (er schlägt auf, sobald er drückt).
 - Größen sind öffentliche Angaben; Prell-Zahlen, viele Jubel-Arten und manche Kopfbedeckung sind geschätzt (Feld `unsicher`). Kleiderfarben sind frei gewählt.
 - Weiterhin gilt: keine Gesichter oder Körper echter Spieler nachbauen, keine Fotos als Vorlage.
+
+## Stadion und Requisiten
+
+- `stadium.js` baut zuerst Klötze und tauscht sie gegen die Modelle aus `requisiten.js`, sobald diese geladen sind. Ballkinder, Linienrichter und
+  Tribünendach gibt es nur bei großen Turnieren (`def.zuschauer` ab 0,6) und nicht bei Qualität „niedrig“.
+- Bodenbelag: graue Bilder `assets/boden_sand|rasen|hart.jpg`, die Farbe kommt aus `theme`. Himmel: `assets/himmel_tag|abend.jpg` auf einem großen Zylinder.
+- Bandenwerbung (`WERBUNG` in `stadium.js`) ist erfunden. Sitzschalen, Geländer, Dach, Flutlicht und Hallendecke sind aus einfachen Formen gebaut.
+- Pokal nach eigenem Turniersieg: `game.pokalZeigen(canvas, 'silber' | 'gold' | 'stern')`. Ballmaschine im Training: `game.maschineZeigen`.
+- Neue Modelle vor dem Einbau verkleinern (Richtwert 2.000–7.000 Dreiecke, nur Farbbild, 512 oder 1024 Pixel). Wunschliste: Projektdatei `docs/3d_wunschliste.md`.
+- Bisher nur im Test-Browser ohne Grafikkarte als Standbild geprüft, nicht auf einem echten iPad (Tempo dort noch unbekannt).
 
 ## Bekannte Grenzen
 

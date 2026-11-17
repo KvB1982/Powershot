@@ -8,6 +8,7 @@ import { KameraBild } from './kamerabild.js';
 import { Match } from './match.js';
 import { AUFSCHLAEGE, AUFSCHLAG_ARTEN, standardAufschlag } from './schlaege.js';
 import { loadFigure } from './figur.js';
+import { ladeRequisiten } from './requisiten.js';
 import { loadMocap } from './mocap.js';
 import * as D from './data.js';
 import * as TN from './tournament.js';
@@ -472,7 +473,9 @@ function renderTournament() {
   let top;
   if (T.done) {
     const pay = T.humanId ? TN.payout(T, T.humanId) : null;
-    top = `<div class="panel center"><h2 class="gold">🏆 ${esc(T.players[T.champion].name)}</h2>
+    // Hast du selbst gewonnen, gibt es einen Pokal zum Ansehen (kein Pokal beim Liga-Spiel)
+    const meinPokal = T.champion === T.humanId && def.cat !== 'LIGA';
+    top = `<div class="panel center">${meinPokal ? '<canvas id="pokal" class="pokal3d" width="400" height="500"></canvas>' : ''}<h2 class="gold">🏆 ${esc(T.players[T.champion].name)}</h2>
       <p>gewinnt ${def.name}${T.champion === T.humanId ? ' – das bist du! Glückwunsch!' : '.'}</p>
       ${pay && pay.label && def.cat !== 'LIGA' ? `<p class="dim">Dein Ergebnis: ${D.ROUND_NAMES[pay.label]}</p>` : ''}
       <button class="primary" data-a="tourDone">Weiter</button></div>`;
@@ -491,6 +494,9 @@ function renderTournament() {
   // In der Saison kommt man vom Turnier zurück zur Übersicht (das Turnier bleibt gespeichert)
   const zurueck = ctxT.season ? '<button class="ghost" data-a="saison" data-v="start">‹ Saison</button>' : '';
   show(`<div class="bar">${zurueck}<h2>${def.name} ${catTag(def)}</h2><span class="dim">${def.city} · ${D.SURFACE_NAMES[def.surface]}</span></div>${top}${bracketHtml(T, def)}`);
+  // Pokal nach einem eigenen Turniersieg: Grand Slam = Silberpokal, ATP Finals = Stern, alle anderen = Goldpokal
+  const pokalBild = document.getElementById('pokal');
+  if (pokalBild) game.pokalZeigen(pokalBild, def.cat === 'GS' ? 'silber' : def.cat === 'F' ? 'stern' : 'gold');
   // Den Baum so hinschieben, dass man die aktuelle Runde sieht
   // (links daneben bleibt die Runde davor stehen, damit man sieht, woher die Spieler kommen)
   const cur = screen.querySelector('.bcol.curcol'), box = screen.querySelector('.bscroll');
@@ -1177,7 +1183,7 @@ window.__powershotPadWeg = () => { controls.nativePad = false; controls.padWeg()
 
 window.__powershot = { game, controls, settings, step, kameraLauf, kameraBild, get match() { return match; }, get career() { return career; }, get season() { return season; }, actions };
 // Das Spielermodell laden (höchstens 8 Sekunden warten – sonst geht es mit den einfachen Figuren los)
-await Promise.race([Promise.all([loadFigure(), loadMocap()]), new Promise((r) => setTimeout(r, 8000))]);
+await Promise.race([Promise.all([loadFigure(), loadMocap(), ladeRequisiten()]), new Promise((r) => setTimeout(r, 8000))]);
 $('#loading').remove();
 actions.home();
 requestAnimationFrame(loop);

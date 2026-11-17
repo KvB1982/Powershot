@@ -5,6 +5,7 @@ import { Stadium } from './stadium.js';
 import { Avatar } from './avatar.js';
 import { TOSS_TIME, TOSS_FLIGHT } from './match.js';
 import { COURT as C } from './physics.js';
+import { ladeRequisiten, requisit } from './requisiten.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -98,6 +99,50 @@ export class Game3D {
 
     this.zoneGroup = new THREE.Group();
     S.add(this.zoneGroup);
+  }
+
+  // Die Ballmaschine fürs Training. Sie steht dort, von wo die Bälle kommen (siehe feed() in match.js).
+  maschineZeigen(an) {
+    if (an && !this.maschine) {
+      this.maschine = requisit('ballmaschine');
+      if (this.maschine) { this.maschine.position.set(0.5, 0, -(C.L + 0.5)); this.scene.add(this.maschine); }
+    }
+    if (this.maschine) this.maschine.visible = an;
+    return !!this.maschine;
+  }
+
+  // ---------------------------------------------------------------
+  // Pokal im Menü
+  // ---------------------------------------------------------------
+  // Zeigt nach einem Turniersieg einen Pokal, der sich langsam dreht.
+  // bild = ein <canvas> aus dem Menü, art = 'silber' (Grand Slam), 'gold' (Masters und kleine Turniere), 'stern' (ATP Finals).
+  // Der Pokal wird in einer eigenen kleinen Szene gezeichnet und dann in dieses Bild kopiert.
+  pokalZeigen(bild, art) {
+    this.pokal = null;
+    ladeRequisiten().then(() => {
+      const mesh = requisit('pokal_' + art, { rau: 0.35, metall: 0.15, schatten: false });
+      if (!mesh || !bild.isConnected) return;
+      const szene = new THREE.Scene();
+      szene.background = new THREE.Color(0x16203a);
+      szene.add(mesh, new THREE.HemisphereLight(0xffffff, 0x404858, 1.6));
+      const licht = new THREE.DirectionalLight(0xfff4d8, 2.6); licht.position.set(1.5, 2.5, 2); szene.add(licht);
+      const kamera = new THREE.PerspectiveCamera(30, bild.width / bild.height, 0.1, 10);
+      kamera.position.set(0, 0.42, 1.45); kamera.lookAt(0, 0.3, 0);
+      this.pokal = { bild, mesh, szene, kamera, stift: bild.getContext('2d') };
+    });
+  }
+
+  pokalZeichnen(dt) {
+    const p = this.pokal;
+    if (!p.bild.isConnected) { p.mesh.material.dispose(); this.pokal = null; return; }    // das Menü ist schon wieder weg
+    p.mesh.rotation.y += dt * 0.9;
+    const r = this.renderer, pr = r.getPixelRatio(), w = 200, h = 250;       // kleine Ecke unten links im großen Bild
+    r.setViewport(0, 0, w, h); r.setScissor(0, 0, w, h); r.setScissorTest(true);
+    r.render(p.szene, p.kamera);
+    r.setScissorTest(false);
+    const el = r.domElement;
+    p.stift.drawImage(el, 0, el.height - h * pr, w * pr, h * pr, 0, 0, p.bild.width, p.bild.height);
+    r.setViewport(0, 0, el.width / pr, el.height / pr);
   }
 
   loadVenue(def) {
@@ -237,11 +282,15 @@ export class Game3D {
       if (mk.userData.life <= 0) mk.visible = false;
     }
     this.stadium.update(dt);
+    if (this.pokal) this.pokalZeichnen(dt);          // zuerst der kleine Pokal, danach übermalt das Stadion das ganze Bild
     this.renderer.render(this.scene, this.camera);
   }
 
   syncMatch(dt, m) {
     const b = m.ball.pos;
+    // Training mit der Ballmaschine: Statt des Gegners steht die Maschine da (wenn ihr Modell geladen ist)
+    const maschine = this.maschineZeigen(m.mode === 'ballmaschine') && m.mode === 'ballmaschine';
+    if (this.avatars[1] && m.state !== 'intro') this.avatars[1].group.visible = !maschine;
     // Figuren
     for (let i = 0; i < 2; i++) {
       const p = m.P[i], av = this.avatars[i];
@@ -354,6 +403,7 @@ export class Game3D {
     this.camera.lookAt(this.camLook);
     this.ball.visible = this.blob.visible = this.trail.visible = false;
     for (const av of this.avatars) if (av) av.group.visible = false;
+    if (this.maschine) this.maschine.visible = false;
   }
 
   showAvatars(on) { for (const av of this.avatars) if (av) av.group.visible = on; }

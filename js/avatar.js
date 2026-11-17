@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { figureReady, makeFigure, REST, BONES } from './figur.js';
+import { requisit } from './requisiten.js';
 import { mocapClip, mocapFrame, mocapLoop, mocapGang } from './mocap.js';
 import { JUBEL, pose as namedPose, mixPose, strokePose, prepPose, strokeName, strokeFamily, strokeStart, strokeEnd } from './posen.js';
 
@@ -252,13 +253,27 @@ export class Avatar {
     const M = this.m;
     const rk = M.racket = new THREE.Group();
     this.group.add(rk);
+    const saiten = new THREE.MeshBasicMaterial({ map: stringTexture(), transparent: true, side: THREE.DoubleSide, depthWrite: false });
+    // Das fertige Schläger-Modell (assets/schlaeger.glb): Der Lack bekommt die Farbe des Schlägers aus dem Shop,
+    // das Griffband bleibt weiß. Das Modell ist 1 Einheit lang und liegt mit der Fläche quer – deshalb drehen und strecken.
+    const modell = requisit('schlaeger', { farbe: look.racket ?? 0x202020, abY: -0.24, hell: [0.35, 0.95], rau: 0.4 });
+    if (modell) {
+      modell.rotation.y = Math.PI / 2;
+      modell.scale.set(0.42, 0.69, 0.59);          // dünner, 69 cm lang, Kopf etwas schmaler
+      modell.position.y = 0.325;                   // das Griffende liegt in der Hand
+      const strings = new THREE.Mesh(new THREE.CircleGeometry(0.125, 22), saiten);
+      strings.scale.set(0.98, 1.4, 1); strings.position.y = 0.487;
+      rk.add(modell, strings);
+      rk.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      return;
+    }
+    // Ersatz, falls das Modell nicht geladen werden konnte: Ring, Scheibe und Stäbchen
     const frameMat = stdMat(look.racket ?? 0x202020, 0.4);
     const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.019, 0.2, 8), stdMat(0xf2f2f2, 0.9));
     grip.position.y = 0.08;
     const frame = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.011, 6, 26), frameMat);
     frame.scale.set(1, 1.28, 1); frame.position.y = 0.5;
-    const strings = new THREE.Mesh(new THREE.CircleGeometry(0.125, 22),
-      new THREE.MeshBasicMaterial({ map: stringTexture(), transparent: true, side: THREE.DoubleSide, depthWrite: false }));
+    const strings = new THREE.Mesh(new THREE.CircleGeometry(0.125, 22), saiten);
     strings.scale.set(1, 1.28, 1); strings.position.y = 0.5;
     rk.add(grip, frame, strings);
     for (const sx of [-1, 1]) {

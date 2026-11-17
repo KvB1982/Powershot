@@ -328,3 +328,6 @@ tr.cut td { text-align: center; font-size: 11px; font-weight: 700; color: var(--
   border-radius: 10px; border: 3px solid #5fd36b; opacity: 0.9; }
 #kameraMini.on { display: block; }
 #kameraMini.weg { border-color: #ff5a4a; }      /* roter Rand: Die Kamera sieht dich gerade nicht */
+
+/* Der Pokal nach einem Turniersieg (wird in js/game3d.js gezeichnet) */
+.pokal3d { display: block; width: 160px; height: 200px; margin: 0 auto 4px; border-radius: 12px; }
