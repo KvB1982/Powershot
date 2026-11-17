@@ -85,6 +85,10 @@ const P = {
   cheer_arme:     { r: [0.02, 0.44, 1.86], d: [0.0, 0.35, 0.94], l: [0.02, -0.44, 1.86], tw: 0, cr: -0.02, ln: -0.06 },         // beide Arme hoch
   cheer_muskel:   { r: [0.10, 0.34, 0.84], d: [0.40, 0.20, -0.90], l: [0.04, -0.44, 1.62], tw: 0.15, cr: 0.06, ln: -0.04 },     // Arm anwinkeln: „Schaut, meine Muskeln!“
 
+  // Siegerehrung: den Pokal mit beiden Händen über den Kopf stemmen · Pokal oder Teller vor der Brust halten
+  pokal_hoch:     { r: [0.10, 0.17, 1.98], d: [0.0, 0.2, 1.0], l: [0.10, -0.17, 1.98], tw: 0, cr: -0.03, ln: -0.07 },
+  pokal_halten:   { r: [0.30, 0.15, 1.16], d: [0.3, 0.2, 0.9], l: [0.30, -0.15, 1.16], tw: 0, cr: 0, ln: -0.02 },
+
   // Vor dem Aufschlag: leicht vorgebeugt, die freie Hand prellt den Ball auf den Boden
   sv_prell:   { r: [0.24, 0.16, 0.86], d: [0.80, -0.25, 0.10], l: [0.44, -0.04, 0.92], tw: -0.5, cr: 0.07, ln: 0.14, st: 1 },
 };

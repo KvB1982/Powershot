@@ -11,6 +11,8 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 const REASON_TEXT = { aus: 'Aus!', netz: 'Netz!', doppelfehler: 'Doppelfehler!', ass: 'Ass!', winner: 'Winner!' };
 
+import { Siegerehrung } from './siegerehrung.js';
+
 export class Game3D {
   constructor(canvas, sound) {
     this.canvas = canvas;
@@ -32,6 +34,7 @@ export class Game3D {
     this.realFigures = true;        // realistisches Spielermodell statt der einfachen Figur
     this.venueKey = '';
     this.buildProps();
+    this.ehrung = new Siegerehrung(this);      // Siegerehrung nach einem gewonnenen Finale
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
@@ -274,7 +277,7 @@ export class Game3D {
   frame(dt) {
     this.time += dt;
     const m = this.match;
-    if (m) this.syncMatch(dt, m); else this.menuCamera(dt);
+    if (m) this.syncMatch(dt, m); else if (this.ehrung.an) this.ehrung.update(dt); else this.menuCamera(dt);
     for (const mk of this.marks) {
       if (!mk.visible) continue;
       mk.userData.life -= dt;

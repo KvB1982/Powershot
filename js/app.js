@@ -515,17 +515,93 @@ actions.tourPlay = () => {
     onEnd: (res) => {
       TN.playRound(T, { winner: res.won ? T.humanId : oppId, score: res.score, setDiff: res.setDiff });
       if (ctxT.season) SE.saveSeason(season);
+      let danach = renderTournament;
       if (ctxT.career) {
         // Müde werden, Saiten abnutzen, Erfahrung sammeln
         const ups = CA.matchGespielt(career, res.won, roundIdx);
         CA.saveCareer(career);
-        if (ups) return showInfo('Level ' + career.level + '!', 'Du hast 3 neue Fähigkeitspunkte bekommen. Verteile sie im Karriere-Menü unter „Fähigkeiten“.', 'tourShow');
+        if (ups) danach = () => showInfo('Level ' + career.level + '!', 'Du hast 3 neue Fähigkeitspunkte bekommen. Verteile sie im Karriere-Menü unter „Fähigkeiten“.', 'tourShow');
       }
-      renderTournament();
+      // Finale gewonnen? Dann gibt es zuerst die Siegerehrung im Stadion (nicht beim Liga-Spiel).
+      if (T.done && T.champion === T.humanId && def.cat !== 'LIGA') return siegerehrung(getPlayer(oppId), danach);
+      danach();
     },
   });
 };
 actions.tourShow = () => renderTournament();
+
+// ---------------------------------------------------------------
+// Siegerehrung nach einem gewonnenen Finale
+// ---------------------------------------------------------------
+// Was im Stadion passiert, steht in siegerehrung.js. Hier ist nur das kleine Fenster unten mit Text und Knöpfen.
+let ehrung = null;
+const ehrungEl = document.createElement('div');
+ehrungEl.id = 'ehrung';
+document.body.appendChild(ehrungEl);
+
+function siegerehrung(gegner, danach) {
+  const { T, def } = ctxT;
+  const art = def.cat === 'GS' ? 'silber' : def.cat === 'F' ? 'stern' : 'gold';     // Grand Slam = Silberpokal, ATP Finals = Stern
+  const geld = TN.payout(T, T.humanId).money || 0;
+  hide();
+  ehrung = { danach, art, def, gegner, geld, rede: null, foto: null, fertig: false };
+  game.ehrung.start({ art, gross: def.zuschauer ?? 1, geld, turnier: def.name, farbe: def.theme && def.theme.wall });
+  sound.setCrowd(0.06);
+  ehrungZeigen();
+}
+
+function ehrungZeigen() {
+  const e = ehrung, schritt = game.ehrung.schritt, ich = getPlayer(ctxT.T.humanId);
+  const weiter = (text = 'Weiter ›') => `<button class="primary" data-a="ehrungWeiter">${text}</button>`;
+  let html = '';
+  if (schritt === 'aufstellen') html = `<h3>🏆 Siegerehrung · ${esc(e.def.name)}</h3><p>Das Finale ist vorbei. Beide Spieler kommen zur Ehrung nach vorn.</p>${weiter()}`;
+  else if (schritt === 'teller') html = `<p>Zuerst wird der Zweite geehrt: <b>${esc(e.gegner.name)}</b> bekommt den Teller für den Finalisten. Auch er hat ein tolles Turnier gespielt!</p>${weiter()}`;
+  else if (schritt === 'pokal') html = `<h3 class="gold">Der Sieger: ${esc(ich.name)}!</h3><p>Du bekommst den Pokal und stemmst ihn in die Luft.</p>${weiter()}`;
+  else if (schritt === 'scheck') html = `<p>Dazu gibt es den großen Scheck: <b class="gold">${money(e.geld)}</b> Preisgeld.</p>${weiter()}`;
+  else if (schritt === 'rede' && !e.rede) {
+    html = `<p>Jetzt bekommst du das Mikrofon. Was sagst du?</p><div class="row">${Object.entries(CA.REDEN).map(([k, r]) =>
+      `<button data-a="ehrungRede" data-v="${k}">${r.knopf}${ctxT.career ? `<small>${r.bringt}</small>` : ''}</button>`).join('')}</div>`;
+  } else if (schritt === 'rede') {
+    const r = CA.REDEN[e.rede];
+    html = `<p>„${r.satz}“</p><p class="dim">Die Zuschauer klatschen.${ctxT.career ? ' ' + r.bringt : ''}</p>${weiter('Zum Siegerfoto ›')}`;
+  } else if (schritt === 'foto' && !e.fertig) html = `<p>Die Fotografen warten. Bitte lächeln!</p><button class="primary" data-a="ehrungFoto">📸 Foto machen</button>`;
+  else {
+    html = `${e.foto ? `<img class="siegerfoto" src="${e.foto}" alt="Siegerfoto">` : ''}<p>${ctxT.career ? 'Das Foto steht jetzt in deinem Pokalschrank (Karriere-Menü).' : 'Ein schönes Foto!'}</p>
+      <button class="primary" data-a="ehrungEnde">Weiter ›</button>`;
+  }
+  const ueberspringen = e.fertig ? '' : '<button class="ghost klein" data-a="ehrungEnde">Überspringen</button>';
+  ehrungEl.innerHTML = `<div class="panel">${html}${ueberspringen}</div><div id="blitz"></div>`;
+  ehrungEl.classList.add('on');
+}
+actions.ehrungWeiter = () => { game.ehrung.weiter(); ehrungZeigen(); };
+actions.ehrungRede = (v) => {
+  if (!CA.REDEN[v]) return;
+  ehrung.rede = v;
+  if (ctxT.career) CA.siegerRede(career, v);
+  game.ehrung.jubeln(0.8);
+  ehrungZeigen();
+};
+actions.ehrungFoto = () => {
+  ehrung.foto = game.ehrung.foto();
+  ehrung.fertig = true;
+  sound.click();
+  ehrungZeigen();
+  // Blitzlicht: das Bild wird kurz weiß
+  const blitz = document.getElementById('blitz');
+  if (blitz) { blitz.classList.add('on'); setTimeout(() => blitz.classList.remove('on'), 60); }
+};
+actions.ehrungEnde = () => {
+  const e = ehrung;
+  if (!e) return;
+  // In der Karriere kommt jeder Turniersieg in den Pokalschrank – auch wenn die Ehrung übersprungen wurde (dann ohne Foto)
+  if (ctxT.career) CA.pokalMerken(career, e.def, e.art, e.foto);
+  ehrung = null;
+  game.ehrung.ende();
+  ehrungEl.classList.remove('on');
+  ehrungEl.innerHTML = '';
+  enterMenu();
+  e.danach();
+};
 actions.tourSim = () => { TN.simulateRest(ctxT.T); if (ctxT.career) CA.saveCareer(career); if (ctxT.season) SE.saveSeason(season); renderTournament(); };
 actions.tourDone = () => {
   if (ctxT.season) return seasonTournamentDone();
@@ -648,7 +724,7 @@ function frischeBalken(f) {
 
 function renderCareer() {
   const c = career, me = CA.mePlayer(c), rk = CA.myRank(c), def = CA.nextTournament(c), stufe = CA.vertragsStufe(c);
-  const tabs = [['start', 'Übersicht'], ['shop', 'Ausrüstung'], ['team', 'Team & Sponsoren'], ['skills', 'Fähigkeiten' + (c.skillPoints ? ' ●' : '')], ['kalender', 'Kalender'], ['rangliste', 'Weltrangliste']];
+  const tabs = [['start', 'Übersicht'], ['shop', 'Ausrüstung'], ['team', 'Team & Sponsoren'], ['skills', 'Fähigkeiten' + (c.skillPoints ? ' ●' : '')], ['pokale', 'Pokalschrank' + (c.pokale.length ? ' ' + c.pokale.length : '')], ['kalender', 'Kalender'], ['rangliste', 'Weltrangliste']];
   let body = '';
   if (careerTab === 'start') {
     const sp = CA.sponsorGeld(c), lohn = CA.lohn(c), muede = CA.frischeAbzug(c.frische);
@@ -685,6 +761,14 @@ function renderCareer() {
           ${c.skillPoints ? `<p class="gold">Du hast ${c.skillPoints} Fähigkeitspunkte zu verteilen!</p>` : ''}
           <p class="dim klein">Wildcards in dieser Saison: ${c.wildcards}. Mit einer Wildcard (Einladung) darfst du bei einem Turnier mitspielen, für das dein Platz knapp nicht reicht.</p></div>
       </div>`;
+  } else if (careerTab === 'pokale') {
+    // Pokalschrank: jeder Turniersieg mit Siegerfoto (das neueste zuerst)
+    const symbol = { silber: '🏆', gold: '🏆', stern: '🌟' };
+    body = c.pokale.length ? `<div class="grid">${[...c.pokale].reverse().map((p) => `<div class="panel teil pokalkarte">
+        ${p.foto ? `<img src="${p.foto}" alt="Siegerfoto">` : `<div class="ohnefoto">${symbol[p.art] || '🏆'}</div>`}
+        <b>${esc(p.name)}</b><div class="dim klein">${p.ort ? esc(p.ort) + ' · ' : ''}Saison ${p.jahr}, Woche ${p.woche}</div></div>`).join('')}</div>`
+      : `<div class="panel center"><div style="font-size:56px">🏆</div><p>Dein Pokalschrank ist noch leer.</p>
+        <p class="dim">Gewinne ein Turnier – dann steht hier dein Pokal mit dem Siegerfoto.</p></div>`;
   } else if (careerTab === 'kalender') {
     const done = Object.fromEntries(c.history.filter((h) => h.season === c.season).map((h) => [h.tid, h]));
     body = `<div class="panel scroll"><table><tr><th>Monat</th><th>Großes Turnier</th><th>Das hast du gemacht</th><th class="num">Punkte</th><th class="num">Geld</th></tr>

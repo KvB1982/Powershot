@@ -45,6 +45,7 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 | `js/mocap.js` | Lädt `mocap/bewegungen.json`, falls vorhanden |
 | `js/avatar.js` | Skelett: Posen/Aufnahmen → Gelenke → Knochen; `pickStroke` wählt den Schlag nach Spielsituation |
 | `js/game3d.js`, `js/stadium.js`, `js/audio.js` | Darstellung, Stadion, Sound (Aufnahmen aus `sounds/`) |
+| `js/siegerehrung.js` | Siegerehrung nach einem gewonnenen Finale (nicht Liga): Tisch, Pokal, Teller für den Zweiten, Scheck, Konfetti, Siegerfoto. Schritte in `SCHRITTE`, Kamera in `KAMERA`; das Fenster mit Text und Knöpfen baut `app.js` (`siegerehrung`, `ehrung…`). In der Karriere: Rede (`REDEN` in `career.js`) und Pokalschrank (`c.pokale`, höchstens 10 Fotos) |
 | `js/requisiten.js` | Fertige 3D-Modelle aus 3D AI Studio (`assets/*.glb`): Schiedsrichterstuhl, Bank, Ballkind, Linienrichter, Ballmaschine, drei Pokale, Schläger. Einmal laden, mehrfach hinstellen; `requisit(name, { farbe })` färbt graue Stellen um |
 | `assets/zuschauer.webp` | 48 erfundene Zuschauer in einem Bild (8 × 6, je 128 × 192 Pixel; 32 von vorn, 16 von der Seite); `stadium.js` zeigt sie als flache Bildtafeln |
 | `js/tournament.js`, `js/career.js`, `js/app.js` | Turnierbaum, Karriere (localStorage), Menüs |
@@ -135,6 +136,8 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 - Bisher nur im Test-Browser ohne Grafikkarte als Standbild geprüft, nicht auf einem echten iPad (Tempo dort noch unbekannt).
 
 ## Bekannte Grenzen
+
+- Siegerehrung: nur im Test-Browser als Standbilder geprüft (Australian Open und eine kleine Ehrung), nicht auf dem iPad und nicht in Bewegung angesehen. Wirkung der Reden ist geschätzt.
 
 - Die Spielermodelle kommen aus 3D AI Studio (nur starre T-Pose-Modelle); das Skelett rechnet das Spiel selbst. Keine Finger.
 - Gesichter sind erfunden – keine Abbilder echter Spieler erzeugen.

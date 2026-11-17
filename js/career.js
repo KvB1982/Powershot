@@ -58,6 +58,8 @@ function reparieren(c) {
   c.saitenRest = c.saitenRest || 0;
   c.wildcards = c.wildcards ?? WILDCARDS_PRO_SAISON;
   c.siege = c.siege || 0;
+  c.pokale = c.pokale || [];           // Pokalschrank: ein Eintrag je Turniersieg
+  c.redeFans = c.redeFans || 0;        // Fan-Sterne aus Siegerreden
   c.v = 2;
   return c;
 }
@@ -156,7 +158,7 @@ export function besteSchuhe(c, surface, stufe) {
 // Fans (⭐): schicke Sachen und Titel machen dich beliebt. Mehr Fans = mehr Geld von den Sponsoren.
 export function fans(c) {
   const stufe = vertragsStufe(c);
-  let n = c.titles * TITEL_FANS;
+  let n = c.titles * TITEL_FANS + (c.redeFans || 0);
   for (const cat of ['Outfit', 'Kopf', 'Schweißband', 'Tasche']) n += (traegt(c, cat, stufe) || {}).sterne || 0;
   return Math.min(FAN_MAX, n);
 }
@@ -521,6 +523,35 @@ export function raiseSkill(c, key) {
   c.skillPoints--;
   saveCareer(c);
   return true;
+}
+
+// ---------------------------------------------------------------
+// Siegerehrung: Pokalschrank und Siegerrede
+// ---------------------------------------------------------------
+
+// Nach einem Turniersieg sagst du einen Satz ins Mikrofon. Jede Art von Rede bringt etwas anderes (Zahlen geschätzt).
+export const REDEN = {
+  fans: { knopf: '„Danke an die Fans!“', satz: 'Ihr wart unglaublich. Ohne euch hätte ich das nicht geschafft!', bringt: '+1 Fan-Stern ⭐' },
+  team: { knopf: '„Danke an mein Team!“', satz: 'Dieser Pokal gehört auch meinem Team. Danke für die harte Arbeit!', bringt: '+30 Erfahrung' },
+  gegner: { knopf: '„Glückwunsch an meinen Gegner!“', satz: 'Du hast toll gespielt. Wir sehen uns bestimmt bald wieder in einem Finale.', bringt: '+6 Frische (du schläfst zufrieden ein)' },
+};
+export const REDE_FANS_MAX = 5;       // mehr Fan-Sterne gibt es durch Reden insgesamt nicht
+const FOTOS_MAX = 10;                 // so viele Siegerfotos werden aufgehoben (Fotos brauchen viel Speicherplatz)
+
+export function siegerRede(c, art) {
+  if (art === 'fans') c.redeFans = Math.min(REDE_FANS_MAX, (c.redeFans || 0) + 1);
+  if (art === 'team') addXp(c, 30);
+  if (art === 'gegner') c.frische = begrenzen(c.frische + 6, 0, 100);
+  saveCareer(c);
+}
+
+// Einen Turniersieg in den Pokalschrank stellen. def = das Turnier, art = 'gold' | 'silber' | 'stern', foto = Bild als Text (oder null)
+export function pokalMerken(c, def, art, foto) {
+  c.pokale.push({ name: def.name, ort: def.city || '', cat: def.cat, jahr: c.season, woche: c.week + 1, art, foto: foto || null });
+  // Von den älteren Siegen bleibt nur der Eintrag, das Foto wird gelöscht
+  const mitFoto = c.pokale.filter((p) => p.foto);
+  for (const p of mitFoto.slice(0, Math.max(0, mitFoto.length - FOTOS_MAX))) p.foto = null;
+  saveCareer(c);
 }
 
 export { SHOP };
