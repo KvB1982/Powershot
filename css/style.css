@@ -352,3 +352,14 @@ tr.cut td { text-align: center; font-size: 11px; font-weight: 700; color: var(--
 .pokalkarte { text-align: center; }
 .pokalkarte img { display: block; width: 100%; border-radius: 8px; margin-bottom: 6px; }
 .pokalkarte .ohnefoto { font-size: 64px; padding: 18px 0; }
+
+/* ---------- Turnieranlage (Probe) ---------- */
+#anlage { position: fixed; inset: 0; display: none; pointer-events: none; z-index: 18; }
+#anlage.on { display: block; }
+#anlage .oben { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+  display: flex; gap: 8px; pointer-events: auto; white-space: nowrap; }
+#anlage .oben button { background: var(--bg); }
+#anlage .panel { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+  width: min(620px, calc(100% - 24px)); margin: 0; text-align: center; pointer-events: auto; }
+#anlage h3 { margin: 0 0 4px; font-size: 22px; color: var(--accent); }
+#anlage p { margin: 4px 0; }

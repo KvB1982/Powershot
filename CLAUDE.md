@@ -48,6 +48,7 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 | `js/avatar.js` | Skelett: Posen/Aufnahmen → Gelenke → Knochen; `pickStroke` wählt den Schlag nach Spielsituation |
 | `js/game3d.js`, `js/stadium.js`, `js/audio.js` | Darstellung, Stadion, Sound (Aufnahmen aus `sounds/`) |
 | `js/siegerehrung.js` | Siegerehrung nach einem gewonnenen Finale (nicht Liga): Tisch, Pokal, Teller für den Zweiten, Scheck, Konfetti, Siegerfoto. Schritte in `SCHRITTE`, Kamera in `KAMERA`; das Fenster mit Text und Knöpfen baut `app.js` (`siegerehrung`, `ehrung…`). In der Karriere: Rede (`REDEN` in `career.js`) und Pokalschrank (`c.pokale`, höchstens 10 Fotos) |
+| `js/anlage.js` | Turnieranlage als PROBE (Hauptmenü → „Turnieranlage“): Gebäude als Klötze im Kreis (`ORTE`), zwei Arten zum Vergleichen – `tippen` (von oben, Figur läuft von selbst zum angetippten Ort) und `laufen` (Kamera hinter der Figur, selbst steuern). In den Gebäuden passiert noch nichts. Plan dazu: Claude-Dokument „Profileben auf der Tour – Plan“ |
 | `js/requisiten.js` | Fertige 3D-Modelle aus 3D AI Studio (`assets/*.glb`): Schiedsrichterstuhl, Bank, Ballkind, Linienrichter, Ballmaschine, drei Pokale, Schläger. Einmal laden, mehrfach hinstellen; `requisit(name, { farbe })` färbt graue Stellen um |
 | `assets/zuschauer.webp` | 48 erfundene Zuschauer in einem Bild (8 × 6, je 128 × 192 Pixel; 32 von vorn, 16 von der Seite); `stadium.js` zeigt sie als flache Bildtafeln |
 | `js/tournament.js`, `js/career.js`, `js/app.js` | Turnierbaum, Karriere (localStorage), Menüs |
