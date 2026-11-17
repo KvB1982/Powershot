@@ -146,6 +146,7 @@ label { display: block; font-size: 13px; color: var(--dim); margin: 12px 0 6px; 
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9); opacity: 0; transition: opacity 0.25s; }
 #toast.on { opacity: 1; }
 #toast.warn { color: #ffb14a; }
+#toast.wichtig { color: #ffe14a; letter-spacing: 0.04em; text-transform: uppercase; }
 #power { position: absolute; left: 50%; bottom: max(26px, env(safe-area-inset-bottom)); width: min(420px, 60vw); height: 20px;
   transform: translateX(-50%); background: rgba(0, 0, 0, 0.55); border: 2px solid rgba(255, 255, 255, 0.7); border-radius: 12px; overflow: hidden; display: none; }
 #power.on { display: block; }

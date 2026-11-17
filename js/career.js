@@ -90,19 +90,21 @@ export function newCareer(opts) {
 // ---------------------------------------------------------------
 const total = (slots) => Object.values(slots || {}).reduce((s, v) => s + v, 0);
 
-// Hinter den Top 100 stehen in echt noch rund 2000 weitere Spieler. Die haben wir nicht einzeln im Spiel.
+// Hinter den Top 200 stehen in echt noch rund 2000 weitere Spieler. Die haben wir nicht einzeln im Spiel.
 // Darum schätzen wir deinen Platz aus deinen Punkten: [Punkte, Platz]. Dazwischen wird gleichmäßig verteilt.
 // (Die Zahlen sind der echten Rangliste grob nachempfunden: Mit 100 Punkten steht man ungefähr auf Platz 400.)
 const KURVE = [[0, 2000], [1, 1700], [4, 1300], [10, 1000], [20, 800], [40, 600], [60, 500], [100, 400], [150, 320], [220, 250], [300, 200], [400, 160], [500, 130]];
-export function platzAusPunkten(punkte, punkteVon100) {
-  const k = [...KURVE.filter(([p]) => p < punkteVon100), [punkteVon100, 101]];
+// punkteVomLetzten = so viele Punkte hat der letzte echte Spieler (Platz 200). Direkt dahinter beginnt die Schätzung.
+export function platzAusPunkten(punkte, punkteVomLetzten) {
+  const dahinter = PLAYERS.length + 1;
+  const k = [...KURVE.filter(([p, platz]) => p < punkteVomLetzten && platz > dahinter), [punkteVomLetzten, dahinter]];
   for (let i = 1; i < k.length; i++) {
     if (punkte <= k[i][0]) {
       const [p0, r0] = k[i - 1], [p1, r1] = k[i];
-      return Math.max(101, Math.round(r0 + (r1 - r0) * (punkte - p0) / (p1 - p0)));
+      return Math.max(dahinter, Math.round(r0 + (r1 - r0) * (punkte - p0) / (p1 - p0)));
     }
   }
-  return 101;
+  return dahinter;
 }
 
 // Weltrangliste: sortierte Liste mit { id, name, country, points, rank, me }
@@ -112,7 +114,7 @@ export function ranking(c) {
   list.push(ich);
   list.sort((a, b) => b.points - a.points || (a.me ? 1 : -1));
   list.forEach((p, i) => { p.rank = i + 1; });
-  // Stehst du hinter allen 100 echten Spielern? Dann wird dein Platz aus den Punkten geschätzt.
+  // Stehst du hinter allen 200 echten Spielern? Dann wird dein Platz aus den Punkten geschätzt.
   if (ich.rank > PLAYERS.length) ich.rank = platzAusPunkten(ich.points, list[PLAYERS.length - 1].points);
   return list;
 }
@@ -352,8 +354,11 @@ function feld(c, def) {
     const [von, bis] = (STUFEN[def.stufe] || def).staerke;
     const pool = NACHWUCHS.filter((p) => { const s = staerke(p); return s >= von - 1 && s <= bis + 1; });
     andere = zufall(pool.length >= def.draw - 1 ? pool : NACHWUCHS, def.draw - 1);
-    // Bei großen Challengern spielen auch ein paar Profis vom Ende der Top 100 mit
-    if (def.stufe === 'CH125' || def.stufe === 'CH175') andere.splice(0, 3, ...zufall(PLAYERS.slice(70, 100), 3));
+    // Bei Challengern spielen in echt vor allem die Profis von Platz 100 bis 300. Darum mischen wir
+    // ein paar echte Spieler unter die erfundenen: [von Platz, bis Platz, wie viele]
+    const echte = { CH75: [[140, 200, 3]], CH100: [[120, 200, 4]], CH125: [[70, 100, 3], [100, 180, 3]], CH175: [[70, 100, 3], [100, 160, 4]] }[def.stufe] || [];
+    const profis = echte.flatMap(([von, bis, wie]) => zufall(PLAYERS.slice(von, bis), wie));
+    andere.splice(0, profis.length, ...profis);
   }
   // Setzliste: die Stärksten zuerst
   return [...andere, ich].sort((a, b) => staerke(b) - staerke(a));

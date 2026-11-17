@@ -38,6 +38,7 @@ export class Match {
     this.rally = 0;
     this.training = { balls: this.mode === 'aufschlag' ? 12 : 20, done: 0, score: 0, zones: [] };
     this.lastPoint = null;
+    this.wechselPruefen = false;    // wird wahr, sobald ein Punkt zu Ende ist (siehe next)
   }
 
   mkPlayer(side, data) {
@@ -143,7 +144,12 @@ export class Match {
       this.fx.matchOver(this.score);
       return;
     }
-    if (this.changeoverDue()) {
+    // Nur einmal pro Punkt fragen, ob es zur Bank geht. Sonst würden die Spieler nach einem
+    // Aufschlagfehler im nächsten Spiel noch einmal loslaufen, weil der letzte Punkt
+    // ("Spiel gewonnen") ja immer noch gemerkt ist.
+    const wechsel = this.wechselPruefen && this.changeoverDue();
+    this.wechselPruefen = false;
+    if (wechsel) {
       this.state = 'changeover';
       this.timer = CHANGEOVER_TIME;
       for (const p of this.P) { p.mood = null; p.plan = null; p.prep = 0; }
@@ -483,6 +489,7 @@ export class Match {
     this.P[winner].mood = big ? 'cheer' : null;
     this.P[loser].mood = events.includes('set') ? 'sad' : null;
     this.lastPoint = { winner, reason, events, rally: this.rally };
+    this.wechselPruefen = true;     // nach diesem Punkt darf next() einmal nach dem Seitenwechsel schauen
     this.fx.point(this.lastPoint);
   }
 
