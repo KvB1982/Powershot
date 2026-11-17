@@ -145,7 +145,7 @@ export const STUNDEN_GELD = 600;      // so viel verdienst du in einer Woche als
 // ---------------------------------------------------------------
 // Nachwuchsspieler (alle erfunden!) – deine Gegner bei ITF-Turnieren und Challengern
 // ---------------------------------------------------------------
-// Die echten Spieler im Spiel sind die Top 100. Alle dahinter haben wir uns ausgedacht.
+// Die echten Spieler im Spiel sind die Top 200 (data.js). Die Nachwuchsspieler hier haben wir uns ausgedacht.
 const NAMEN = `Jonas|Kessler;GER
 Luca|Brandtner;AUT
 Mateo|Rivas Soler;ESP

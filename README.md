@@ -26,7 +26,7 @@ bekommt man es als Vollbild-App.
 
 | Modus | Was |
 |---|---|
-| **Freies Spiel** | Einen der Top 100 der Weltrangliste wählen (Stand 9. November 2026), Gegner und Stadion aussuchen. |
+| **Freies Spiel** | Einen der Top 200 der Weltrangliste wählen (Stand 16. November 2026), Gegner und Stadion aussuchen. |
 | **Turnier** | Ein einzelnes Turnier mit einem Profi durchspielen. |
 | **Saison** | Einen echten Profi aussuchen und mit ihm das Jahr spielen. Für jedes Ergebnis gibt es Punkte im ATP Race (echte ATP-Punkte je Runde). Die besten 8 fahren zu den ATP Finals. Mit Zeitleiste, Race-Tabelle und Turnierbaum. |
 | **Karriere** | Eigenen Spieler erstellen, bei Platz 101 starten, die Saison spielen: 4 Grand Slams, 9 Masters 1000, ATP Finals. Ranglistenpunkte, Preisgeld, Ausrüstung kaufen, Fähigkeiten steigern. |
@@ -36,7 +36,7 @@ Vereinfachungen gegenüber der echten Tour: Grand Slams haben ein 32er-Feld, Mas
 Die ATP Finals laufen wie in echt: zwei Vierergruppen, Halbfinale, Finale. Die Weltrangliste rechnet
 wie die echte: Jedes Turnier ersetzt die Punkte desselben Turniers aus dem Vorjahr.
 
-Alle 100 Spieler tragen die echten Namen, Plätze und Punkte der Weltrangliste vom 9. November 2026.
+Alle 200 Spieler tragen die echten Namen, Plätze und Punkte der Weltrangliste vom 16. November 2026.
 Die Fähigkeitswerte und das Aussehen sind frei geschätzt (Platz 1 bis 20 von Hand, der Rest nach Platz und Spielertyp berechnet).
 
 ## Die Spielerfiguren

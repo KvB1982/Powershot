@@ -1,5 +1,5 @@
 // Powershot – Daten: Spieler, Turniere, Schwierigkeit (Ausrüstung: ausruestung.js, kleine Turniere: kleinetour.js)
-// Die Namen, Plätze und Punkte sind die echte Weltrangliste vom 9. November 2026.
+// Die Namen, Plätze und Punkte der 200 Spieler sind die echte Weltrangliste vom 16. November 2026.
 // Die Fähigkeitswerte und das Aussehen sind frei geschätzt (nur fürs Spiel).
 
 import { KLEINE_TURNIERE, LIGA, NACHWUCHS } from './kleinetour.js';
@@ -8,129 +8,234 @@ import { KLEINE_TURNIERE, LIGA, NACHWUCHS } from './kleinetour.js';
 // Werte: s = Aufschlag, p = Kraft, t = Tempo, c = Präzision, v = Volley
 // [Platz, id, Name, Land, Punkte, s, p, t, c, v, Schlaghand, Haut, Haare, Hemd, Hose, Kopf]
 const STARS = [
-  [1, 'zverev', 'Alexander|Zverev', 'GER', 9550, 95, 90, 84, 90, 78, 1, 0xf0c8a0, 0xc9a45c, 0xffffff, 0x1a1a1a, 'band'],
-  [2, 'sinner', 'Jannik|Sinner', 'ITA', 9450, 90, 95, 90, 94, 80, 1, 0xf3cfb0, 0xc8642a, 0x1f6f43, 0xffffff, 'cap'],
+  [1, 'zverev', 'Alexander|Zverev', 'GER', 9320, 95, 90, 84, 90, 78, 1, 0xf0c8a0, 0xc9a45c, 0xffffff, 0x1a1a1a, 'band'],
+  [2, 'sinner', 'Jannik|Sinner', 'ITA', 7950, 90, 95, 90, 94, 80, 1, 0xf3cfb0, 0xc8642a, 0x1f6f43, 0xffffff, 'cap'],
   [3, 'alcaraz', 'Carlos|Alcaraz', 'ESP', 6100, 86, 93, 96, 91, 90, 1, 0xe2b48c, 0x2b1d14, 0xf2e85c, 0x202020, 'none'],
-  [4, 'shelton', 'Ben|Shelton', 'USA', 4530, 97, 90, 85, 80, 82, -1, 0xc99872, 0x3a2a1c, 0x2e6fd8, 0xffffff, 'none'],
-  [5, 'medvedev', 'Daniil|Medvedev', 'RUS', 3860, 88, 82, 88, 92, 72, 1, 0xf0c8a0, 0x8a6a45, 0x7fd0e8, 0x20304a, 'none'],
-  [6, 'cobolli', 'Flavio|Cobolli', 'ITA', 3690, 80, 85, 90, 83, 74, 1, 0xe8bd98, 0x3a2a1c, 0xe84a3a, 0x1a1a1a, 'cap'],
-  [7, 'fils', 'Arthur|Fils', 'FRA', 3525, 86, 91, 88, 80, 76, 1, 0x8a5a3c, 0x1a1410, 0xffffff, 0x1f3f8f, 'none'],
-  [8, 'tiafoe', 'Frances|Tiafoe', 'USA', 3430, 84, 86, 90, 79, 85, 1, 0x7a4a30, 0x14100c, 0xff7a2a, 0x1a1a1a, 'band'],
-  [9, 'deminaur', 'Alex|de Minaur', 'AUS', 3410, 76, 78, 98, 88, 80, 1, 0xeec4a0, 0x4a3524, 0x1fb87a, 0xffffff, 'cap'],
-  [10, 'jodar', 'Rafael|Jodar', 'ESP', 3209, 82, 86, 86, 82, 74, 1, 0xe6ba94, 0x2b1d14, 0xd83a3a, 0xffffff, 'none'],
-  [11, 'djokovic', 'Novak|Djokovic', 'SRB', 3140, 86, 84, 84, 96, 84, 1, 0xeac09a, 0x2a2420, 0x2a4ab8, 0xffffff, 'none'],
-  [12, 'fritz', 'Taylor|Fritz', 'USA', 3095, 93, 90, 78, 85, 74, 1, 0xf0c8a0, 0x5a4028, 0x1a1a1a, 0x1a1a1a, 'band'],
-  [13, 'fauger', 'Felix|Auger-Aliassime', 'CAN', 2875, 93, 88, 84, 80, 80, 1, 0x9a6a48, 0x1a1410, 0xe82a4a, 0xffffff, 'none'],
-  [14, 'paul', 'Tommy|Paul', 'USA', 2775, 82, 82, 92, 85, 82, 1, 0xf0c8a0, 0x6a4a2c, 0xffffff, 0xc82a2a, 'cap'],
-  [15, 'lehecka', 'Jiri|Lehecka', 'CZE', 2580, 88, 90, 84, 80, 76, 1, 0xf0c8a0, 0x5a4028, 0x3a8ad8, 0x1a1a1a, 'cap'],
-  [16, 'mensik', 'Jakub|Mensik', 'CZE', 2545, 94, 87, 80, 79, 76, 1, 0xf0c8a0, 0x7a5a38, 0xb8e84a, 0x1a1a1a, 'none'],
-  [17, 'davidovich', 'Alejandro|Davidovich Fokina', 'ESP', 2510, 76, 84, 90, 82, 78, 1, 0xeac09a, 0xb89a5c, 0xff9a2a, 0x202020, 'band'],
-  [18, 'nakashima', 'Brandon|Nakashima', 'USA', 2375, 84, 82, 82, 84, 74, 1, 0xe6c09a, 0x1a1410, 0x2ab8b8, 0x1a1a1a, 'cap'],
-  [19, 'tien', 'Learner|Tien', 'USA', 2345, 76, 80, 88, 88, 76, -1, 0xe6c09a, 0x1a1410, 0xffffff, 0x1f3f8f, 'cap'],
-  [20, 'cerundolo', 'Francisco|Cerundolo', 'ARG', 2260, 76, 88, 84, 82, 70, 1, 0xe8bd98, 0x3a2a1c, 0x7ac8ff, 0xffffff, 'band'],
-  [23, 'ruud', 'Casper|Ruud', 'NOR', 2035, 82, 88, 84, 86, 70, 1, 0xf2ccaa, 0xb8935a, 0x9a3ad8, 0xffffff, 'cap'],
+  [4, 'shelton', 'Ben|Shelton', 'USA', 5170, 97, 90, 85, 80, 82, -1, 0xc99872, 0x3a2a1c, 0x2e6fd8, 0xffffff, 'none'],
+  [5, 'medvedev', 'Daniil|Medvedev', 'RUS', 3820, 88, 82, 88, 92, 72, 1, 0xf0c8a0, 0x8a6a45, 0x7fd0e8, 0x20304a, 'none'],
+  [6, 'cobolli', 'Flavio|Cobolli', 'ITA', 3680, 80, 85, 90, 83, 74, 1, 0xe8bd98, 0x3a2a1c, 0xe84a3a, 0x1a1a1a, 'cap'],
+  [7, 'fils', 'Arthur|Fils', 'FRA', 3625, 86, 91, 88, 80, 76, 1, 0x8a5a3c, 0x1a1410, 0xffffff, 0x1f3f8f, 'none'],
+  [8, 'tiafoe', 'Frances|Tiafoe', 'USA', 3390, 84, 86, 90, 79, 85, 1, 0x7a4a30, 0x14100c, 0xff7a2a, 0x1a1a1a, 'band'],
+  [9, 'fritz', 'Taylor|Fritz', 'USA', 3300, 93, 90, 78, 85, 74, 1, 0xf0c8a0, 0x5a4028, 0x1a1a1a, 0x1a1a1a, 'band'],
+  [10, 'jodar', 'Rafael|Jodar', 'ESP', 3234, 82, 86, 86, 82, 74, 1, 0xe6ba94, 0x2b1d14, 0xd83a3a, 0xffffff, 'none'],
+  [11, 'deminaur', 'Alex|de Minaur', 'AUS', 3170, 76, 78, 98, 88, 80, 1, 0xeec4a0, 0x4a3524, 0x1fb87a, 0xffffff, 'cap'],
+  [12, 'djokovic', 'Novak|Djokovic', 'SRB', 2940, 86, 84, 84, 96, 84, 1, 0xeac09a, 0x2a2420, 0x2a4ab8, 0xffffff, 'none'],
+  [13, 'paul', 'Tommy|Paul', 'USA', 2925, 82, 82, 92, 85, 82, 1, 0xf0c8a0, 0x6a4a2c, 0xffffff, 0xc82a2a, 'cap'],
+  [14, 'lehecka', 'Jiri|Lehecka', 'CZE', 2540, 88, 90, 84, 80, 76, 1, 0xf0c8a0, 0x5a4028, 0x3a8ad8, 0x1a1a1a, 'cap'],
+  [15, 'mensik', 'Jakub|Mensik', 'CZE', 2500, 94, 87, 80, 79, 76, 1, 0xf0c8a0, 0x7a5a38, 0xb8e84a, 0x1a1a1a, 'none'],
+  [16, 'davidovich', 'Alejandro|Davidovich Fokina', 'ESP', 2500, 76, 84, 90, 82, 78, 1, 0xeac09a, 0xb89a5c, 0xff9a2a, 0x202020, 'band'],
+  [17, 'fauger', 'Felix|Auger-Aliassime', 'CAN', 2465, 93, 88, 84, 80, 80, 1, 0x9a6a48, 0x1a1410, 0xe82a4a, 0xffffff, 'none'],
+  [18, 'ruud', 'Casper|Ruud', 'NOR', 2435, 82, 88, 84, 86, 70, 1, 0xf2ccaa, 0xb8935a, 0x9a3ad8, 0xffffff, 'cap'],
+  [19, 'nakashima', 'Brandon|Nakashima', 'USA', 2360, 84, 82, 82, 84, 74, 1, 0xe6c09a, 0x1a1410, 0x2ab8b8, 0x1a1a1a, 'cap'],
+  [20, 'cerundolo', 'Francisco|Cerundolo', 'ARG', 2220, 76, 88, 84, 82, 70, 1, 0xe8bd98, 0x3a2a1c, 0x7ac8ff, 0xffffff, 'band'],
+  [22, 'tien', 'Learner|Tien', 'USA', 2145, 76, 80, 88, 88, 76, -1, 0xe6c09a, 0x1a1410, 0xffffff, 0x1f3f8f, 'cap'],
 ];
 
-// Alle anderen Spieler der Top 100: 'Platz;Vorname|Nachname;Land;Punkte;Besonderheit'
+// Alle anderen Spieler der Top 200: 'Platz;Vorname|Nachname;Land;Punkte;Besonderheit'
 // Besonderheit: L = Linkshänder, dazu die Stärke (s, p, t, c oder v). Die Werte werden daraus berechnet.
-const REST = `21;Luciano|Darderi;ITA;2200;p
-22;Andrey|Rublev;RUS;2085;p
-24;Lorenzo|Musetti;ITA;1960;c
-25;Karen|Khachanov;RUS;1940;p
-26;Alexander|Bublik;KAZ;1895;s
-27;Valentin|Vacherot;MON;1780;s
-28;Alexander|Blockx;BEL;1665;p
-29;Hubert|Hurkacz;POL;1625;s
-30;Alejandro|Tabilo;CHI;1565;Lc
-31;Tomas Martin|Etcheverry;ARG;1550;p
-32;Arthur|Fery;GBR;1503;t
-33;Ignacio|Buse;PER;1445;c
-34;Stefanos|Tsitsipas;GRE;1440;v
-35;Alex|Michelsen;USA;1435;c
-36;Matteo|Arnaldi;ITA;1311;t
-37;Botic|van de Zandschulp;NED;1295;s
-38;Ugo|Humbert;FRA;1295;Lc
-39;Jan-Lennard|Struff;GER;1271;s
-40;Zizou|Bergs;BEL;1226;t
-41;Joao|Fonseca;BRA;1200;p
-42;Daniel|Merida;ESP;1195;c
-43;Matteo|Berrettini;ITA;1173;s
-44;Arthur|Gea;FRA;1146;t
-45;Cameron|Norrie;GBR;1145;Lt
-46;Quentin|Halys;FRA;1127;s
-47;Luca|van Assche;FRA;1105;t
-48;Mariano|Navone;ARG;1099;t
-49;Nuno|Borges;POR;1075;c
+// Echt sind Name, Platz, Land und Punkte. Die Stärke und die Schlaghand sind bei den hinteren Plätzen oft nur geschätzt.
+const REST = `21;Luciano|Darderi;ITA;2160;p
+23;Andrey|Rublev;RUS;2085;p
+24;Karen|Khachanov;RUS;1980;p
+25;Alexander|Bublik;KAZ;1885;s
+26;Valentin|Vacherot;MON;1790;s
+27;Lorenzo|Musetti;ITA;1785;c
+28;Alexander|Blockx;BEL;1640;p
+29;Tomas Martin|Etcheverry;ARG;1640;p
+30;Hubert|Hurkacz;POL;1625;s
+31;Alejandro|Tabilo;CHI;1595;Lc
+32;Arthur|Fery;GBR;1507;t
+33;Ignacio|Buse;PER;1495;c
+34;Luca|van Assche;FRA;1492;t
+35;Alex|Michelsen;USA;1480;c
+36;Stefanos|Tsitsipas;GRE;1430;v
+37;Matteo|Arnaldi;ITA;1321;t
+38;Ugo|Humbert;FRA;1320;Lc
+39;Jan-Lennard|Struff;GER;1296;s
+40;Botic|van de Zandschulp;NED;1280;s
+41;Nuno|Borges;POR;1241;c
+42;Daniel|Merida;ESP;1237;c
+43;Matteo|Berrettini;ITA;1223;s
+44;Zizou|Bergs;BEL;1220;t
+45;Quentin|Halys;FRA;1214;s
+46;Joao|Fonseca;BRA;1200;p
+47;Thiago Agustin|Tirante;ARG;1197;p
+48;Arthur|Gea;FRA;1146;t
+49;Mariano|Navone;ARG;1095;t
 50;Tallon|Griekspoor;NED;1075;s
 51;Denis|Shapovalov;CAN;1055;Lp
-52;Sebastian|Baez;ARG;1044;t
-53;Thiago Agustin|Tirante;ARG;1023;p
-54;Juan Manuel|Cerundolo;ARG;1000;Lc
+52;Cameron|Norrie;GBR;1045;Lt
+53;Sebastian|Baez;ARG;1040;t
+54;Juan Manuel|Cerundolo;ARG;1015;Lc
 55;Raphael|Collignon;BEL;968;p
-56;Adolfo Daniel|Vallejo;PAR;947;t
+56;Adolfo Daniel|Vallejo;PAR;959;t
 57;Jaime|Faria;POR;941;s
-58;Yannick|Hanfmann;GER;923;p
-59;Adrian|Mannarino;FRA;898;Lc
-60;Miomir|Kecmanovic;SRB;893;c
-61;Fabian|Marozsan;HUN;875;c
-62;Vit|Kopriva;CZE;844;c
-63;Daniel|Altmaier;GER;837;p
-64;Ethan|Quinn;USA;831;s
-65;Jaume|Munar;ESP;825;t
-66;Mattia|Bellucci;ITA;824;Lv
-67;Martin|Landaluce;ESP;822;p
-68;Arthur|Rinderknech;FRA;820;s
-69;Tomas|Machac;CZE;819;t
-70;James|Duckworth;AUS;814;s
-71;Roman|Safiullin;RUS;807;p
-72;Facundo|Diaz Acosta;ARG;807;Lt
-73;Terence|Atmane;FRA;787;Lp
-74;Pablo|Carreno Busta;ESP;773;c
-75;Zachary|Svajda;USA;759;c
-76;Roman Andres|Burruchaga;ARG;754;t
-77;Hamad|Medjedovic;SRB;751;p
-78;Alex|Molcan;SVK;747;Lt
-79;Titouan|Droguet;FRA;746;s
-80;Kyrian|Jacquet;FRA;741;c
-81;Camilo|Ugo Carabelli;ARG;730;t
+58;Arthur|Rinderknech;FRA;920;s
+59;Rinky|Hijikata;AUS;909;v
+60;Tomas|Machac;CZE;899;t
+61;Adrian|Mannarino;FRA;898;Lc
+62;Mattia|Bellucci;ITA;879;Lv
+63;Fabian|Marozsan;HUN;875;c
+64;Miomir|Kecmanovic;SRB;871;c
+65;Camilo|Ugo Carabelli;ARG;845;t
+66;Facundo|Diaz Acosta;ARG;836;Lt
+67;Yannick|Hanfmann;GER;835;p
+68;Ethan|Quinn;USA;831;s
+69;Vit|Kopriva;CZE;828;c
+70;Jaume|Munar;ESP;825;t
+71;Martin|Landaluce;ESP;822;p
+72;Daniel|Altmaier;GER;822;p
+73;Alex|Molcan;SVK;820;Lt
+74;Roman|Safiullin;RUS;807;p
+75;Terence|Atmane;FRA;787;Lp
+76;Pablo|Carreno Busta;ESP;773;c
+77;James|Duckworth;AUS;772;s
+78;Zachary|Svajda;USA;759;c
+79;Hamad|Medjedovic;SRB;751;p
+80;Roman Andres|Burruchaga;ARG;735;t
+81;Titouan|Droguet;FRA;732;s
 82;Kamil|Majchrzak;POL;725;c
-83;Rinky|Hijikata;AUS;693;v
-84;Aleksandar|Kovacevic;USA;693;s
-85;Coleman|Wong;HKG;692;p
-86;Sebastian|Korda;USA;690;c
-87;Nikoloz|Basilashvili;GEO;681;p
-88;Damir|Dzumhur;BIH;679;t
-89;Marcos|Giron;USA;676;t
-90;Jacob|Fearnley;GBR;671;p
-91;Marco|Trungelliti;ARG;670;c
-92;Dino|Prizmic;CRO;663;c
+83;Aleksandar|Kovacevic;USA;693;s
+84;Coleman|Wong;HKG;692;p
+85;Nikoloz|Basilashvili;GEO;688;p
+86;Kyrian|Jacquet;FRA;680;c
+87;Jacob|Fearnley;GBR;671;p
+88;Marco|Trungelliti;ARG;670;c
+89;Dino|Prizmic;CRO;663;c
+90;Damir|Dzumhur;BIH;661;t
+91;Benjamin|Bonzi;FRA;657;v
+92;Toby|Samuel;GBR;647;s
 93;Yunchaokete|Bu;CHN;646;p
 94;Jenson|Brooksby;USA;638;c
-95;Benjamin|Bonzi;FRA;630;v
-96;Marin|Cilic;CRO;629;s
-97;Toby|Samuel;GBR;625;s
-98;Adam|Walton;AUS;619;c
-99;Henrique|Rocha;POR;596;p
-100;Michael|Zheng;USA;594;c`;
+95;Marcos|Giron;USA;638;t
+96;Zsombor|Piros;HUN;620;c
+97;Adam|Walton;AUS;619;c
+98;Michael|Zheng;USA;616;c
+99;Marin|Cilic;CRO;613;s
+100;Aleksandr|Shevchenko;KAZ;609;c
+101;Thiago|Seyboth Wild;BRA;609;p
+102;Sebastian|Korda;USA;590;c
+103;Martin|Damm;USA;588;Ls
+104;Lloyd|Harris;RSA;579;s
+105;Jesper|de Jong;NED;575;t
+106;Yibing|Wu;CHN;571;p
+107;Otto|Virtanen;FIN;570;s
+108;Hugo|Dellien;BOL;566;t
+109;Corentin|Moutet;FRA;540;Lv
+110;Lorenzo|Sonego;ITA;539;s
+111;Hugo|Gaston;FRA;530;Lv
+112;Jan|Choinski;GBR;527;s
+113;Dalibor|Svrcina;CZE;521;t
+114;Nicolas|Mejia;COL;521;s
+115;Henrique|Rocha;POR;521;p
+116;Clement|Chidekh;FRA;512;c
+117;Nishesh|Basavareddy;USA;510;c
+118;Christopher|O'Connell;AUS;505;c
+119;Gustavo|Heide;BRA;504;p
+120;Pedro|Martinez;ESP;497;t
+121;Jurij|Rodionov;AUT;496;Lp
+122;Dane|Sweeny;AUS;493;t
+123;Valentin|Royer;FRA;493;p
+124;Sebastian|Ofner;AUT;491;p
+125;Rei|Sakamoto;JPN;487;s
+126;Emilio|Nava;USA;477;p
+127;Borna|Gojo;CRO;461;s
+128;Sho|Shimabukuro;JPN;457;v
+129;Alexei|Popyrin;AUS;448;s
+130;Max|Alcala Gurri;ESP;446;c
+131;Shintaro|Mochizuki;JPN;444;v
+132;Nikolas|Sanchez Izquierdo;ESP;438;t
+133;Stefanos|Sakellaridis;GRE;431;s
+134;Moise|Kouame;FRA;429;p
+135;Grigor|Dimitrov;BUL;422;v
+136;Francisco|Comesana;ARG;421;p
+137;Laslo|Djere;SRB;419;c
+138;Aleksandar|Vukic;AUS;418;s
+139;Federico|Cina;ITA;415;c
+140;Giovanni|Mpetshi Perricard;FRA;411;s
+141;Matej|Dodig;CRO;406;p
+142;Andrea|Pellegrino;ITA;404;t
+143;Pablo|Llamas Ruiz;ESP;403;t
+144;Jerome|Kym;SUI;403;p
+145;Tristan|Schoolkate;AUS;401;v
+146;Marton|Fucsovics;HUN;400;t
+147;Ilia|Simakin;RUS;393;c
+148;Vilius|Gaubas;LTU;389;t
+149;Elmer|Moller;DEN;386;c
+150;Michael|Mmoh;USA;386;t
+151;Darwin|Blanch;USA;380;Ls
+152;Tom|Gentzsch;GER;363;p
+153;Lukas|Neumayer;AUT;362;t
+154;Alexandre|Muller;FRA;361;c
+155;Jack|Draper;GBR;360;Lp
+156;Soonwoo|Kwon;KOR;355;t
+157;Zhizhen|Zhang;CHN;354;s
+158;Francesco|Passaro;ITA;354;p
+159;Dusan|Lajovic;SRB;353;c
+160;Andrea|Guerrieri;ITA;349;c
+161;Jan|Kumstat;CZE;348;p
+162;Francesco|Maestrelli;ITA;346;s
+163;Stan|Wawrinka;SUI;343;p
+164;Mark|Lajal;EST;343;p
+165;Liam|Draxl;CAN;341;t
+166;Gabriel|Diallo;CAN;339;s
+167;Pavel|Kotov;RUS;339;p
+168;Taro|Daniel;JPN;338;c
+169;Joel|Schwaerzler;AUT;334;Lp
+170;Gauthier|Onclin;BEL;333;c
+171;Billy|Harris;GBR;327;s
+172;Marco|Cecchinato;ITA;325;c
+173;Felix|Balshaw;FRA;324;p
+174;Bernard|Tomic;AUS;322;c
+175;Stefano|Travaglia;ITA;322;p
+176;Nicolai|Budkov Kjaer;NOR;321;s
+177;Joao Lucas|Reis Da Silva;BRA;321;t
+178;Mika|Brunold;SUI;320;c
+179;Lautaro|Midon;ARG;319;t
+180;Chris|Rodesch;LUX;317;s
+181;Juan Carlos|Prado Angelo;BOL;314;p
+182;Guido Ivan|Justo;ARG;308;t
+183;Clement|Tabur;FRA;307;t
+184;Gonzalo|Bueno;PER;307;t
+185;Diego|Dedura;GER;307;Lt
+186;Dylan|Dietrich;SUI;304;s
+187;Jack|Pinnington Jones;GBR;302;v
+188;Keegan|Smith;USA;301;v
+189;Inaki|Montes-De La Torre;ESP;300;c
+190;Alexis|Galarneau;CAN;297;t
+191;Sascha|Gueymard Wayenburg;FRA;290;s
+192;David|Jorda Sanchis;ESP;290;c
+193;Timofey|Skatov;KAZ;290;t
+194;Luka|Pavlovic;FRA;288;Lc
+195;Kilian|Feldbausch;SUI;288;c
+196;Andre|Ilagan;USA;288;t
+197;Juan Pablo|Varillas;PER;288;p
+198;August|Holmgren;DEN;286;v
+199;Facundo|Mena;ARG;285;p
+200;Tristan|Boyer;USA;284;p`;
 
 export const FLAGS = {
   GER: '🇩🇪', ITA: '🇮🇹', ESP: '🇪🇸', USA: '🇺🇸', RUS: '🏳️', FRA: '🇫🇷', AUS: '🇦🇺', SRB: '🇷🇸', CAN: '🇨🇦',
   CZE: '🇨🇿', NOR: '🇳🇴', ARG: '🇦🇷', GBR: '🇬🇧', POL: '🇵🇱', GRE: '🇬🇷', DEN: '🇩🇰', BRA: '🇧🇷', CHN: '🇨🇳',
   JPN: '🇯🇵', NED: '🇳🇱', SUI: '🇨🇭', AUT: '🇦🇹', BEL: '🇧🇪', CRO: '🇭🇷', CHI: '🇨🇱', KAZ: '🇰🇿', POR: '🇵🇹',
   HUN: '🇭🇺', SWE: '🇸🇪', FIN: '🇫🇮', MON: '🇲🇨', PER: '🇵🇪', PAR: '🇵🇾', SVK: '🇸🇰', HKG: '🇭🇰', GEO: '🇬🇪',
-  BIH: '🇧🇦',
+  BIH: '🇧🇦', RSA: '🇿🇦', BOL: '🇧🇴', COL: '🇨🇴', BUL: '🇧🇬', LTU: '🇱🇹', KOR: '🇰🇷', EST: '🇪🇪', LUX: '🇱🇺',
 };
 
 const HEMDEN = [0xe84a3a, 0x2e6fd8, 0xffffff, 0x1fb87a, 0xf2e85c, 0x9a3ad8, 0xff7a2a, 0x2ab8b8, 0x1a1a1a, 0xe82a8a];
 const HAUT = [0xf0c8a0, 0xe2b48c, 0xeac09a, 0xc99872, 0xf3cfb0, 0xe6ba94];
 const HAAR = [0x2b1d14, 0x5a4028, 0xb8935a, 0x1a1410, 0x8a6a45, 0x3a2a1c];
 
+// Kurze Namen für die Anzeigetafel: sehr lange Nachnamen werden abgekürzt.
+// Gibt es einen Nachnamen zweimal (Cerundolo, Harris), kommt der erste Buchstabe des Vornamens davor.
+const KURZ = {
+  'Davidovich Fokina': 'Davidovich F.', 'Mpetshi Perricard': 'Mpetshi P.', 'Gueymard Wayenburg': 'Gueymard W.',
+  'Montes-De La Torre': 'Montes', 'Sanchez Izquierdo': 'Sanchez I.', 'Pinnington Jones': 'Pinnington J.',
+  'Juan Manuel|Cerundolo': 'J. M. Cerundolo', 'Lloyd|Harris': 'L. Harris', 'Billy|Harris': 'B. Harris',
+};
 function names(full) {
   const [first, last] = full.split('|');
-  let short = last;
-  if (last === 'Davidovich Fokina') short = 'Davidovich F.';
-  if (first === 'Juan Manuel') short = 'J. M. Cerundolo';
-  return { name: first + ' ' + last, short };
+  return { name: first + ' ' + last, short: KURZ[full] || KURZ[last] || last };
 }
 
 function star(a) {
@@ -147,7 +252,8 @@ function other(line) {
   const rank = +rk, i = rank - 21;
   const n = names(full);
   const strong = extra.replace('L', '');
-  const base = 78 - i * 0.24;                       // Platz 21 ≈ 78, Platz 100 ≈ 59
+  // Platz 21 ≈ 78, Platz 100 ≈ 59. Dahinter liegen die Spieler eng beieinander: Platz 200 ≈ 53
+  const base = rank <= 100 ? 78 - i * 0.24 : 59 - (rank - 100) * 0.06;
   const w = (key, k) => Math.round(Math.max(48, Math.min(93, base + (((i * 37 + k * 53) % 9) - 4) + (key === strong ? 7 : -1))));
   return {
     id: n.short.toLowerCase().replace(/[^a-z]/g, ''), ...n, country, rank, basePoints: +pts,
@@ -166,7 +272,7 @@ export const PLAYERS = [...STARS.map(star), ...REST.split('\n').map(other)].sort
 // alle anderen eines von a, c, d, f. Dazu ein Muster (0–4) und eine zweite Farbe für die Kleidung.
 const OHNE = ['a', 'c', 'd', 'f'];
 const dark = (c) => ((c >> 16) & 255) + ((c >> 8) & 255) + (c & 255) < 300;
-const EINHAND = ['tsitsipas', 'musetti', 'shapovalov', 'altmaier', 'kovacevic'];   // Rückhand mit einer Hand
+const EINHAND = ['tsitsipas', 'musetti', 'shapovalov', 'altmaier', 'kovacevic', 'dimitrov', 'wawrinka', 'lajovic', 'cecchinato', 'mpetship', 'oconnell', 'holmgren'];   // Rückhand mit einer Hand
 
 // ---------------------------------------------------------------
 // Stil der besten Spieler: Woran erkennt man sie auf dem Platz?
@@ -203,7 +309,7 @@ export const STIL = {
   mensik:     { groesse: 196, statur: 'schlank',  modell: 'a', prellen: 4, jubel: 'faust',    merkmal: 'Sehr groß, einer der härtesten Aufschläge', unsicher: 'Kopfbedeckung, Jubel' },
   davidovich: { groesse: 183, statur: 'normal',   modell: 'b', prellen: 2, jubel: 'faust',    merkmal: 'Blonde Haare, wirft sich nach jedem Ball', unsicher: 'Kopfbedeckung, Jubel' },
   nakashima:  { groesse: 188, statur: 'normal',   modell: 'e', prellen: 3, jubel: 'ruhig',    merkmal: 'Kappe, zeigt nie Gefühle', unsicher: 'Kopfbedeckung' },
-  tien:       { groesse: 180, statur: 'schlank',  modell: 'e', prellen: 3, jubel: 'ruhig',    merkmal: 'Linkshänder, der Kleinste der Top 20, Kappe' },
+  tien:       { groesse: 180, statur: 'schlank',  modell: 'e', prellen: 3, jubel: 'ruhig',    merkmal: 'Linkshänder, eher klein, Kappe' },
   cerundolo:  { groesse: 185, statur: 'normal',   modell: 'b', prellen: 3, jubel: 'faust',    merkmal: 'Riesige Vorhand', unsicher: 'Kopfbedeckung, Jubel' },
   ruud:       { groesse: 183, statur: 'normal',   modell: 'e', prellen: 4, jubel: 'faust',    merkmal: 'Viel Topspin mit der Vorhand', unsicher: 'Kopfbedeckung, Jubel' },
 };
@@ -224,7 +330,7 @@ PLAYERS.forEach((p, i) => {
   L.trim = L.shirt === L.shorts ? (dark(L.shirt) ? 0xffffff : 0x1a2a4a) : (i % 2 ? L.shorts : (dark(L.shirt) ? 0xf2f2f2 : 0x1a2a4a));
 });
 export const TOP_PLAYERS = PLAYERS.slice(0, 20);
-// Sucht einen Spieler: zuerst bei den echten Top 100, dann bei den erfundenen Nachwuchsspielern der kleinen Tour
+// Sucht einen Spieler: zuerst bei den echten Top 200, dann bei den erfundenen Nachwuchsspielern der kleinen Tour
 export const playerById = (id) => PLAYERS.find((p) => p.id === id) || NACHWUCHS.find((p) => p.id === id);
 export const overall = (st) => Math.round((st.s + st.p + st.t + st.c + st.v) / 5);
 

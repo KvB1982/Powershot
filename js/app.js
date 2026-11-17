@@ -120,11 +120,11 @@ function optionRow(label, key, names) {
 }
 const CAT_KLASSE = { GS: 'gs', M: 'm', F: 'f', A500: 'a500', A250: 'a250', CH: 'ch', ITF: 'itf', LIGA: 'itf' };
 const catTag = (def) => `<span class="tag ${CAT_KLASSE[def.cat] || 'f'}">${def.catName}</span>`;
-// Die 100 Spieler in Seiten zu je 20: Knöpfe "1–20", "21–40" …
+// Die 200 Spieler in Seiten zu je 20: Knöpfe "1–20", "21–40" …
 const pageOf = (id) => { const p = D.playerById(id); return p ? Math.floor((p.rank - 1) / 20) : 0; };
 const pagePlayers = (page) => D.PLAYERS.slice(page * 20, page * 20 + 20);
-const pageTabs = (act, page) => `<div class="row tabs">${[0, 1, 2, 3, 4].map((i) =>
-  `<button class="${i === page ? 'sel' : ''}" data-a="${act}" data-v="${i}">Platz ${i * 20 + 1}–${i * 20 + 20}</button>`).join('')}</div>`;
+const pageTabs = (act, page) => `<div class="row tabs">${Array.from({ length: Math.ceil(D.PLAYERS.length / 20) }, (_, i) =>
+  `<button class="${i === page ? 'sel' : ''}" data-a="${act}" data-v="${i}">${i ? '' : 'Platz '}${i * 20 + 1}–${i * 20 + 20}</button>`).join('')}</div>`;
 const getPlayer = (id) => (id === 'me' ? CA.mePlayer(career) : D.playerById(id));
 const back = (to = 'home') => `<button class="ghost" data-a="${to}">‹ Zurück</button>`;
 
@@ -694,11 +694,11 @@ function renderCareer() {
       </table><p class="dim klein">Geld = was in der Woche übrig blieb (Preisgeld und Sponsoren minus Reise und Team).</p></div>`;
   } else if (careerTab === 'rangliste') {
     const list = CA.ranking(c);
-    const rows = list.filter((p) => p.rank <= 30 || p.me || (rk <= 104 && Math.abs(p.rank - rk) <= 4));
+    const rows = list.filter((p) => p.rank <= 30 || p.me || (rk <= D.PLAYERS.length + 4 && Math.abs(p.rank - rk) <= 4));
     body = `<div class="panel scroll"><table><tr><th class="num">Platz</th><th>Spieler</th><th class="num">Punkte</th></tr>
       ${rows.map((p, i) => `${i > 0 && rows[i - 1].rank < p.rank - 1 ? '<tr><td colspan="3" class="dim center">…</td></tr>' : ''}
         <tr class="${p.me ? 'me' : ''}"><td class="num">${p.rank}</td><td>${flag(p.country)} ${esc(p.name)}</td><td class="num">${p.points.toLocaleString('de-DE')}</td></tr>`).join('')}
-      </table>${rk > 100 ? '<p class="dim klein">Hinter den Top 100 stehen in echt noch rund 2000 Spieler. Dein Platz dort wird aus deinen Punkten geschätzt.</p>' : ''}</div>`;
+      </table>${rk > D.PLAYERS.length ? '<p class="dim klein">Hinter den Top 200 stehen in echt noch rund 2000 Spieler. Dein Platz dort wird aus deinen Punkten geschätzt.</p>' : ''}</div>`;
   } else if (careerTab === 'skills') {
     const eff = CA.effectiveStats(c), liste = CA.bonusListe(c);
     body = `<div class="panel"><p>Freie Fähigkeitspunkte: <b class="gold">${c.skillPoints}</b> · Level ${c.level}. Punkte gibt es für jedes neue Level (Matches und Training bringen Erfahrung).</p>
