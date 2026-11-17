@@ -61,6 +61,45 @@ export class MatchScore {
     }
   }
 
+  // Was würde passieren, wenn Seite w den nächsten Punkt gewinnt? Probiert es an einer Kopie aus,
+  // der echte Spielstand bleibt unverändert. Gibt z. B. ['point', 'game', 'set'] zurück.
+  wennPunkt(w) {
+    const k = new MatchScore(this.cfg);
+    k.sets = this.sets.map((x) => [...x]);
+    k.setsWon = [...this.setsWon]; k.games = [...this.games]; k.points = [...this.points];
+    k.tiebreak = this.tiebreak; k.server = this.server; k.tbFirst = this.tbFirst;
+    return k.pointTo(w);
+  }
+
+  // Ist der nächste Punkt ein besonders wichtiger? Gibt null zurück oder
+  // { art: 'match' | 'satz' | 'break', wer: 0|1, anzahl } – anzahl = wie viele solche Bälle er hintereinander hat.
+  // Matchball geht vor Satzball, Satzball geht vor Breakball.
+  wichtigerPunkt() {
+    if (this.winner !== null) return null;
+    let best = null;
+    const rang = { break: 1, satz: 2, match: 3 };
+    for (const w of [0, 1]) {
+      const ev = this.wennPunkt(w);
+      if (!ev.includes('game')) continue;
+      // Breakball: Der Rückschläger kann dem Aufschläger das Spiel wegnehmen (im Tiebreak gibt es das nicht)
+      const art = ev.includes('match') ? 'match' : ev.includes('set') ? 'satz' : w !== this.server && !this.tiebreak ? 'break' : null;
+      if (!art || (best && rang[best.art] >= rang[art])) continue;
+      // Bei 40:0 sind es drei Bälle, bei 40:15 zwei, bei 40:30 oder Vorteil einer
+      best = { art, wer: w, anzahl: Math.max(1, this.points[w] - this.points[1 - w]) };
+    }
+    return best;
+  }
+
+  // Der Hinweis als Text, z. B. "Breakball Sinner" oder "3 Matchbälle Alcaraz".
+  // finale = true: Im Endspiel heißt der Matchball "Championship Point".
+  wichtigText(names, finale = false) {
+    const p = this.wichtigerPunkt();
+    if (!p) return '';
+    const eins = { break: 'Breakball', satz: 'Satzball', match: finale ? 'Championship Point' : 'Matchball' }[p.art];
+    const viele = { break: 'Breakbälle', satz: 'Satzbälle', match: finale ? 'Championship Points' : 'Matchbälle' }[p.art];
+    return (p.anzahl > 1 ? `${p.anzahl} ${viele}` : eins) + ' ' + names[p.wer];
+  }
+
   // Punkte-Anzeige für beide Seiten, z. B. ['40', 'A']
   pointLabels() {
     const [a, b] = this.points;
