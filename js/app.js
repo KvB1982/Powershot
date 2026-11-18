@@ -13,6 +13,7 @@ import { loadMocap } from './mocap.js';
 import * as D from './data.js';
 import * as TN from './tournament.js';
 import * as CA from './career.js';
+import * as TT from './turniertag.js';
 import * as AU from './ausruestung.js';
 import * as KT from './kleinetour.js';
 import * as SE from './season.js';
@@ -487,7 +488,7 @@ function renderTournament() {
       <div class="vs"><div><div class="who">${flag(me.country)} ${esc(me.short)}</div><div class="dim">Stärke ${D.overall(me.stats)}</div></div>
       <div class="x">gegen</div>
       <div><div class="who">${flag(opp.country)} ${esc(opp.short)}</div><div class="dim">${def.cat === 'LIGA' ? 'Spieler des anderen Vereins' : 'Nr. ' + T.players[oppId].seed + ' der Setzliste'} · Stärke ${D.overall(opp.stats)}</div></div></div>
-      <div class="center"><button class="primary" data-a="tourPlay">Match spielen ›</button></div></div>`;
+      <div class="center">${ctxT.career && def.cat !== 'LIGA' ? `<button data-a="tagAnlage">🚶 Erst auf die Anlage <small>${career.tag ? `noch ${TT.freieFenster(career)} Zeitfenster` : `${TT.ZEIT_FENSTER} Zeitfenster vor dem Match`}</small></button> ` : ''}<button class="primary" data-a="tourPlay">Match spielen ›</button></div></div>`;
   } else {
     top = `<div class="panel center"><p>${T.humanId ? 'Du bist ausgeschieden.' : 'Du spielst dieses Turnier nicht mit.'}</p>
       <button class="primary" data-a="tourSim">Turnier zu Ende spielen lassen</button></div>`;
@@ -539,13 +540,36 @@ actions.tourShow = () => renderTournament();
 const anlageEl = document.createElement('div');
 anlageEl.id = 'anlage';
 document.body.appendChild(anlageEl);
+let anlageTag = null;        // { def } wenn die Anlage gerade der Tag vor einem Karriere-Match ist, sonst null
+let anlageErgebnis = null;   // was die letzte Tätigkeit gebracht hat: { ort, text, bringt }
 function anlageZeigen() {
   const A = game.anlage, ort = A.amOrt;
   const hilfe = 'Laufen: W A S D oder mit einem Finger ziehen. Tippe auf ein Gebäude, dann läuft deine Figur von selbst hin. Kamera: Knöpfe rechts, zwei Finger oder rechte Maustaste.';
   const kam = [['karte', '🗺️', 'Übersicht'], ['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg']];
-  anlageEl.innerHTML = `<div class="oben"><button class="ghost" data-a="anlageEnde">‹ Zurück</button></div>
+  let unten = `<p class="dim">${hilfe}</p>`, zeit = '';
+  if (anlageTag) {
+    // Der Tag vor dem Match: oben steht, wie viel Zeit noch ist
+    const frei = TT.freieFenster(career);
+    zeit = `<span class="zeit">${esc(anlageTag.def.name)} · ${TT.FENSTER_NAMEN[TT.ZEIT_FENSTER - frei]} · ${frei ? `noch ${frei} Zeitfenster` : 'dein Match beginnt gleich'} · Frische ${Math.round(career.frische)}</span>`;
+    unten = `<p class="dim">${frei ? 'Such dir aus, was du vor dem Match machst. Für alles reicht die Zeit nicht!' : 'Die Zeit ist um. Geh zum <b>Centre Court</b> – dort wartet dein Match.'}</p>`;
+  }
+  if (ort) {
+    unten = `<h3>${esc(ort.name)}</h3><p>${ort.text}</p><p class="dim klein">Hier passiert noch nichts. Später gehst du hier hinein.</p>`;
+    const T = TT.TAETIGKEITEN[ort.id];
+    if (anlageTag && anlageErgebnis && anlageErgebnis.ort === ort.id) {
+      unten = `<h3>${esc(ort.name)}</h3><p>${anlageErgebnis.text}</p><p class="gold">${anlageErgebnis.bringt.join(' · ')}</p>`;
+    } else if (anlageTag && ort.id === 'court') {
+      unten = `<h3>${esc(ort.name)}</h3><p>Dein Gegner wartet schon. Bist du bereit?</p><button class="primary" data-a="anlageMatch">Match spielen ›</button>`;
+    } else if (anlageTag && ort.id === 'hotel') {
+      unten = `<h3>${esc(ort.name)}</h3><p>Erst nach dem Match geht es zurück ins Hotel.</p>`;
+    } else if (anlageTag && T) {
+      const k = TT.kann(career, ort.id, anlageTag.def);
+      unten = `<h3>${esc(ort.name)}</h3>` + (k.ok ? `<p>${ort.text}</p><button class="primary" data-a="anlageTun" data-v="${ort.id}">${T.name} <small>braucht 1 Zeitfenster</small></button>` : `<p>${k.warum}</p>`);
+    }
+  }
+  anlageEl.innerHTML = `<div class="oben"><button class="ghost" data-a="anlageEnde">‹ Zurück</button>${zeit}</div>
     <div class="kam">${kam.map(([k, z, t]) => `<button data-kam="${k}" title="${t}" aria-label="${t}">${z}</button>`).join('')}</div>
-    <div class="panel">${ort ? `<h3>${esc(ort.name)}</h3><p>${ort.text}</p><p class="dim klein">Hier passiert noch nichts. Später gehst du hier hinein.</p>` : `<p class="dim">${hilfe}</p>`}</div>`;
+    <div class="panel">${unten}</div>`;
   anlageEl.classList.add('on');
 }
 // Kamera-Knöpfe: solange gedrückt, dreht oder zoomt die Kamera
@@ -556,17 +580,33 @@ anlageEl.addEventListener('pointerdown', (e) => {
   if (b.dataset.kam === 'karte') game.anlage.uebersicht(); else game.anlage.kamTaste = b.dataset.kam;
 });
 for (const n of ['pointerup', 'pointercancel', 'pointerleave']) anlageEl.addEventListener(n, () => { game.anlage.kamTaste = null; }, true);
-actions.anlage = () => {
+function anlageStart(ich) {
   hide();
   enterMenu();
-  // Mit deinem Karriere-Spieler, sonst mit dem ersten Spieler der Liste
-  const ich = career ? CA.mePlayer(career) : D.PLAYERS[0];
   game.setPlayers(ich, ich);
-  game.anlage.wennDa = anlageZeigen;
+  anlageErgebnis = null;
+  game.anlage.wennDa = () => { anlageErgebnis = null; anlageZeigen(); };
   game.anlage.start();
   anlageZeigen();
+}
+function anlageSchluss() { game.anlage.ende(); anlageEl.classList.remove('on'); anlageEl.innerHTML = ''; }
+// Aus dem Hauptmenü: einfach nur herumlaufen (mit deinem Karriere-Spieler, sonst mit dem ersten Spieler der Liste)
+actions.anlage = () => { anlageTag = null; anlageStart(career ? CA.mePlayer(career) : D.PLAYERS[0]); };
+// In der Karriere: der Tag vor dem Match. Wer schon auf der Anlage war und zurückkommt, macht dort weiter.
+actions.tagAnlage = () => {
+  if (!ctxT || !ctxT.career) return;
+  if (!career.tag) TT.tagStart(career);
+  anlageTag = { def: ctxT.def };
+  anlageStart(CA.mePlayer(career));
 };
-actions.anlageEnde = () => { game.anlage.ende(); anlageEl.classList.remove('on'); anlageEl.innerHTML = ''; actions.home(); };
+actions.anlageTun = (v) => {
+  if (!anlageTag) return;
+  const bringt = TT.tun(career, v, anlageTag.def);
+  if (bringt) anlageErgebnis = { ort: v, text: TT.TAETIGKEITEN[v].text, bringt };
+  anlageZeigen();
+};
+actions.anlageMatch = () => { anlageSchluss(); actions.tourPlay(); };
+actions.anlageEnde = () => { anlageSchluss(); if (anlageTag) renderTournament(); else actions.home(); };
 
 // ---------------------------------------------------------------
 // Siegerehrung nach einem gewonnenen Finale
@@ -684,7 +724,7 @@ let careerTab = 'start';
 actions.career = (v) => {
   if (!career) return renderCreate();
   if (career.tournament) { ctxT = { T: career.tournament, def: D.tournamentById(career.tournament.defId), career: true }; return renderTournament(); }
-  if (['start', 'kalender', 'rangliste', 'skills', 'shop', 'team'].includes(v)) careerTab = v;
+  if (['start', 'kalender', 'rangliste', 'skills', 'shop', 'team', 'pokale'].includes(v)) careerTab = v;
   enterMenu();
   renderCareer();
 };

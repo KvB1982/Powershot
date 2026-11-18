@@ -160,7 +160,7 @@ export function besteSchuhe(c, surface, stufe) {
 // Fans (⭐): schicke Sachen und Titel machen dich beliebt. Mehr Fans = mehr Geld von den Sponsoren.
 export function fans(c) {
   const stufe = vertragsStufe(c);
-  let n = c.titles * TITEL_FANS + (c.redeFans || 0);
+  let n = c.titles * TITEL_FANS + (c.redeFans || 0) + (c.tagFans || 0);      // tagFans: Autogramme und Presse (siehe turniertag.js)
   for (const cat of ['Outfit', 'Kopf', 'Schweißband', 'Tasche']) n += (traegt(c, cat, stufe) || {}).sterne || 0;
   return Math.min(FAN_MAX, n);
 }
@@ -197,6 +197,8 @@ export function bonusListe(c, def = laufendesTurnier(c)) {
   const t = TRAINER.find((x) => x.id === c.trainer), p = PHYSIOS.find((x) => x.id === c.physio);
   if (t && t.bonus) out.push({ name: t.name, bonus: t.bonus });
   if (p && p.bonus) out.push({ name: p.name, bonus: p.bonus });
+  // Was du heute vor dem Match auf der Anlage getan hast (siehe turniertag.js)
+  if (c.tag && Object.keys(c.tag.bonus || {}).length) out.push({ name: 'Heute auf der Anlage', bonus: c.tag.bonus });
   const f = frischeAbzug(c.frische);
   if (Object.keys(f).length) out.push({ name: c.frische >= 95 ? 'Topfit' : 'Müde', bonus: f });
   return out;
@@ -405,6 +407,7 @@ export const ligaSpiel = (c) => startTournament(c, LIGA.id);
 // Gibt zurück, wie viele Level du aufgestiegen bist.
 export function matchGespielt(c, gewonnen, runde = 1) {
   c.frische = begrenzen(c.frische - meinPhysio(c).last, 0, 100);
+  c.tag = null;                        // der Tag ist vorbei, seine Pluspunkte auch
   if (gewonnen) c.siege++;
   const saite = traegt(c, 'Saiten');
   if (saite && c.saitenRest > 0) {

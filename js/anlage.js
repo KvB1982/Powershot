@@ -185,7 +185,14 @@ export class Anlage {
       ort.schild = schild(o.name, x, (o.platz ? 2.2 : o.h + 1.3), z);
       // Ein heller Kreis auf dem Boden zeigt, wo man hin muss
       ort.kreis = teil(new THREE.RingGeometry(0.75, 1.0, 28).rotateX(-Math.PI / 2), 0xe8f04a, ort.tx, 0.12, ort.tz);
-      if (!o.platz) this.hindernisse.push({ x, z, r: Math.max(o.b, o.t) / 2 + 0.3 });
+      // Wo man nicht durchlaufen kann: Ein breites Haus wird mit mehreren Kreisen nebeneinander nachgebaut
+      if (!o.platz) {
+        const r = Math.min(o.b, o.t) / 2 + 0.1, n = Math.max(1, Math.ceil(o.b / o.t)), lang = Math.max(0, o.b / 2 - r);
+        for (let i = 0; i < n; i++) {
+          const u = n === 1 ? 0 : -lang + 2 * lang * i / (n - 1);
+          this.hindernisse.push({ x: x + Math.cos(dreh) * u, z: z - Math.sin(dreh) * u, r });
+        }
+      }
       this.orte.push(ort);
     }
 
@@ -270,7 +277,18 @@ export class Anlage {
       // Von selbst zum angetippten Ziel laufen
       const dx = this.ziel.x - p.x, dz = this.ziel.z - p.z, weit = Math.hypot(dx, dz);
       if (weit < 0.15) { p.vx = p.vz = 0; this.ziel = null; }
-      else { const v = Math.min(TEMPO, weit * 2.5 + 0.4); p.vx = dx / weit * v; p.vz = dz / weit * v; }
+      else {
+        // Richtung zum Ziel. Steht etwas im Weg (z. B. der Brunnen), biegt die Figur seitlich daran vorbei.
+        let rx = dx / weit, rz = dz / weit;
+        for (const h of this.hindernisse) {
+          const hx = p.x - h.x, hz = p.z - h.z, hd = Math.hypot(hx, hz) || 0.001;
+          if (hd > h.r + 1.3 || rx * hx + rz * hz > 0 || weit < hd) continue;      // weit weg, schon vorbei oder das Ziel liegt davor
+          const seite = hx * dz - hz * dx >= 0 ? 1 : -1;
+          rx += -hz / hd * seite * 1.4; rz += hx / hd * seite * 1.4;
+        }
+        const rl = Math.hypot(rx, rz) || 1, v = Math.min(TEMPO, weit * 2.5 + 0.4);
+        p.vx = rx / rl * v; p.vz = rz / rl * v;
+      }
     } else if (st > 0.05) {
       const v = TEMPO * Math.min(1, st * 1.2);
       p.vx = ex / st * v; p.vz = ez / st * v;
