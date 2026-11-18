@@ -102,7 +102,8 @@ export class Anlage {
     if (weit) k.zw = Math.round(k.zw / (Math.PI * 2)) * Math.PI * 2;
   }
 
-  start() {
+  // woher = bei welchem Ort die Figur startet (ohne Angabe: beim Fahrdienst)
+  start(woher = 'hotel') {
     this.ende();
     const g = this.game;
     this.an = true;
@@ -158,10 +159,10 @@ export class Anlage {
       let haus;
       if (o.platz) {
         // Trainingsplatz: eine blaue Fläche mit weißen Linien und einem Netz
-        haus = teil(new THREE.BoxGeometry(o.b, 0.06, o.t), o.farbe, x, 0.03, z);
+        haus = teil(new THREE.BoxGeometry(o.b, 0.06, o.t), o.farbe, x, 0.09, z);
         haus.rotation.y = dreh;
-        const linien = teil(new THREE.BoxGeometry(o.b * 0.82, 0.07, o.t * 0.82), 0xffffff, x, 0.03, z);
-        const feld = teil(new THREE.BoxGeometry(o.b * 0.8, 0.08, o.t * 0.78), o.farbe, x, 0.03, z);
+        const linien = teil(new THREE.BoxGeometry(o.b * 0.82, 0.07, o.t * 0.82), 0xffffff, x, 0.1, z);
+        const feld = teil(new THREE.BoxGeometry(o.b * 0.8, 0.08, o.t * 0.78), o.farbe, x, 0.11, z);
         const netz = teil(new THREE.BoxGeometry(o.b * 0.86, 0.9, 0.05), 0xf0f0f0, x, 0.45, z, { schatten: true });
         for (const m of [linien, feld, netz]) m.rotation.y = dreh;
         const maschine = requisit('ballmaschine');
@@ -222,8 +223,8 @@ export class Anlage {
     }
 
     // Die Figur startet beim Fahrdienst und schaut zur Mitte
-    const startOrt = this.orte.find((o) => o.id === 'hotel');
-    this.p = { x: startOrt.tx, z: startOrt.tz - 1.5, vx: 0, vz: 0, blick: Math.PI };     // blick: 0 = schaut nach +z, π = nach −z
+    const startOrt = this.orte.find((o) => o.id === woher) || this.orte.find((o) => o.id === 'hotel');
+    this.p = { x: startOrt.tx, z: startOrt.tz, vx: 0, vz: 0, blick: Math.atan2(-startOrt.tx, -startOrt.tz) };     // blick: 0 = schaut nach +z, π = nach −z
     this.ziel = null;
     g.showAvatars(false);
     if (g.avatars[0]) g.avatars[0].group.visible = true;

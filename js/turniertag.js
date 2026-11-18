@@ -27,8 +27,8 @@ export function stufeVon(def) {
 // Die Tätigkeiten. ort = Name des Ortes in anlage.js · ab = ab welcher Turnier-Stufe es das gibt ·
 // frische = so ändert sich deine Frische · bonus = Pluspunkte für das Match heute · xp = Erfahrung · geld = Kosten in $
 export const TAETIGKEITEN = {
-  training: { name: 'Einschlagen', ab: 0, frische: -4, bonus: { c: 1, p: 1 }, xp: 15,
-    text: 'Du schlägst dich eine halbe Stunde ein. Dein Arm ist warm und die Bälle kommen genau.' },
+  // Der Trainingsplatz ist ein echtes Minispiel: Wie gut du die Zielfelder triffst, bestimmt die Pluspunkte (siehe UEBUNGEN).
+  training: { name: 'Einschlagen', ab: 0, frische: -4, spiel: true },
   kraft: { name: 'Krafttraining', ab: 1, frische: -9, bonus: { s: 1 }, xp: 30,
     text: 'Gewichte, Sprünge, Medizinball. Du lernst viel dazu – aber so kurz vor dem Match macht es müde.',
     fehlt: 'Bei so kleinen Turnieren gibt es keinen Kraftraum. Die Tür ist zu.' },
@@ -42,6 +42,20 @@ export const TAETIGKEITEN = {
     fehlt: 'Hier ist kein Reporter. Für die Presse musst du erst bei den großen Turnieren spielen.' },
   fans: { name: 'Autogramme geben', ab: 0, autogramm: true, text: 'Du unterschreibst Bälle und Kappen. Die Kinder strahlen.' },
 };
+
+// Die zwei Übungen auf dem Trainingsplatz. modus = Spielart in match.js · baelle = so viele Bälle ·
+// stufen = [ab welchem Anteil der möglichen Punkte, Pluspunkte, Satz dazu] – die erste passende Zeile gilt
+export const UEBUNGEN = {
+  einschlagen: { name: 'Einschlagen mit der Ballmaschine', kurz: '10 Bälle auf die Zielfelder', modus: 'ballmaschine', baelle: 10, stufen: [
+    [0.5, { c: 2, p: 1 }, 'Was für ein Einschlagen! Heute triffst du alles.'],
+    [0.25, { c: 1, p: 1 }, 'Gut eingeschlagen. Dein Arm ist warm und die Bälle kommen genau.'],
+    [0, { c: 1 }, 'Ein paar Bälle gingen daneben, aber du bist jetzt wach.']] },
+  aufschlag: { name: 'Aufschlag üben', kurz: '8 Aufschläge auf die Zielfelder', modus: 'aufschlag', baelle: 8, stufen: [
+    [0.5, { s: 2 }, 'Dein Aufschlag sitzt heute wie angenagelt!'],
+    [0.25, { s: 1 }, 'Der Aufschlag fühlt sich gut an.'],
+    [0, {}, 'Der Aufschlag wollte heute nicht so recht. Wenigstens ist die Schulter warm.']] },
+};
+export const PUNKTE_PRO_BALL = 5;     // so viele Punkte gibt ein Ball höchstens (gelbes Zielfeld)
 
 // Alte Spielstände kennen den Tag noch nicht
 function tag(c) {
@@ -77,9 +91,19 @@ export function kann(c, ort, def) {
 }
 
 // Etwas tun. Gibt eine Liste mit Sätzen zurück, was es gebracht hat (oder null, wenn es nicht geht).
-export function tun(c, ort, def) {
+// spiel = nur beim Trainingsplatz: { uebung: 'einschlagen' | 'aufschlag', punkte } – das Ergebnis des Minispiels
+export function tun(c, ort, def, spiel) {
   if (!kann(c, ort, def).ok) return null;
-  const T = TAETIGKEITEN[ort], t = tag(c), bringt = [];
+  let T = TAETIGKEITEN[ort];
+  const t = tag(c), bringt = [];
+  if (T.spiel) {
+    const U = UEBUNGEN[spiel && spiel.uebung];
+    if (!U) return null;
+    const anteil = Math.max(0, Math.min(1, spiel.punkte / (U.baelle * PUNKTE_PRO_BALL)));
+    const stufe = U.stufen.find((s) => anteil >= s[0]);
+    T = { ...T, bonus: stufe[1], xp: 10 + Math.round(20 * anteil) };
+    bringt.push(stufe[2]);
+  }
   if (T.saiten) {
     const saite = traegt(c, 'Saiten'), frei = gratis(c, saite);
     bespannen(c, saite.id);
@@ -89,7 +113,7 @@ export function tun(c, ort, def) {
     c.frische = Math.max(0, Math.min(100, c.frische + T.frische));
     bringt.push(`Frische ${T.frische > 0 ? '+' : '−'}${Math.abs(T.frische)}`);
   }
-  if (T.bonus) {
+  if (T.bonus && Object.keys(T.bonus).length) {
     for (const k in T.bonus) t.bonus[k] = (t.bonus[k] || 0) + T.bonus[k];
     bringt.push('Pluspunkte für das Match heute');
   }

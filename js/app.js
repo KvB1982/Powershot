@@ -562,6 +562,11 @@ function anlageZeigen() {
       unten = `<h3>${esc(ort.name)}</h3><p>Dein Gegner wartet schon. Bist du bereit?</p><button class="primary" data-a="anlageMatch">Match spielen ›</button>`;
     } else if (anlageTag && ort.id === 'hotel') {
       unten = `<h3>${esc(ort.name)}</h3><p>Erst nach dem Match geht es zurück ins Hotel.</p>`;
+    } else if (anlageTag && T && T.spiel) {
+      // Trainingsplatz: zwei Übungen zur Auswahl, jede ist ein kleines Spiel
+      const k = TT.kann(career, ort.id, anlageTag.def);
+      unten = `<h3>${esc(ort.name)}</h3>` + (k.ok ? `<p>Je besser du triffst, desto mehr Pluspunkte hast du im Match. Braucht 1 Zeitfenster.</p><div class="row">${Object.entries(TT.UEBUNGEN).map(([id, U]) =>
+        `<button class="primary" data-a="anlageUeben" data-v="${id}">${U.name} <small>${U.kurz}</small></button>`).join('')}</div>` : `<p>${k.warum}</p>`);
     } else if (anlageTag && T) {
       const k = TT.kann(career, ort.id, anlageTag.def);
       unten = `<h3>${esc(ort.name)}</h3>` + (k.ok ? `<p>${ort.text}</p><button class="primary" data-a="anlageTun" data-v="${ort.id}">${T.name} <small>braucht 1 Zeitfenster</small></button>` : `<p>${k.warum}</p>`);
@@ -580,13 +585,15 @@ anlageEl.addEventListener('pointerdown', (e) => {
   if (b.dataset.kam === 'karte') game.anlage.uebersicht(); else game.anlage.kamTaste = b.dataset.kam;
 });
 for (const n of ['pointerup', 'pointercancel', 'pointerleave']) anlageEl.addEventListener(n, () => { game.anlage.kamTaste = null; }, true);
-function anlageStart(ich) {
+// woher = an welcher Tür die Figur startet · ergebnis = was dort gleich angezeigt wird (nach einem Minispiel)
+function anlageStart(ich, woher, ergebnis = null) {
   hide();
   enterMenu();
   game.setPlayers(ich, ich);
-  anlageErgebnis = null;
-  game.anlage.wennDa = () => { anlageErgebnis = null; anlageZeigen(); };
-  game.anlage.start();
+  anlageErgebnis = ergebnis;
+  // Das Ergebnis bleibt stehen, bis die Figur von der Tür weggeht
+  game.anlage.wennDa = (ort) => { if (!ort || !anlageErgebnis || anlageErgebnis.ort !== ort.id) anlageErgebnis = null; anlageZeigen(); };
+  game.anlage.start(woher);
   anlageZeigen();
 }
 function anlageSchluss() { game.anlage.ende(); anlageEl.classList.remove('on'); anlageEl.innerHTML = ''; }
@@ -604,6 +611,25 @@ actions.anlageTun = (v) => {
   const bringt = TT.tun(career, v, anlageTag.def);
   if (bringt) anlageErgebnis = { ort: v, text: TT.TAETIGKEITEN[v].text, bringt };
   anlageZeigen();
+};
+// Minispiel auf dem Trainingsplatz: Ballmaschine oder Aufschlag. Danach geht es zurück auf die Anlage.
+actions.anlageUeben = (v) => {
+  const U = TT.UEBUNGEN[v];
+  if (!anlageTag || !U || !TT.kann(career, 'training', anlageTag.def).ok) return;
+  const def = anlageTag.def, trainer = { ...D.PLAYERS[59], name: 'Trainer', short: 'Trainer' };
+  anlageSchluss();
+  startMatch({
+    me: CA.mePlayer(career), opp: trainer, def, mode: U.modus, balls: U.baelle, title: U.name,
+    onEnd: (res) => {
+      let ergebnis = null;
+      // Wer abbricht, hat das Zeitfenster noch nicht verbraucht
+      if (!res.aborted) {
+        const bringt = TT.tun(career, 'training', def, { uebung: v, punkte: res.training.score });
+        if (bringt) ergebnis = { ort: 'training', text: `${res.training.score} von ${U.baelle * TT.PUNKTE_PRO_BALL} Punkten. ${bringt[0]}`, bringt: bringt.slice(1) };
+      }
+      anlageStart(CA.mePlayer(career), 'training', ergebnis);
+    },
+  });
 };
 actions.anlageMatch = () => { anlageSchluss(); actions.tourPlay(); };
 actions.anlageEnde = () => { anlageSchluss(); if (anlageTag) renderTournament(); else actions.home(); };
@@ -1099,7 +1125,7 @@ function startMatch(o) {
   session = { o, names, over: false, mode };
   match = new Match({
     players: [o.me, o.opp], human: 0, surface: o.def.surface, difficulty: settings.difficulty,
-    sets: len.sets, games: len.games, mode, assist: settings.assist, controlMode: settings.control,
+    sets: len.sets, games: len.games, mode, balls: o.balls, assist: settings.assist, controlMode: settings.control,
     finale: !!o.finale,      // im Endspiel heißt der Matchball "Championship Point"
   }, game.makeFx(names), controls);
   game.attach(match, hud);

@@ -36,7 +36,7 @@ export class Match {
     this.state = 'intro';
     this.timer = 1.2;
     this.rally = 0;
-    this.training = { balls: this.mode === 'aufschlag' ? 12 : 20, done: 0, score: 0, zones: [] };
+    this.training = { balls: cfg.balls || (this.mode === 'aufschlag' ? 12 : 20), done: 0, score: 0, zones: [] };
     this.lastPoint = null;
     this.wechselPruefen = false;    // wird wahr, sobald ein Punkt zu Ende ist (siehe next)
   }
