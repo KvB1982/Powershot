@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { figureReady, makeFigure, REST, BONES } from './figur.js';
 import { requisit } from './requisiten.js';
 import { mocapClip, mocapFrame, mocapLoop, mocapGang } from './mocap.js';
+import { SHOW, showFuer } from './showschlaege.js';
 import { JUBEL, pose as namedPose, mixPose, strokePose, prepPose, strokeName, strokeFamily, strokeStart, strokeEnd } from './posen.js';
 
 // Maße des Skeletts: einmal für die einfache Figur aus Kapseln, einmal für das realistische Modell
@@ -306,6 +307,10 @@ export class Avatar {
   //   Dazu etwas Zufall, damit nicht jeder Schlag gleich aussieht. Slice, Volley und Schmetterball ergeben sich aus dem Schlag.
   pickStroke(kind, type, y, sit) {
     const a = this.a, name = strokeName(kind, type);
+    // Show-Schlag (siehe showschlaege.js)? Nur wenn es dafür eine eigene Aufnahme gibt – sonst bleibt alles wie immer.
+    a.show = this.real ? showFuer(name, { ...sit, y, volley: type === 'volley' }, (clip) => !!mocapClip(clip)) : null;
+    a.showBasis = name;
+    if (a.show) return name;
     const attack = y > HIGH_BALL || sit.inside, defend = y < LOW_BALL || sit.defend;
     if (name === 'fh_ts') {
       if (this.clipFor('fh_at') && a.rnd < (attack && !defend ? 0.75 : 0.12)) return 'fh_at';
@@ -320,6 +325,8 @@ export class Avatar {
   // Gibt es für diese Bewegung eine Aufnahme? Einhändige Spieler bekommen für jede Rückhand die einhändige Aufnahme.
   clipFor(name) {
     if (!this.real) return null;
+    // Läuft gerade ein Show-Schlag, ersetzt seine Aufnahme die normale Bewegung
+    if (this.a.show && name === this.a.showBasis) return mocapClip(SHOW[this.a.show].clip);
     if (this.bh === 1 && strokeFamily(name) === 'bh_ts') return mocapClip('bh_sl');
     return mocapClip(name);
   }
@@ -352,7 +359,7 @@ export class Avatar {
       if (st.stroke && st.stroke !== 'sv') {
         const type = st.planY > 2.0 ? 'smash' : st.volley ? 'volley' : (st.hint || 'drive');
         // (nicht mehr wechseln, wenn der Schwung schon läuft – sonst springt die Figur)
-        this.sit = { inside: st.inside, defend: st.defend };
+        this.sit = { inside: st.inside, defend: st.defend, weg: st.weg };
         if (a.pre === null) a.art = this.pickStroke(st.stroke, type, st.planY ?? 0.95, this.sit);
       } else if (a.art === 'sv') a.art = 'fh_ts';
       const known = st.tHit !== undefined && st.tHit !== null;

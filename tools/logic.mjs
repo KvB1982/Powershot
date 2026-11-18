@@ -14,7 +14,7 @@ if (KA.WOCHEN.length !== 52) throw new Error('Der Kalender muss 52 Wochen haben'
 for (const t of D.TOURNAMENTS) if (KA.wocheVon(t.id) < 0) throw new Error(t.id + ' fehlt im Kalender');
 if (new Set(KT.NACHWUCHS.map((p) => p.name)).size !== KT.NACHWUCHS.length) throw new Error('Nachwuchs: doppelter Name');
 if (KT.NACHWUCHS.some((n) => names.has(n.name))) throw new Error('Ein erfundener Spieler heißt wie ein echter');
-for (const r of AU.SHOP.filter((s) => s.cat === 'Schläger')) if (Object.values(r.bonus).reduce((a, b) => a + b, 0) !== 4) throw new Error(r.name + ': Pluspunkte müssen zusammen 4 sein');
+for (const r of AU.SHOP.filter((s) => s.cat === 'Schläger' && !s.verdient)) if (Object.values(r.bonus).reduce((a, b) => a + b, 0) !== 4) throw new Error(r.name + ': Pluspunkte müssen zusammen 4 sein');
 
 // ---------------- Karriere: von ganz unten nach oben ----------------
 // Ein Test-Spieler, der so spielt: immer das größte Turnier, bei dem er mitspielen darf und das er bezahlen kann.
@@ -115,6 +115,24 @@ for (const stur of [false, true]) {
   // Wie oft kommt ein Zufall?
   let n = 0; for (let i = 0; i < 400; i++) { TT.tagStart(t, itf); if (TT.ereignis(t)) { n++; if (TT.EREIGNISSE[t.tag.ereignis].ab > 0) throw new Error('Ereignis passt nicht zum ITF-Turnier'); } }
   console.log('Turniertag: ok · Zufälle an', Math.round(n / 4), '% der Tage');
+}
+{
+  // Sammlung: Turnier-Editionen nur in der Turnierwoche und nur mit Startrecht; Sonderstücke nur verdient; Handtücher
+  const t = CA.newCareer({ name: 'Sammel Test', look: {} });
+  t.money = 5000;
+  if (CA.buy(t, 'e_ao') || CA.buy(t, 'x_titel')) throw new Error('Edition oder Sonderstück darf man so nicht kaufen');
+  t.week = KA.wocheVon('ao');
+  if (CA.buy(t, 'e_ao')) throw new Error('Edition ohne Startrecht gekauft');
+  t.erg.me.push({ a: CA.jetzt(t) - 1, p: 3000, k: 0 }); t.stand++;
+  if (!CA.buy(t, 'e_ao') || !CA.buy(t, 'h_0')) throw new Error('Edition mit Startrecht muss gehen');
+  t.week++;
+  if (!CA.editionDa(t, AU.shopById('e_ao')) ) throw new Error('Edition muss auch in der zweiten Turnierwoche da sein');
+  t.titles = 1;
+  const neu = CA.sonderPruefen(t);
+  if (!neu.some((x) => x.id === 'x_titel') || !neu.some((x) => x.id === 'x_top100') || CA.sonderPruefen(t).length) throw new Error('Sonderstücke falsch: ' + neu.map((x) => x.id));
+  if (CA.anprobeLook(t, 'e_rg').shirt !== 0xc8643a || CA.anprobeLook(t, null).shirt !== 0x3aa0f0) throw new Error('Anprobe falsch');
+  if (!c.handtuecher.length || c.handtuecher.some((h) => !h.n || h.mal < 1)) throw new Error('Handtücher fehlen');
+  console.log('Sammlung: ok ·', c.handtuecher.length, 'Handtücher nach 3 Jahren ·', c.owned.filter((id) => id[0] === 'x').join(','));
 }
 CA.addXp(c, 500); console.log('Level', c.level, 'Punkte', c.skillPoints, CA.effectiveStats(c), CA.bonusListe(c).map((b) => b.name).join(' | '));
 // Wimbledon ohne weißes Outfit kostet Leihgebühr; Schuhe passen sich dem Belag an

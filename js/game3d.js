@@ -150,6 +150,60 @@ export class Game3D {
     r.setViewport(0, 0, el.width / pr, el.height / pr);
   }
 
+  // ---------------------------------------------------------------
+  // Anprobe im Shop: deine Figur in einem kleinen Bild, sie dreht sich langsam
+  // ---------------------------------------------------------------
+  // bild = ein <canvas> aus dem Menü, look = Aussehen (Farben von Hemd, Hose, Schuhen, Schläger, Kappe …)
+  // Gleiche Technik wie beim Pokal: eigene kleine Szene, dann ins Bild kopieren.
+  figurZeigen(bild, look, hand = 1) {
+    if (this.figur) this.figur.av.dispose();
+    const szene = new THREE.Scene();
+    szene.background = new THREE.Color(0x16203a);
+    const av = new Avatar(look, 0, hand, this.realFigures);
+    const boden = new THREE.Mesh(new THREE.CircleGeometry(0.9, 32), new THREE.MeshStandardMaterial({ color: 0x2a3a5a, roughness: 0.9 }));
+    boden.rotation.x = -Math.PI / 2;
+    szene.add(av.group, boden, new THREE.HemisphereLight(0xffffff, 0x404858, 1.7));
+    const licht = new THREE.DirectionalLight(0xfff4d8, 2.2); licht.position.set(1.5, 3, 2.5); szene.add(licht);
+    const kamera = new THREE.PerspectiveCamera(30, bild.width / bild.height, 0.1, 20);
+    kamera.position.set(0, 1.25, 4.3); kamera.lookAt(0, 0.95, 0);
+    this.figur = { bild, av, szene, kamera, stift: bild.getContext('2d'), winkel: 0.5 };
+  }
+
+  figurZeichnen(dt) {
+    const f = this.figur;
+    if (!f.bild.isConnected) { f.av.dispose(); this.figur = null; return; }    // das Menü ist schon wieder weg
+    f.winkel += dt * 0.7;
+    f.av.update(dt, { x: 0, z: 0, vx: 0, vz: 0, face: f.winkel, faceFest: true });
+    const r = this.renderer, pr = r.getPixelRatio(), w = 200, h = 250;
+    r.setViewport(0, 0, w, h); r.setScissor(0, 0, w, h); r.setScissorTest(true);
+    r.render(f.szene, f.kamera);
+    r.setScissorTest(false);
+    const el = r.domElement;
+    f.stift.drawImage(el, 0, el.height - h * pr, w * pr, h * pr, 0, 0, f.bild.width, f.bild.height);
+    r.setViewport(0, 0, el.width / pr, el.height / pr);
+  }
+
+  // ---------------------------------------------------------------
+  // Deine Schlägertasche neben der Bank (Karriere). farbe = Farbe der Tasche, null = keine Tasche
+  // ---------------------------------------------------------------
+  // Aus einfachen Formen gebaut: eine lange Rolle, zwei dunkle Enden, ein Tragegurt und ein Schlägergriff, der herausschaut.
+  tascheZeigen(farbe) {
+    if (this.tasche) { this.scene.remove(this.tasche); this.tasche.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); this.tasche = null; }
+    if (farbe == null) return;
+    const G = this.tasche = new THREE.Group();
+    const teil = (geo, col, x, y, z, rz = 0, rx = 0) => {
+      const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: col, roughness: 0.8 }));
+      m.position.set(x, y, z); m.rotation.set(rx, 0, rz); m.castShadow = true; G.add(m); return m;
+    };
+    teil(new THREE.CapsuleGeometry(0.17, 0.5, 6, 14), farbe, 0, 0.17, 0, 0, Math.PI / 2);                 // die Tasche selbst, liegt längs
+    teil(new THREE.CylinderGeometry(0.175, 0.175, 0.06, 14), 0x1a1a22, 0, 0.17, 0.2, 0, Math.PI / 2);      // dunkler Streifen
+    teil(new THREE.CylinderGeometry(0.175, 0.175, 0.06, 14), 0x1a1a22, 0, 0.17, -0.2, 0, Math.PI / 2);
+    teil(new THREE.TorusGeometry(0.13, 0.015, 6, 16, Math.PI), 0x1a1a22, 0, 0.33, 0, 0, 0).rotation.y = Math.PI / 2;   // Tragegurt
+    teil(new THREE.CylinderGeometry(0.018, 0.018, 0.3, 8), 0xf2f2f2, 0.02, 0.36, -0.36, 0, -0.9);          // Schlägergriff schaut heraus
+    G.position.set(-(C.NET_W + 1.3), 0, 6.3);        // neben der Bank auf deiner Seite
+    this.scene.add(G);
+  }
+
   loadVenue(def) {
     const key = def.id + this.quality;
     if (key === this.venueKey) return;
@@ -202,7 +256,12 @@ export class Game3D {
       },
       toss(side, k) { self.tossK[side] = k; },
       prell() { snd.bounce(3, self.venue ? self.venue.surface : 'hard'); },      // Ball prellen vor dem Aufschlag
-      swing(side, kind, y, type) { self.tossK[side] = 0; self.avatars[side].swing(kind, y, type); },
+      swing(side, kind, y, type) {
+        self.tossK[side] = 0; self.avatars[side].swing(kind, y, type);
+        // Show-Schlag? Dann erfährt es das Spiel (app.js zeigt den Namen an)
+        const show = self.avatars[side].a.show;
+        if (show && self.wennShow) self.wennShow(side, show);
+      },
       hit(h) {
         snd.hit(clamp((h.speed - 8) / 40, 0.2, 1), h.type === 'serve');
         if (h.type === 'serve') call('serveSpeed', Math.round(h.speed * 3.6), h.side, h.art);
@@ -296,6 +355,7 @@ export class Game3D {
     }
     this.stadium.update(dt);
     if (this.pokal) this.pokalZeichnen(dt);          // zuerst der kleine Pokal, danach übermalt das Stadion das ganze Bild
+    if (this.figur) this.figurZeichnen(dt);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -331,6 +391,7 @@ export class Game3D {
         // Spielsituation für die Wahl des Schlags: steht der Spieler im Feld (Angriff) oder kommt er kaum an den Ball (Abwehr)?
         st.inside = Math.abs(p.plan.sz) < C.L - 1.5;
         st.defend = p.plan.lack > 0.12;
+        st.weg = p.vz * p.dz > 2;          // rennt vom Netz weg (z. B. einem Lob hinterher) – für Show-Schläge
         if (!p.isHuman && p.plan.lack > 0.45) st.hint = 'slice';      // in großer Not spielt der Computer meist Slice
         if (p.isHuman && m.controls) { const raw = m.controls.peek(); if (raw && raw.type) st.hint = raw.type; }
       }

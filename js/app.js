@@ -9,7 +9,8 @@ import { Match } from './match.js';
 import { AUFSCHLAEGE, AUFSCHLAG_ARTEN, standardAufschlag } from './schlaege.js';
 import { loadFigure } from './figur.js';
 import { ladeRequisiten } from './requisiten.js';
-import { loadMocap } from './mocap.js';
+import { loadMocap, mocapClip } from './mocap.js';
+import { SHOW } from './showschlaege.js';
 import * as D from './data.js';
 import * as TN from './tournament.js';
 import * as CA from './career.js';
@@ -51,6 +52,13 @@ sound.voice = settings.voice;
 sound.volume = settings.volume;
 sound.enabled = settings.sound;
 const game = new Game3D($('#view'), sound);
+// Ein Show-Schlag wurde gespielt (nur möglich mit eigener Aufnahme, siehe showschlaege.js): Name einblenden, in der Karriere mitzählen
+game.wennShow = (side, id) => {
+  const S = SHOW[id];
+  if (!S || side !== 0) return;
+  hud.message(S.name + '!', 'wichtig');
+  if (career && ctxT && ctxT.career) { career.showSchlaege = career.showSchlaege || {}; career.showSchlaege[S.clip] = (career.showSchlaege[S.clip] || 0) + 1; }
+};
 game.setQuality(settings.quality);
 game.realFigures = settings.figures === 'echt';
 const controls = new Controls($('#touch'), $('#stick'));
@@ -819,6 +827,8 @@ function wocheZeigen(s) {
   if (r.teamWeg) lines.push('<b>Dein Geld hat für das Team nicht gereicht.</b> Trainer und Physio haben gekündigt.');
   lines.push(`<table class="rechnung">${zeilen.join('')}<tr class="summe"><td>Diese Woche</td><td class="num ${s.netto >= 0 ? 'plus' : 'minus'}">${s.netto >= 0 ? '+' : '−'} ${money(Math.abs(s.netto))}</td></tr></table>`);
   lines.push(`Du stehst jetzt auf <b>Platz ${s.rank}</b> der Weltrangliste${s.vorher && s.vorher !== s.rank ? ` <span class="${s.rank < s.vorher ? 'plus' : 'minus'}">(${s.rank < s.vorher ? '▲' : '▼'} ${Math.abs(s.vorher - s.rank)})</span>` : ''} und hast <b class="gold">${money(career.money)}</b>.`);
+  if (s.handtuch) lines.push(`<span class="dim">🧺 Neu in deiner Sammlung: das Handtuch von ${esc(s.handtuch.n)}.</span>`);
+  for (const t of s.neueTeile || []) lines.push(`<b class="gold">🎁 Sonderstück verdient: ${esc(t.name)}!</b> Du bekommst es für ${esc(t.wofuer)}. Es liegt unter „Ausrüstung“ in deiner Sammlung.`);
   for (const g of s.neueSponsoren) lines.push(`<b class="gold">Neuer Sponsor: ${esc(g.name)}!</b> ${esc(g.text)} (${money(g.geld)} pro Turnier)`);
   if (s.seasonOver) lines.push(`<b>Ein neues Tennisjahr beginnt: ${career.season}!</b> Im ATP Race starten alle wieder bei 0 Punkten. In der Weltrangliste behältst du deine Punkte – aber jede Woche fallen die Punkte weg, die genau ein Jahr alt sind. Du hast wieder ${CA.WILDCARDS_PRO_SAISON} Wildcards.`);
   if (s.netto > 0) sound.coin();
@@ -890,6 +900,7 @@ const bonusText = (b) => Object.entries(b).map(([k, v]) => `${v > 0 ? '+' : '−
 const sterne = (n) => (n ? '⭐'.repeat(n) : '');
 const BELAG_KURZ = { hard: 'Hartplatz', clay: 'Sand', grass: 'Rasen', indoor: 'Halle' };
 let shopCat = 'Schläger';
+let anprobeId = null;         // dieses Teil probiert die Figur im Shop gerade an (null = was du wirklich trägst)
 
 // Ein Turnier, das diese Woche zur Auswahl steht
 function angebotKarte(a) {
@@ -1065,6 +1076,9 @@ function renderCareer() {
       ${Object.entries(AB.BEREICHE).map(([id, B]) => stufenKarte(id, B, B.stufen, wirkB)).join('')}
       <h2>Spezial-Trainer</h2><p class="dim">Allein kommst du bei jeder Fähigkeit nur bis ${AB.GRENZE_OHNE}. Ein Spezial-Trainer hebt diese Grenze für seine Fähigkeiten. Die Punkte verteilst du weiter unter „Fähigkeiten“.</p>
       ${Object.entries(AB.SPEZIAL).map(([id, B]) => stufenKarte(id, B, AB.TRAINER_STUFEN, (S) => `${B.fuer.map((f) => D.STAT_NAMES[f]).join(' und ')} bis ${S.grenze}`)).join('')}
+      <h2>Show-Schläge</h2><p class="dim">Besondere Schläge für die Zuschauer. Dafür braucht das Spiel eure eigenen Bewegungs-Aufnahmen – die Anleitung steht in <code>js/showschlaege.js</code>. Solange eine Aufnahme fehlt, spielt die Figur den normalen Schlag.</p>
+      <div class="grid">${Object.values(SHOW).map((S) => `<div class="panel teil"><b>${esc(S.name)}</b><br><small class="dim">${esc(S.text)}</small><br>
+        <small class="${mocapClip(S.clip) ? 'plus' : 'dim'}">${mocapClip(S.clip) ? '✓ Aufnahme gefunden' : `🔒 Aufnahme fehlt: mocap/${S.datei}.FBX`}</small>${c.showSchlaege && c.showSchlaege[S.clip] ? `<br><small class="gold">${c.showSchlaege[S.clip]}-mal gespielt</small>` : ''}</div>`).join('')}</div>
       <h2>Profi-Schläge</h2><p class="dim">Stärkere Arten von Schlägen, die du schon kennst. Lernen kann sie nur, wer die Fähigkeit dafür hat.</p>
       <div class="grid">${Object.entries(AB.TECHNIKEN).map(([id, T]) => { const k = AB.kannLernen(c, id);
         return `<div class="panel teil"><b>${T.bild} ${esc(T.name)}</b><br><small class="dim">${esc(T.text)}</small><br><small class="gold">braucht ${Object.entries(T.braucht).map(([f, w]) => `${D.STAT_NAMES[f]} ${w}`).join(', ')}</small><br>
@@ -1077,7 +1091,15 @@ function renderCareer() {
       else if (s.cat === 'Saiten') info = `<small class="gold">${bonusText(s.bonus)}</small><br><small class="dim">${esc(s.text)} Hält ${CA.saitenLeben(c, s)} Matches.</small>`;
       else if (s.cat === 'Schuhe') info = `<small class="gold">Tempo: ${Object.entries(s.tempo).map(([b, v]) => `${BELAG_KURZ[b]} +${v}`).join(' · ')}</small><br><small class="dim">${esc(s.text)}</small>`;
       else info = `<small class="gold">${[s.bonus ? bonusText(s.bonus) : '', sterne(s.sterne)].filter(Boolean).join(' · ')}</small>${s.text ? `<br><small class="dim">${esc(s.text)}</small>` : ''}`;
-      if (s.cat === 'Saiten') {
+      // Seltene Stücke bekommen ein farbiges Schild
+      if (s.selten) info = `<span class="tag" style="background:${AU.SELTEN_FARBE[s.selten]};color:#111">${AU.SELTEN[s.selten]}</span> ` + info;
+      const probe = ['Schläger', 'Schuhe', 'Outfit', 'Kopf'].includes(s.cat) ? ` <button class="ghost" data-a="anprobe" data-v="${s.id}" style="margin-top:8px">${anprobeId === s.id ? '👀 wird anprobiert' : 'Anprobieren'}</button>` : '';
+      if (s.verdient && !own) {
+        knopf = `<button disabled>🔒 Nicht zu kaufen</button><br><small class="dim">Bekommst du für ${esc(s.wofuer)}.</small>`;
+      } else if (s.nur && !own && !CA.editionDa(c, s)) {
+        const t = D.tournamentById(s.nur);
+        knopf = `<button disabled>🔒 Nur im Turnier-Shop</button><br><small class="dim">Gibt es nur in der Woche von ${esc(t.name)} (${KA.datumKurz(c.season, KA.wocheVon(s.nur))}) – und nur, wenn du dort mitspielen darfst.</small>`;
+      } else if (s.cat === 'Saiten') {
         knopf = on && c.saitenRest > 0 ? `<button class="sel" disabled>✓ Aufgezogen · noch ${c.saitenRest} ${c.saitenRest === 1 ? 'Match' : 'Matches'}</button>`
           : `<button data-a="buy" data-v="${s.id}" ${!frei && c.money < s.price ? 'disabled' : ''}>Bespannen · ${frei ? 'gratis' : money(s.price)}</button>`;
       } else if (s.cat === 'Schuhe') {
@@ -1087,17 +1109,37 @@ function renderCareer() {
           : `<button data-a="buy" data-v="${s.id}" ${c.money < s.price ? 'disabled' : ''}>Kaufen · ${money(s.price)}</button>`;
       }
       const farbe = s.color != null ? s.color : s.shirt;
-      return `<div class="panel teil">${farbe != null ? `<i class="punkt" style="background:${hex(farbe)}"></i>` : ''}<b>${esc(s.name)}</b><br>${info}<br>${knopf.replace('<button', '<button style="margin-top:8px"')}</div>`;
+      return `<div class="panel teil" ${s.selten ? `style="border-color:${AU.SELTEN_FARBE[s.selten]}"` : ''}>${farbe != null ? `<i class="punkt" style="background:${hex(farbe)}"></i>` : ''}<b>${esc(s.name)}</b><br>${info}<br>${knopf.replace('<button', '<button style="margin-top:8px"')}${probe}</div>`;
     };
     const teile = AU.SHOP.filter((s) => s.cat === shopCat);
+    const probeTeil = AU.shopById(anprobeId);
+    // Anprobe: deine Figur in 3D, mit dem Teil, das du gerade anschaust
+    const anprobe = `<div class="panel anprobe"><canvas id="anprobe" width="320" height="400"></canvas>
+      <div><h3 style="margin-top:0">Anprobe</h3><p>${probeTeil ? `Du probierst an: <b>${esc(probeTeil.name)}</b>${c.owned.includes(probeTeil.id) ? '' : ' <span class="dim">(gehört dir noch nicht)</span>'}` : 'So sieht dein Spieler gerade aus.'}</p>
+      <p class="dim klein">Tippe bei einem Schläger, Schuh, Outfit oder einer Kappe auf „Anprobieren“. Die Figur zeigt nur Farben und Formen – echte Marken-Logos gibt es im Spiel nicht.</p>
+      ${probeTeil ? '<button class="ghost" data-a="anprobe" data-v="">Wieder meine eigenen Sachen zeigen</button>' : ''}</div></div>`;
     const marken = [...new Set(teile.map((s) => s.marke))];
     // Schläger nach Marke sortiert anzeigen, alles andere in einer Liste
     const liste = shopCat === 'Schläger'
       ? marken.map((m) => `<div class="panel"><h3 style="margin-top:0">${m}${c.vertrag.schlaeger === m && stufe >= 0 ? ' <span class="tag gs">dein Ausrüster</span>' : ''}</h3><div class="grid">${teile.filter((s) => s.marke === m).map(karte).join('')}</div></div>`).join('')
       : `<div class="panel"><div class="grid">${teile.map(karte).join('')}</div></div>`;
+    // Sammlung: alles, was dir gehört – nach Seltenheit sortiert – und die Handtücher von deinen Turnieren
+    let sammlung = '';
+    if (shopCat === 'Sammlung') {
+      const meins = AU.SHOP.filter((s) => s.cat !== 'Saiten' && c.owned.includes(s.id)).sort((a, b) => b.selten - a.selten);
+      const zahl = (n) => AU.SHOP.filter((s) => s.cat !== 'Saiten' && s.selten === n);
+      sammlung = `<div class="panel"><h3 style="margin-top:0">Deine Sammlung</h3>
+        <div class="kpi">${AU.SELTEN.map((name, n) => `<div style="border-bottom:3px solid ${AU.SELTEN_FARBE[n]}"><b>${zahl(n).filter((s) => c.owned.includes(s.id)).length} / ${zahl(n).length}</b><span>${name}</span></div>`).join('')}
+          <div><b>${c.handtuecher.length}</b><span>Turnier-Handtücher</span></div></div>
+        <p class="dim klein">Seltene Stücke machen nicht stärker als normale – sie bringen Fans und sind etwas für Sammler. Turnier-Editionen gibt es nur vor Ort im Turnier-Shop, Sonderstücke nur für besondere Erfolge.</p></div>
+        <div class="panel">${meins.length ? `<div class="grid">${meins.map(karte).join('')}</div>` : '<p class="dim">Noch nichts gekauft. Saiten zählen nicht zur Sammlung – die werden ja verbraucht.</p>'}</div>
+        <div class="panel"><h3 style="margin-top:0">Noch zu holen: Sonderstücke</h3><div class="grid">${AU.SHOP.filter((s) => s.verdient && !c.owned.includes(s.id)).map(karte).join('') || '<p class="gold">Du hast alle Sonderstücke!</p>'}</div></div>
+        <div class="panel"><h3 style="margin-top:0">🧺 Turnier-Handtücher</h3><p class="dim klein">Von jedem Turnier, bei dem du spielst, nimmst du ein Handtuch mit – das machen die echten Profis auch.</p>
+          ${c.handtuecher.length ? `<div class="row">${c.handtuecher.map((h) => `<span class="tag ${h.cat === 'GS' ? 'gs' : ''}" title="zum ersten Mal ${h.jahr}">${esc(h.n)}${h.mal > 1 ? ' ×' + h.mal : ''}</span>`).join('')}</div>` : '<p class="dim">Noch keins. Spiel dein erstes Turnier!</p>'}</div>`;
+    }
     body = `<p>Dein Geld: <b class="gold">${money(c.money)}</b></p>
-      <div class="row tabs">${AU.SHOP_CATS.map((k) => `<button class="${shopCat === k ? 'sel' : ''}" data-a="shopCat" data-v="${k}">${k}</button>`).join('')}</div>
-      <p class="dim">${AU.SHOP_INFO[shopCat]}</p>${liste}`;
+      <div class="row tabs">${[...AU.SHOP_CATS, 'Sammlung'].map((k) => `<button class="${shopCat === k ? 'sel' : ''}" data-a="shopCat" data-v="${k}">${k}</button>`).join('')}</div>
+      ${shopCat === 'Sammlung' ? sammlung : `<p class="dim">${AU.SHOP_INFO[shopCat]}</p>${anprobe}${liste}`}`;
   } else if (careerTab === 'team') {
     const person = (p, aktiv, extra) => `<div class="panel teil"><b>${p.name}</b><br><small class="dim">${p.text}</small><br><small class="gold">${extra}</small><br>
       <button class="${aktiv ? 'sel' : ''}" data-a="careerTeam" data-v="${p.id}" style="margin-top:8px">${aktiv ? '✓ In deinem Team' : p.lohn ? 'Einstellen · ' + money(p.lohn) + ' pro Woche' : 'Auswählen'}</button></div>`;
@@ -1127,7 +1169,10 @@ function renderCareer() {
   }
   show(`<div class="bar">${back()}<h2>${flag(c.country)} ${esc(c.name)}</h2><button class="ghost" data-a="careerDelete">Karriere löschen</button></div>
     <div class="tabs">${tabs.map(([k, n]) => `<button class="${careerTab === k ? 'sel' : ''}" data-a="career" data-v="${k}">${n}</button>`).join('')}</div>${body}`);
+  const probeBild = document.getElementById('anprobe');
+  if (probeBild) game.figurZeigen(probeBild, CA.anprobeLook(c, anprobeId), c.hand);
 }
+actions.anprobe = (v) => { anprobeId = v || null; keepScroll(renderCareer); };
 actions.ranglisteTab = (v) => { ranglisteTab = v; keepScroll(renderCareer); };
 actions.ausbau = (v) => { if (CA.ausbauKaufen(career, v)) sound.coin(); keepScroll(renderCareer); };
 actions.technik = (v) => { if (CA.technikLernen(career, v)) sound.coin(); keepScroll(renderCareer); };
@@ -1291,6 +1336,9 @@ function startMatch(o) {
   menuVenue = o.def.id;
   game.loadVenue(o.def);
   game.setPlayers(o.me, o.opp);
+  // In der Karriere steht deine Schlägertasche neben der Bank
+  const tasche = career && o.me && o.me.me ? CA.traegt(career, 'Tasche') : null;
+  game.tascheZeigen(tasche ? tasche.color ?? 0x2a2a34 : null);
   game.showAvatars(true);
   controls.setMode(settings.control);
   controls.enabled = true;

@@ -135,18 +135,68 @@ const BAENDER = [
 }));
 
 // Taschen. In eine große Tasche passen mehr fertig bespannte Schläger – deine Saiten halten dadurch mehr Matches (mehr = …).
+// Die Farbe sieht man im Match: Deine Tasche steht neben deiner Bank.
 const TASCHEN = [
-  ['Head', 'Tour Team 3er', 1, 0, 50],
-  ['Wilson', 'Super Tour 6er', 2, 0, 90],
-  ['Yonex', 'Pro 9er', 2, 1, 120],
-  ['Babolat', 'Pure Aero 12er', 3, 1, 140],
-  ['Tecnifibre', 'Tour Endurance 15er', 4, 2, 160],
-].map(([marke, modell, mehr, sterne, price], i) => ({
-  id: 't_' + i, cat: 'Tasche', marke, name: marke + ' ' + modell, mehr, sterne, price,
+  ['Head', 'Tour Team 3er', 1, 0, 50, 0x2a2a34],
+  ['Wilson', 'Super Tour 6er', 2, 0, 90, 0xc82a2a],
+  ['Yonex', 'Pro 9er', 2, 1, 120, 0x2a6ad8],
+  ['Babolat', 'Pure Aero 12er', 3, 1, 140, 0xf2e85c],
+  ['Tecnifibre', 'Tour Endurance 15er', 4, 2, 160, 0xf0f0f8],
+].map(([marke, modell, mehr, sterne, price, color], i) => ({
+  id: 't_' + i, cat: 'Tasche', marke, name: marke + ' ' + modell, mehr, sterne, price, color,
   text: `Saiten halten ${mehr} ${mehr === 1 ? 'Match' : 'Matches'} länger`,
 }));
 
-export const SHOP = [...SCHLAEGER, ...SAITEN, ...SCHUHE, ...OUTFITS, ...KOPF, ...BAENDER, ...TASCHEN];
+// ---------------------------------------------------------------
+// Seltene Stücke
+// ---------------------------------------------------------------
+// Jedes Teil hat eine Seltenheit (selten): 0 = normal, 1 = selten, 2 = episch, 3 = legendär.
+// Die Stärke im Match hängt NICHT an der Seltenheit – seltene Stücke bringen vor allem Fans und sind etwas für Sammler.
+export const SELTEN = ['Normal', 'Selten', 'Episch', 'Legendär'];
+export const SELTEN_FARBE = ['#8a93a8', '#4aa8ff', '#b06aff', '#ffc83a'];
+
+// Turnier-Editionen: Zu jedem großen Turnier gibt es ein Outfit in den Farben des Turniers. Man bekommt es nur im
+// Turnier-Shop vor Ort – also nur in der Woche des Turniers, und nur, wenn man dort mitspielen darf.
+// (In echt bringen die Marken zu den Grand Slams eigene Kollektionen heraus. Unsere sind erfunden und haben keine Marke.)
+// [Turnier, Name, Hemd, Hose, Sterne, Preis, Seltenheit]
+const EDITIONEN = [
+  ['ao', 'Melbourne-Edition Himmelblau', 0x3aa0f0, 0xffffff, 4, 260, 2],
+  ['rg', 'Paris-Edition Sandrot', 0xc8643a, 0x1a2a4a, 4, 260, 2],
+  ['wim', 'London-Edition Schneeweiß', 0xffffff, 0xffffff, 4, 260, 2],
+  ['uso', 'New-York-Edition Nachtblau', 0x1a1a4a, 0xf2e85c, 4, 260, 2],
+  ['fin', 'Finals-Edition Schwarz-Gold', 0x1a1a1a, 0xd8b040, 5, 400, 3],
+  ['iw', 'Wüsten-Edition Türkis', 0x2ad8c8, 0x8a5ad8, 3, 180, 1],
+  ['mia', 'Miami-Edition Pink', 0xff5aa8, 0x2ad8d8, 3, 180, 1],
+  ['mc', 'Monte-Carlo-Edition Azur', 0x2a7ad8, 0xf5e8d0, 3, 180, 1],
+  ['mad', 'Madrid-Edition Lila', 0x7a3ac8, 0x1a1a1a, 3, 180, 1],
+  ['rom', 'Rom-Edition Terrakotta', 0xd8703a, 0xf5f5f5, 3, 180, 1],
+  ['can', 'Kanada-Edition Ahornrot', 0xd82a2a, 0xffffff, 3, 180, 1],
+  ['cin', 'Cincinnati-Edition Marine', 0x1a2a6a, 0xf5f5f5, 3, 180, 1],
+  ['sha', 'Shanghai-Edition Jade', 0x2aa87a, 0x1a1a1a, 3, 180, 1],
+  ['par', 'Hallen-Edition Graphit', 0x4a4a58, 0xd8f02a, 3, 180, 1],
+].map(([nur, name, shirt, shorts, sterne, price, selten]) => ({
+  id: 'e_' + nur, cat: 'Outfit', marke: 'Turnier-Shop', name, shirt, shorts, sterne, price, selten, nur,
+  weiss: shirt === 0xffffff && shorts === 0xffffff,
+}));
+
+// Sonderstücke: Die kann man nicht kaufen. Man bekommt sie für etwas Besonderes (verdient + wofuer).
+//   verdient: 'titel' = erster Turniersieg · 'top100' / 'top10' / 'nr1' = so weit vorn in der Weltrangliste ·
+//             'slam' = Grand-Slam-Sieg · 'siege100' = 100 gewonnene Matches
+const SONDER = [
+  { id: 'x_titel', cat: 'Schweißband', name: 'Goldenes Schweißband', bonus: { c: 1, s: 1 }, sterne: 2, verdient: 'titel', wofuer: 'deinen ersten Turniersieg' },
+  { id: 'x_siege', cat: 'Kopf', name: 'Stirnband „100 Siege“', head: 'band', sterne: 2, verdient: 'siege100', wofuer: '100 gewonnene Matches', text: 'Hält Haare und Schweiß aus dem Gesicht' },
+  { id: 'x_top100', cat: 'Kopf', name: 'Top-100-Kappe', head: 'cap', sterne: 3, verdient: 'top100', wofuer: 'einen Platz unter den besten 100', text: 'Bei Sonne: +1 Aufschlag' },
+  { id: 'x_top10', cat: 'Tasche', name: 'Top-10-Tasche in Gold', mehr: 4, sterne: 3, color: 0xd8b040, verdient: 'top10', wofuer: 'einen Platz unter den besten 10', text: 'Saiten halten 4 Matches länger' },
+  { id: 'x_slam', cat: 'Outfit', name: 'Champion-Outfit Gold', shirt: 0xe8c040, shorts: 0x1a1a1a, sterne: 5, verdient: 'slam', wofuer: 'einen Grand-Slam-Sieg' },
+  { id: 'x_nr1', cat: 'Schläger', name: 'Schläger der Nummer 1', typ: 'Legende', bonus: { p: 1, c: 2, s: 1, v: 1 }, color: 0xd8b040, verdient: 'nr1', wofuer: 'Platz 1 der Weltrangliste' },
+].map((x) => ({ marke: 'Sonderstück', price: 0, selten: 3, ...x }));
+
+// Seltenheit der normalen Teile: viele Fan-Sterne oder Naturdarm = selten
+for (const x of [...OUTFITS, ...KOPF, ...TASCHEN]) x.selten = x.sterne >= 3 ? 1 : 0;
+for (const x of SAITEN) x.selten = x.price >= 60 ? 1 : 0;
+
+export const SHOP = [...SCHLAEGER, ...SAITEN, ...SCHUHE, ...OUTFITS, ...EDITIONEN, ...KOPF, ...BAENDER, ...TASCHEN, ...SONDER];
+for (const x of SHOP) x.selten = x.selten || 0;
 export const SHOP_CATS = ['Schläger', 'Saiten', 'Schuhe', 'Outfit', 'Kopf', 'Schweißband', 'Tasche'];
 export const SHOP_INFO = {
   'Schläger': 'Jeder Schläger bringt 4 Pluspunkte, nur anders verteilt. Such dir den aus, der zu deinem Spiel passt.',

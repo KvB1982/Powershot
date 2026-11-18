@@ -73,6 +73,7 @@ function reparieren(c) {
   c.serie = c.serie || 0;              // so viele Wochen hintereinander hast du Matches gespielt
   c.koerper = c.koerper || null;       // Beschwerden: { teil, wochen }
   c.verletzung = c.verletzung || null; // Verletzung: { name, teil, wochen, gesamt, fehler }
+  c.handtuecher = c.handtuecher || []; // Sammlung: von jedem Turnier, bei dem du gespielt hast, ein Handtuch
   c.v = 3;
   return c;
 }
@@ -356,9 +357,37 @@ export function mePlayer(c) {
   return { id: 'me', name: c.name, short: parts[parts.length - 1], country: c.country, stats: effectiveStats(c, def), hand: c.hand, look, me: true, technik: technikWerte(c) };
 }
 
+// Turnier-Edition: Gibt es dieses Teil gerade zu kaufen? Nur in der Woche "seines" Turniers (bei Turnieren über
+// zwei Wochen auch in der zweiten), und nur, wenn du dort mitspielen darfst.
+export function editionDa(c, item) {
+  if (!item.nur) return true;
+  const W = WOCHEN[c.week];
+  return (W.gross === item.nur || W.zweite === item.nur) && zugang(c, tournamentById(item.nur)).ok;
+}
+
+// Sonderstücke: Hast du dir gerade eines verdient? Gibt die neuen Teile zurück (sie liegen dann in deinem Schrank).
+export function sonderPruefen(c, platz = myRank(c)) {
+  const erfuellt = {
+    titel: c.titles >= 1, siege100: c.siege >= 100, top100: platz <= 100, top10: platz <= 10, nr1: platz <= 1,
+    slam: c.pokale.some((p) => p.cat === 'GS') || c.history.some((h) => h.cat === 'GS' && h.label === 'W'),
+  };
+  const neu = SHOP.filter((s) => s.verdient && erfuellt[s.verdient] && !c.owned.includes(s.id));
+  for (const s of neu) c.owned.push(s.id);
+  return neu;
+}
+
+// So sähe dein Spieler mit diesem Teil aus (für die Anprobe im Shop). Ohne id: so, wie er jetzt aussieht.
+export function anprobeLook(c, id) {
+  const item = shopById(id);
+  if (!item) return mePlayer({ ...c, tournament: null }).look;
+  const look = mePlayer({ ...c, tournament: null, owned: [...c.owned, id], equipped: { ...c.equipped, [item.cat]: id } }).look;
+  if (item.cat === 'Schuhe') look.shoes = item.color;
+  return look;
+}
+
 export function buy(c, id) {
   const item = shopById(id);
-  if (!item) return false;
+  if (!item || item.verdient || !editionDa(c, item)) return false;
   if (item.cat === 'Saiten') return bespannen(c, id);
   if (hat(c, item) || c.money < item.price) return false;
   c.money -= item.price;
@@ -727,6 +756,7 @@ function wocheFertig(c, summary, erholung, wochen = 1) {
   summary.rank = rk;
   summary.vorher = vorher;
   summary.neueSponsoren = neueGeldgeber(c, rk);
+  summary.neueTeile = sonderPruefen(c, rk);
   // Frisch verletzt? Dann ausrechnen, wie viele Punkte in der Zwangspause aus der Rangliste fallen.
   if (summary.verletzung) summary.punkteInGefahr = zuVerteidigen(c, summary.verletzung.wochen).filter((e) => e.zaehlt).reduce((x, e) => x + e.p, 0);
   const r = summary.rechnung;
@@ -753,10 +783,17 @@ export function finishTournament(c) {
   c.money += mine.money;
   const titel = mine.label === 'W' && def.cat !== 'LIGA';
   if (titel) c.titles++;
+  // Für die Sammlung: Von jedem Turnier nimmst du ein Handtuch mit (das machen die Profis wirklich).
+  let handtuch = null;
+  if (def.cat !== 'LIGA' && T.humanId) {
+    const n = def.klein ? `${def.catName || def.cat} ${def.city}` : def.name;
+    const h = c.handtuecher.find((x) => x.n === n);
+    if (h) h.mal++; else { handtuch = { n, cat: def.cat, jahr: c.season, mal: 1 }; c.handtuecher.push(handtuch); }
+  }
   const lang = !def.klein && zweiWochen(def.id) && (ZWEITE_WOCHE[def.cat] || []).includes(mine.label);
   return wocheFertig(c, {
     tid: def.id, name: def.name, cat: def.cat, label: mine.label, points: mine.points, money: mine.money, titel,
-    champion: T.players[T.champion].name,
+    champion: T.players[T.champion].name, handtuch,
     rechnung: c.rechnung || { sponsor: 0, sponsoren: [], flug: 0, hotel: 0, essen: 0, team: 0, bespannen: 0, leihe: 0 },
   }, meinPhysio(c).erholung, lang ? 2 : 1);
 }

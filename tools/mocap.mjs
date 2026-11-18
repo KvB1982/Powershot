@@ -44,6 +44,12 @@ const CLIPS = {
   // 'gang' = das Werkzeug sucht selbst die Schritte heraus und schneidet eine Schleife aus ganzen Doppelschritten.
   // Fehlt die Datei, geht die Figur mit dem gebauten Gang aus js/avatar.js (GANG).
   walk:  { file: 'Gehen', gang: true },
+  // Show-Schläge (siehe js/showschlaege.js): eure eigenen Aufnahmen. Fehlt eine Datei, wird sie einfach übersprungen.
+  // Mit einer echten Datei noch nicht erprobt – vor/nach und yaw müssen dann vielleicht angepasst werden.
+  show_tweener: { file: 'Show_Tweener', vor: 1.0, nach: 0.9 },
+  show_sprung:  { file: 'Show_Sprung_Rueckhand', vor: 1.0, nach: 1.0 },
+  show_lasso:   { file: 'Show_Lasso_Vorhand', vor: 1.0, nach: 1.0 },
+  show_hecht:   { file: 'Show_Hechtvolley', vor: 0.8, nach: 1.0 },
 };
 
 // three.js läuft auch ohne Browser, braucht aber ein paar Platzhalter
