@@ -29,6 +29,18 @@ const PAUSE_ERHOLT = 0.06;         // beim Seitenwechsel erholt man sich um dies
 const PRELL_TIME = 0.42;           // Ball prellen vor dem Aufschlag: so lange dauert einmal Boden und zurück (s)
 export const UNTEN_TIME = 0.75;    // Aufschlag von unten: so lange dauert es vom Loslassen des Balls bis zum Treffen
 
+// Profi-Schläge aus der Karriere (siehe TECHNIKEN in ausbau.js): Die Zahlen der Schlagart werden malgenommen.
+// t = { nur: 'fh' | 'bh' | null, mal: { top: 1.25, tempo: 1.06, … } }
+function mitTechnik(S, t, p) {
+  if (!t || (t.nur && t.nur !== p.stroke)) return S;
+  const out = { ...S };
+  for (const k in t.mal) {
+    if (Array.isArray(out[k])) out[k] = out[k].map((x) => x * t.mal[k]);
+    else if (typeof out[k] === 'number') out[k] *= t.mal[k];
+  }
+  return out;
+}
+
 export class Match {
   // cfg: { players:[a,b], human:0|null, surface, difficulty, sets, games,
   //        mode:'match'|'ballmaschine'|'aufschlag', assist:'voll'|'seitlich'|'aus', controlMode }
@@ -361,6 +373,7 @@ export class Match {
     if (type === 'serve') {
       const first = o.serveNo === 1;
       S = aufschlagWerte(intent.art, intent.schlag);
+      S = mitTechnik(S, p.data.technik && p.data.technik.aufschlag[intent.art || 'gerade'], p);
       const z = first ? { tempo: 1, streu: 1, netzfehler: 1 } : S.zweiter;     // zweiter Aufschlag: etwas vorsichtiger
       vh = S.bogen ? 12 : (35 + 23 * p.s) * (0.72 + 0.28 * pw) * S.tempo * z.tempo;
       clear = S.netz;
@@ -372,6 +385,7 @@ export class Match {
       if (o.volley && (grund || type === 'slice')) type = o.from.y > 2.0 ? 'smash' : 'volley';
       else if (grund && o.from.y > 2.1) type = 'smash';
       S = schlagWerte(type, intent.schlag);
+      S = mitTechnik(S, p.data.technik && p.data.technik.schlag[type], p);
       const tp = Array.isArray(S.tempo) ? S.tempo : [S.tempo || 12, S.tempo || 12];
       const nz = Array.isArray(S.netz) ? S.netz : [S.netz, S.netz];
       vh = (tp[0] + (tp[1] - tp[0]) * p.p) * (1 - (S.kraft || 0) + (S.kraft || 0) * pw);

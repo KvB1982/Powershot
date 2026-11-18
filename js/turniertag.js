@@ -11,6 +11,7 @@
 //
 // Pluspunkte gelten für: s = Aufschlag, p = Kraft, t = Tempo, c = Präzision, v = Volley
 import { addXp, saveCareer, traegt, bespannen, gratis } from './career.js';
+import { ausheilen } from './ausbau.js';
 
 export const ZEIT_FENSTER = 2;
 export const FENSTER_NAMEN = ['Morgen', 'Mittag', 'Match'];
@@ -113,6 +114,8 @@ export function tun(c, ort, def, spiel) {
     c.frische = Math.max(0, Math.min(100, c.frische + T.frische));
     bringt.push(`Frische ${T.frische > 0 ? '+' : '−'}${Math.abs(T.frische)}`);
   }
+  // Die Physiotherapeutin behandelt auch, was gerade zwickt
+  if (ort === 'physio' && c.koerper) { const teil = c.koerper.teil; ausheilen(c); bringt.push(`Deine Beschwerden sind weg (${teil}).`); }
   if (T.bonus && Object.keys(T.bonus).length) {
     for (const k in T.bonus) t.bonus[k] = (t.bonus[k] || 0) + T.bonus[k];
     bringt.push('Pluspunkte für das Match heute');

@@ -9,6 +9,7 @@ const KT = await import('../js/kleinetour.js');
 console.log('Shop:', AU.SHOP.length, 'Teile ·', AU.SHOP.filter((s) => s.cat === 'Schläger').length, 'Schläger · kleine Turniere:', KT.KLEINE_TURNIERE.length, '· Nachwuchsspieler:', KT.NACHWUCHS.length);
 if (new Set(AU.SHOP.map((s) => s.id)).size !== AU.SHOP.length) throw new Error('Shop: doppelte id');
 const KA = await import('../js/kalender.js');
+const AB = await import('../js/ausbau.js');
 if (KA.WOCHEN.length !== 52) throw new Error('Der Kalender muss 52 Wochen haben');
 for (const t of D.TOURNAMENTS) if (KA.wocheVon(t.id) < 0) throw new Error(t.id + ' fehlt im Kalender');
 if (new Set(KT.NACHWUCHS.map((p) => p.name)).size !== KT.NACHWUCHS.length) throw new Error('Nachwuchs: doppelter Name');
@@ -18,10 +19,10 @@ for (const r of AU.SHOP.filter((s) => s.cat === 'Schläger')) if (Object.values(
 // ---------------- Karriere: von ganz unten nach oben ----------------
 // Ein Test-Spieler, der so spielt: immer das größte Turnier, bei dem er mitspielen darf und das er bezahlen kann.
 // siegChance = wie oft er ein Match gewinnt. Reicht das Geld nicht, spielt er Liga.
-function karriere(siegChance, saisons, laut) {
+function karriere(siegChance, saisons, laut, stur) {
   const c = CA.newCareer({ name: 'Max Test', look: {} });
   if (CA.myRank(c) !== 2000) throw new Error('Start muss Platz 2000 sein');
-  let liga = 0, minGeld = c.money;
+  let liga = 0, minGeld = c.money, verletzt = 0, wehweh = 0;
   while (c.season < 2026 + saisons) {
     const platz = CA.myRank(c);
     // Ausrüstung und Team wie ein vernünftiger Spieler
@@ -30,6 +31,10 @@ function karriere(siegChance, saisons, laut) {
     if (!c.vertrag.schlaeger && CA.vertragsStufe(c) >= 0) CA.setVertrag(c, 'schlaeger', 'Babolat');
     if (c.money > 30000 && c.trainer === 't0') CA.setTeam(c, 't2');
     if (c.money > 30000 && c.physio === 'p0') CA.setTeam(c, 'p2');
+    for (const id of ['bespanner', 'werkstatt', 'arzt', 'tr_schlag']) if (c.money > 4 * ((AB.kannKaufen(c, id, platz).naechste || {}).preis || 1e9)) CA.ausbauKaufen(c, id);
+    // Verletzt: gesund werden. Beschwerden: eine Woche Pause (so macht es ein vernünftiger Spieler).
+    if (c.verletzung) { const s = CA.wocheOhneTurnier(c, 'pause'); verletzt++; if (s.cat !== 'reha') throw new Error('Verletzt muss Reha sein'); if (laut) console.log(`  Verletzungspause (${s.reha.name}, noch ${s.reha.rest} Wochen)  Platz ${s.rank}`); continue; }
+    if (c.koerper && !stur) { const s = CA.wocheOhneTurnier(c, 'pause'); if (!s.geheilt || c.koerper) throw new Error('Pause muss Beschwerden heilen'); continue; }
     const wahl = CA.angebot(c).filter((a) => a.zugang.ok && !a.fehlt).pop();
     let T;
     if (c.frische < 40) { const s = CA.wocheOhneTurnier(c, 'pause'); if (laut) console.log(`  Pause                              Platz ${s.rank}  Geld ${c.money}`); continue; }
@@ -47,13 +52,15 @@ function karriere(siegChance, saisons, laut) {
     }
     const s = CA.finishTournament(c);
     minGeld = Math.min(minGeld, c.money);
+    if (s.beschwerden) wehweh++;
+    if (s.verletzung && laut) console.log(`  VERLETZT: ${s.verletzung.name}, ${s.verletzung.wochen} Wochen. ${s.verletzung.fehler.join(' ')} (${s.punkteInGefahr} Punkte fallen in der Zeit weg)`);
     if (c.money < 0) throw new Error('Geld darf nie unter 0 fallen');
     const r = s.rechnung;
     if (s.netto !== s.money + r.sponsor - r.flug - r.hotel - r.essen - r.team - r.bespannen - r.leihe) throw new Error('Abrechnung falsch');
     if (laut) console.log(`  ${s.season} ${KA.datumKurz(s.season, s.w).padStart(6)} ${s.name.padEnd(34)} ${String(s.label).padEnd(4)} +${String(s.points).padStart(4)} P  Platz ${String(s.rank).padStart(4)}  netto ${String(s.netto).padStart(8)} $  Geld ${String(c.money).padStart(9)} $  Frische ${c.frische}${s.neueSponsoren.length ? '  NEU: ' + s.neueSponsoren.map((g) => g.name).join(', ') : ''}`);
     void platz;
   }
-  return { c, liga, minGeld };
+  return { c, liga, minGeld, verletzt, wehweh };
 }
 console.log('\nKarriere mit 65 % gewonnenen Matches, 3 Saisons:');
 const { c } = karriere(0.65, 3, true);
@@ -63,6 +70,23 @@ for (const chance of [0.35, 0.5, 0.65, 0.8]) {
   for (let i = 0; i < 4; i++) { const k = karriere(chance, 3); erg.push([CA.myRank(k.c), k.c.money, k.liga, k.minGeld]); }
   const mittel = (j) => Math.round(erg.reduce((a, e) => a + e[j], 0) / erg.length);
   console.log(`Siegchance ${chance}: nach 3 Saisons im Schnitt Platz ${mittel(0)}, Geld ${mittel(1)} $, Liga-Wochen ${mittel(2)}, kleinster Kontostand ${Math.min(...erg.map((e) => e[3]))} $`);
+}
+// Der Körper: Ein vernünftiger Spieler (macht Pause bei Beschwerden) verletzt sich fast nie, ein sturer öfter.
+for (const stur of [false, true]) {
+  let v = 0, w = 0;
+  for (let i = 0; i < 3; i++) { const k = karriere(0.65, 3, false, stur); v += k.verletzt; w += k.wehweh; }
+  console.log(`Körper (${stur ? 'spielt mit Beschwerden weiter' : 'macht Pause bei Beschwerden'}): in 9 Jahren ${w}-mal Beschwerden, ${v} Wochen verletzt`);
+}
+{
+  // Mit festem Zufall: erst Beschwerden, dann Verletzung mit Erklärung
+  const t = { money: 0, ausbau: {}, skills: {} };
+  const eins = AB.koerperWoche(t, { matches: 3, tiefFrische: 25, serie: 7, physio: 0, zufall: () => 0 });
+  if (!eins.beschwerden || !t.koerper) throw new Error('Beschwerden fehlen');
+  const zwei = AB.koerperWoche(t, { matches: 3, tiefFrische: 25, serie: 7, physio: 0, zufall: () => 0 });
+  if (!zwei.verletzung || t.verletzung.fehler.length !== 3 || t.verletzung.wochen !== 12 || t.koerper) throw new Error('Verletzung falsch: ' + JSON.stringify(zwei));
+  if (AB.grenze({ ausbau: {} }, 's') !== 70 || AB.grenze({ ausbau: { tr_aufschlag: 2 } }, 's') !== 88 || AB.grenze({ ausbau: { tr_aufschlag: 2 } }, 'v') !== 70) throw new Error('Grenze der Fähigkeiten falsch');
+  const l = { money: 50000, skills: { s: 80, vh: 60 }, techniken: [] };
+  if (!AB.lernen(l, 'kick') || AB.lernen(l, 'peitsche') || !AB.technikWerte(l).aufschlag.kick) throw new Error('Profi-Schläge lernen falsch');
 }
 CA.addXp(c, 500); console.log('Level', c.level, 'Punkte', c.skillPoints, CA.effectiveStats(c), CA.bonusListe(c).map((b) => b.name).join(' | '));
 // Wimbledon ohne weißes Outfit kostet Leihgebühr; Schuhe passen sich dem Belag an

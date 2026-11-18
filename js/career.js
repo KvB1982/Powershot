@@ -15,6 +15,7 @@ import {
   SHOP, shopById, TRAINER, PHYSIOS, REISEN, VERTRAGS_STUFEN, VERTRAG_CATS, PROFI_AB, GELDGEBER,
   FAN_PROZENT, FAN_MAX, WIMBLEDON_LEIHE,
 } from './ausruestung.js';
+import { ausbauBonus, saitenPlus, grenze, technikWerte, koerperWoche, ausheilen, beschwerdenAbzug, kaufen, lernen } from './ausbau.js';
 import { WOCHEN, WOCHEN_PRO_JAHR, ZAEHLT_HOECHSTENS, PFLICHT_MASTERS, wocheVon, zweiWochen } from './kalender.js';
 
 const KEY = 'powershot.karriere.v1';
@@ -66,6 +67,12 @@ function reparieren(c) {
   c.siege = c.siege || 0;
   c.pokale = c.pokale || [];           // Pokalschrank: ein Eintrag je Turniersieg
   c.redeFans = c.redeFans || 0;        // Fan-Sterne aus Siegerreden
+  // Neu seit dem Profi-Service (siehe ausbau.js):
+  c.ausbau = c.ausbau || {};           // welche Ausbaustufe in welchem Bereich
+  c.techniken = c.techniken || [];     // gelernte Profi-Schläge
+  c.serie = c.serie || 0;              // so viele Wochen hintereinander hast du Matches gespielt
+  c.koerper = c.koerper || null;       // Beschwerden: { teil, wochen }
+  c.verletzung = c.verletzung || null; // Verletzung: { name, teil, wochen, gesamt, fehler }
   c.v = 3;
   return c;
 }
@@ -308,6 +315,10 @@ export function bonusListe(c, def = laufendesTurnier(c)) {
   const t = TRAINER.find((x) => x.id === c.trainer), p = PHYSIOS.find((x) => x.id === c.physio);
   if (t && t.bonus) out.push({ name: t.name, bonus: t.bonus });
   if (p && p.bonus) out.push({ name: p.name, bonus: p.bonus });
+  // Profi-Service: Bespanner, Werkstatt, Ärzte (siehe ausbau.js)
+  out.push(...ausbauBonus(c));
+  const weh = beschwerdenAbzug(c);
+  if (weh) out.push(weh);
   // Was du heute vor dem Match auf der Anlage getan hast (siehe turniertag.js)
   if (c.tag && Object.keys(c.tag.bonus || {}).length) out.push({ name: 'Heute auf der Anlage', bonus: c.tag.bonus });
   const f = frischeAbzug(c.frische);
@@ -340,7 +351,7 @@ export function mePlayer(c) {
   const kopf = traegt(c, 'Kopf', stufe);
   if (kopf) { look.head = kopf.head; look.model = kopf.head === 'cap' ? 'e' : 'b'; }
   const parts = c.name.trim().split(' ');
-  return { id: 'me', name: c.name, short: parts[parts.length - 1], country: c.country, stats: effectiveStats(c, def), hand: c.hand, look, me: true };
+  return { id: 'me', name: c.name, short: parts[parts.length - 1], country: c.country, stats: effectiveStats(c, def), hand: c.hand, look, me: true, technik: technikWerte(c) };
 }
 
 export function buy(c, id) {
@@ -363,10 +374,10 @@ export function equip(c, id) {
   saveCareer(c);
 }
 
-// So viele Matches hält eine frische Bespannung (eine große Tasche bringt Matches dazu)
+// So viele Matches hält eine frische Bespannung (eine große Tasche und ein guter Bespanner bringen Matches dazu)
 export function saitenLeben(c, item) {
   const tasche = traegt(c, 'Tasche');
-  return item.haelt + (tasche ? tasche.mehr : 0);
+  return item.haelt + (tasche ? tasche.mehr : 0) + saitenPlus(c);
 }
 // Den Schläger mit einer Saite bespannen lassen. Gibt true zurück, wenn es geklappt hat.
 export function bespannen(c, id) {
@@ -596,6 +607,7 @@ function wocheBezahlen(c, def) {
 // Lässt du gerade ein Pflichtturnier aus, bei dem du mitspielen dürftest? Dann gibt es dafür 0 Punkte, die mitzählen.
 function pflichtVerpasst(c, meinDef) {
   const gross = grossDerWoche(c);
+  if (c.verletzung) return null;       // Wer verletzt ist, muss nicht antreten
   if (!gross || !istPflicht(gross) || (meinDef && meinDef.id === gross.id) || !zugang(c, gross).ok) return null;
   return gross;
 }
@@ -604,7 +616,7 @@ function pflichtVerpasst(c, meinDef) {
 // Gibt das Turnier zurück – oder null, wenn du nicht mitspielen darfst oder das Geld nicht reicht.
 export function startTournament(c, defId, mitWildcard = false) {
   const def = defId ? tournamentById(defId) : grossDerWoche(c);
-  if (!def) return null;
+  if (!def || c.verletzung) return null;   // verletzt: erst gesund werden
   const z = zugang(c, def);
   if (!z.ok && !(mitWildcard && z.wildcard)) return null;
   const verpasst = pflichtVerpasst(c, def);
@@ -618,6 +630,8 @@ export function startTournament(c, defId, mitWildcard = false) {
   if (def.id === 'wim' && !(outfit && outfit.weiss)) { rechnung.leihe = WIMBLEDON_LEIHE; c.money -= WIMBLEDON_LEIHE; }
   c.rechnung = rechnung;
   c.verpasst = verpasst ? verpasst.id : null;
+  c.matchesWoche = 0;
+  c.tiefFrische = 100;
   const meins = weltWoche(c, def).find((f) => f.def.id === def.id);
   c.tournament = createTournament(def, mitForm(meins.liste), 'me');
   saveCareer(c);
@@ -632,6 +646,9 @@ export function matchGespielt(c, gewonnen, runde = 1) {
   const ruhetag = c.tournament && zweiWochen(c.tournament.defId);
   // Ausdauer: Wer viel Ausdauer hat, den kostet ein Match weniger Frische (bei 52 wie bisher, bei 92 nur noch 60 %).
   const ausdauer = 1 - (c.skills.a - 52) / 100;
+  // Für den Körper (ausbau.js): Wie viele Matches waren es diese Woche, und wie müde bist du dabei angetreten?
+  c.matchesWoche = (c.matchesWoche || 0) + 1;
+  c.tiefFrische = Math.min(c.tiefFrische ?? 100, c.frische);
   c.frische = begrenzen(c.frische - Math.round(meinPhysio(c).last * (ruhetag ? RUHETAG : 1) * ausdauer), 0, 100);
   c.tag = null;                        // der Tag ist vorbei, seine Pluspunkte auch
   if (gewonnen) c.siege++;
@@ -676,6 +693,18 @@ function wocheFertig(c, summary, erholung, wochen = 1) {
   // Diese Punkte sind jetzt ein Jahr alt und fallen aus der Rangliste
   summary.weg = zuVerteidigen(c, wochen).filter((e) => e.zaehlt);
   if (c.welt && c.welt.a === jetzt(c) && c.welt.sieger && !summary.grossSieger) { summary.grossSieger = c.welt.sieger; summary.grossName = c.welt.name; }
+  // Der Körper: Nach einer Woche mit Matches kann etwas zwicken – oder Schlimmeres. Eine Woche ohne Match heilt Beschwerden.
+  if (c.matchesWoche) {
+    c.serie = (c.serie || 0) + wochen;
+    const k = koerperWoche(c, { matches: c.matchesWoche, tiefFrische: c.tiefFrische ?? 100, serie: c.serie, physio: PHYSIOS.indexOf(meinPhysio(c)) });
+    summary.beschwerden = k.beschwerden || null;
+    summary.verletzung = k.verletzung || null;
+  } else {
+    c.serie = 0;
+    summary.geheilt = ausheilen(c);
+  }
+  c.matchesWoche = 0;
+  c.tiefFrische = 100;
   c.frische = begrenzen(c.frische + erholung, 0, 100);
   c.tournament = null;
   c.trainingLeft = meinTrainer(c).training;
@@ -692,6 +721,8 @@ function wocheFertig(c, summary, erholung, wochen = 1) {
   summary.rank = rk;
   summary.vorher = vorher;
   summary.neueSponsoren = neueGeldgeber(c, rk);
+  // Frisch verletzt? Dann ausrechnen, wie viele Punkte in der Zwangspause aus der Rangliste fallen.
+  if (summary.verletzung) summary.punkteInGefahr = zuVerteidigen(c, summary.verletzung.wochen).filter((e) => e.zaehlt).reduce((x, e) => x + e.p, 0);
   const r = summary.rechnung;
   summary.netto = summary.money + r.sponsor - r.flug - r.hotel - r.essen - r.team - r.bespannen - r.leihe;
   c.history.push({ season: summary.season, w: summary.w, tid: summary.tid, name: summary.name, cat: summary.cat, label: summary.label, points: summary.points, money: summary.money, netto: summary.netto });
@@ -725,8 +756,11 @@ export function finishTournament(c) {
 }
 
 // Eine Woche ohne Turnier. art: 'pause' (ausruhen, danach wieder ganz frisch), 'stunden' (Tennisstunden geben, bringt Geld)
-// oder 'vorbereitung' (nur in der Off-Season: hart trainieren für das neue Jahr, bringt Erfahrung)
+// oder 'vorbereitung' (nur in der Off-Season: hart trainieren für das neue Jahr, bringt Erfahrung).
+// Wer verletzt ist, kann nur eines tun: gesund werden ('reha').
 export function wocheOhneTurnier(c, art) {
+  if (c.verletzung) art = 'reha';
+  else if (art === 'reha') art = 'pause';
   if (art === 'vorbereitung' && !WOCHEN[c.week].off) art = 'pause';
   c.verpasst = (pflichtVerpasst(c, null) || {}).id || null;
   const rechnung = wocheBezahlen(c, null);
@@ -736,10 +770,17 @@ export function wocheOhneTurnier(c, art) {
   weltWoche(c, null);
   if (art === 'vorbereitung') addXp(c, VORBEREITUNG_XP);
   const off = WOCHEN[c.week].off;
+  let reha = null;
+  if (art === 'reha') {
+    const v = c.verletzung;
+    v.wochen--;
+    reha = { name: v.name, rest: v.wochen, gesund: v.wochen <= 0 };
+    if (v.wochen <= 0) c.verletzung = null;
+  }
   return wocheFertig(c, {
-    tid: null, name: art === 'stunden' ? 'Tennisstunden gegeben' : art === 'vorbereitung' ? 'Saisonvorbereitung' : off ? 'Urlaub' : 'Pause',
-    cat: art, label: null, points: 0, money: geld, titel: false, rechnung,
-  }, art === 'pause' ? 100 : meinPhysio(c).erholung);
+    tid: null, name: art === 'reha' ? 'Verletzungspause' : art === 'stunden' ? 'Tennisstunden gegeben' : art === 'vorbereitung' ? 'Saisonvorbereitung' : off ? 'Urlaub' : 'Pause',
+    cat: art, label: null, points: 0, money: geld, titel: false, rechnung, reha,
+  }, art === 'pause' || art === 'reha' ? 100 : meinPhysio(c).erholung);
 }
 
 // ---------------------------------------------------------------
@@ -762,11 +803,25 @@ export function addXp(c, n) {
 export const xpNeed = (level) => 100 + level * 40;
 
 export function raiseSkill(c, key) {
-  if (c.skillPoints <= 0 || c.skills[key] >= 95) return false;
+  // Ohne Spezial-Trainer ist irgendwann Schluss (siehe grenze in ausbau.js)
+  if (c.skillPoints <= 0 || c.skills[key] >= grenze(c, key)) return false;
   c.skills[key]++;
   c.skillPoints--;
   saveCareer(c);
   return true;
+}
+
+// Profi-Service: die nächste Ausbaustufe kaufen (Bespanner, Werkstatt, Ärzte, Spezial-Trainer)
+export function ausbauKaufen(c, id) {
+  const ok = kaufen(c, id, myRank(c));
+  if (ok) saveCareer(c);
+  return ok;
+}
+// Einen Profi-Schlag lernen
+export function technikLernen(c, id) {
+  const ok = lernen(c, id);
+  if (ok) saveCareer(c);
+  return ok;
 }
 
 // ---------------------------------------------------------------

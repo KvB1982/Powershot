@@ -17,6 +17,7 @@ import * as TT from './turniertag.js';
 import * as AU from './ausruestung.js';
 import * as KT from './kleinetour.js';
 import * as KA from './kalender.js';
+import * as AB from './ausbau.js';
 import * as SE from './season.js';
 import { bracketHtml, timelineHtml, raceHtml, pointsHtml } from './saisonansicht.js';
 
@@ -728,8 +729,15 @@ function wocheZeigen(s) {
   const lines = [];
   if (s.cat === 'LIGA') lines.push(s.label === 'W' ? '<b>Gewonnen!</b> Dein Verein freut sich.' : 'Verloren – aber das Antrittsgeld gibt es trotzdem.');
   else if (s.label) lines.push(`Dein Ergebnis: <b>${D.ROUND_NAMES[s.label]}</b> · Ranglistenpunkte: <b>${s.points}</b>`);
+  else if (s.cat === 'reha') lines.push(s.reha.gesund ? `<b class="plus">Du bist wieder gesund!</b> Die Verletzung (${esc(s.reha.name)}) ist ausgeheilt. Ab jetzt darfst du wieder Turniere spielen.`
+    : `Du machst Reha: Übungen, Behandlung, viel Geduld. <b>${esc(s.reha.name)}</b> – noch ${s.reha.rest} ${s.reha.rest === 1 ? 'Woche' : 'Wochen'} Pause.`);
   else lines.push(s.cat === 'pause' ? 'Du hast dich ausgeruht und bist wieder ganz frisch.' : s.cat === 'vorbereitung' ? `Du hast eine Woche hart trainiert: +${CA.VORBEREITUNG_XP} Erfahrung.` : 'Du hast eine Woche lang Kindern Tennis beigebracht.');
   if (s.zweiteWoche) lines.push('<span class="dim">Du warst bis in die zweite Turnierwoche dabei. Darum sind jetzt zwei Wochen vergangen.</span>');
+  if (s.geheilt) lines.push('<b class="plus">Die Pause hat gutgetan:</b> Deine Beschwerden sind weg.');
+  if (s.beschwerden) lines.push(`<b class="minus">🩹 Beschwerden: ${esc(s.beschwerden.leicht)}</b> Das ist eine Warnung deines Körpers (−${AB.BESCHWERDEN_ABZUG} ${D.STAT_NAMES[s.beschwerden.trifft]}). Eine Woche Pause oder ein Besuch beim Physio auf der Anlage heilt das. Wer einfach weiterspielt, riskiert eine echte Verletzung.`);
+  if (s.verletzung) lines.push(`<div class="verletzt"><b>🚑 Verletzt: ${esc(s.verletzung.name)}</b><br>Du musst <b>${s.verletzung.wochen} Wochen</b> pausieren.<br><b>Warum ist das passiert?</b><ul>${s.verletzung.fehler.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>
+    <b>Was bedeutet das für die Rangliste?</b> In der Pause sammelst du keine neuen Punkte, und alte Punkte fallen nach einem Jahr weg${s.punkteInGefahr ? ` – in diesen ${s.verletzung.wochen} Wochen sind das <b>${s.punkteInGefahr} Punkte</b>` : ''}. Die anderen spielen weiter. Du wirst also abrutschen.<br>
+    <span class="dim">Beim nächsten Mal: Bei Beschwerden lieber eine Woche Pause machen. Ärzte und ein eigener Physio senken das Risiko.</span></div>`);
   if (s.verpasst) lines.push(`<b class="minus">${esc(s.verpasst)} war für dich ein Pflichtturnier.</b> Weil du nicht angetreten bist, zählt es ein Jahr lang mit 0 Punkten als eines deiner ${KA.ZAEHLT_HOECHSTENS} Turniere.`);
   for (const e of s.weg || []) lines.push(`<span class="minus">−${e.p} Punkte:</span> <span class="dim">${esc(e.n || 'Turnier')} ist jetzt ein Jahr her und fällt aus der Rangliste.</span>`);
   if (s.grossSieger) lines.push(`<span class="dim">${esc(s.grossName)} hat ${esc(s.grossSieger)} gewonnen.</span>`);
@@ -758,7 +766,7 @@ let ranglisteTab = 'welt';
 actions.career = (v) => {
   if (!career) return renderCreate();
   if (career.tournament) { ctxT = { T: career.tournament, def: D.tournamentById(career.tournament.defId), career: true }; return renderTournament(); }
-  if (['start', 'kalender', 'rangliste', 'skills', 'shop', 'team', 'pokale'].includes(v)) careerTab = v;
+  if (['start', 'kalender', 'rangliste', 'skills', 'shop', 'team', 'service', 'pokale'].includes(v)) careerTab = v;
   enterMenu();
   renderCareer();
 };
@@ -838,7 +846,7 @@ function frischeBalken(f) {
 
 function renderCareer() {
   const c = career, me = CA.mePlayer(c), rk = CA.myRank(c), stufe = CA.vertragsStufe(c), W = KA.WOCHEN[c.week];
-  const tabs = [['start', 'Übersicht'], ['shop', 'Ausrüstung'], ['team', 'Team & Sponsoren'], ['skills', 'Fähigkeiten' + (c.skillPoints ? ' ●' : '')], ['pokale', 'Pokalschrank' + (c.pokale.length ? ' ' + c.pokale.length : '')], ['kalender', 'Kalender'], ['rangliste', 'Weltrangliste']];
+  const tabs = [['start', 'Übersicht'], ['shop', 'Ausrüstung'], ['team', 'Team & Sponsoren'], ['service', 'Profi-Service' + (c.koerper || c.verletzung ? ' 🩹' : '')], ['skills', 'Fähigkeiten' + (c.skillPoints ? ' ●' : '')], ['pokale', 'Pokalschrank' + (c.pokale.length ? ' ' + c.pokale.length : '')], ['kalender', 'Kalender'], ['rangliste', 'Weltrangliste']];
   let body = '';
   const raceIch = CA.race(c).find((p) => p.me);
   if (careerTab === 'start') {
@@ -853,6 +861,8 @@ function renderCareer() {
     if (!CA.traegt(c, 'Schläger')) tipps.push('Du spielst noch mit dem alten Vereinsschläger. Unter „Ausrüstung“ gibt es bessere.');
     if (saite && c.saitenRest <= 0) tipps.push('Deine Saiten sind müde und bringen nichts mehr. Lass unter „Ausrüstung“ neu bespannen.');
     if (c.frische < 70) tipps.push(`Du bist müde (${bonusText(muede)}). Eine Pause oder ein Physio hilft.`);
+    if (c.koerper) tipps.push(`<b class="minus">🩹 Beschwerden (${esc(c.koerper.teil)}).</b> Eine Woche Pause oder der Physio auf der Anlage heilt das. Wer weiterspielt, riskiert eine Verletzung.`);
+    else if (c.serie >= AB.SERIE_LANG - 1) tipps.push(`Du spielst schon ${c.serie} Wochen ohne Pause. Dein Körper braucht bald eine freie Woche.`);
     if (stufe >= 0 && !c.vertrag.schlaeger) tipps.push('Eine Schläger-Marke würde dich ausrüsten! Schau unter „Team & Sponsoren“.');
     body = `
       <div class="panel"><div class="kpi">
@@ -865,6 +875,13 @@ function renderCareer() {
         <div><b>${c.titles}</b><span>Titel</span></div>
       </div>${tipps.map((t) => `<p class="tipp">💡 ${t}</p>`).join('')}</div>
       <div class="cols breit">
+        ${c.verletzung ? `<div class="panel"><div class="dim">${c.season} · Woche ${c.week + 1} von ${KA.WOCHEN_PRO_JAHR} · ab Montag, ${KA.datumText(c.season, c.week)}</div>
+          <h2 style="margin:6px 0">🚑 Du bist verletzt</h2>
+          <div class="verletzt"><b>${esc(c.verletzung.name)}</b> – noch <b>${c.verletzung.wochen} ${c.verletzung.wochen === 1 ? 'Woche' : 'Wochen'}</b> Pause (von ${c.verletzung.gesamt}).
+            <ul>${c.verletzung.fehler.map((f) => `<li>${esc(f)}</li>`).join('')}</ul></div>
+          <p class="dim">Solange du verletzt bist, kannst du keine Turniere spielen. Die Welt spielt weiter, und deine alten Punkte fallen nach und nach aus der Rangliste.
+            ${weg.length ? `Nach dieser Woche sind es <b>${weg.reduce((x, e) => x + e.p, 0)} Punkte</b>.` : ''} Pflichtturniere musst du verletzt nicht spielen.</p>
+          <div class="row"><button class="primary grow" data-a="careerWoche" data-v="reha">Eine Woche Reha machen</button></div></div>` : `
         <div class="panel"><div class="dim">${c.season} · Woche ${c.week + 1} von ${KA.WOCHEN_PRO_JAHR} · ab Montag, ${KA.datumText(c.season, c.week)}</div>
           <h2 style="margin:6px 0">${W.off ? 'Off-Season: Was machst du diese Woche?' : 'Wohin reist du diese Woche?'}</h2>
           ${W.hinweis ? `<p class="tipp">📅 ${esc(W.hinweis)}</p>` : ''}
@@ -881,9 +898,9 @@ function renderCareer() {
             <button data-a="careerWoche" data-v="stunden">Tennisstunden geben <small>+ ${money(KT.STUNDEN_GELD)}, kein Match</small></button>
             <button data-a="careerWoche" data-v="pause">${W.off ? 'Urlaub machen' : 'Pause machen'} <small>danach 100 % frisch</small></button>
             ${W.off ? `<button data-a="careerWoche" data-v="vorbereitung">Saisonvorbereitung <small>hart trainieren · +${CA.VORBEREITUNG_XP} Erfahrung</small></button>` : ''}
-          </div></div>
+          </div></div>`}
         <div class="panel">${playerCard(me, 'career', false)}
-          <div class="row" style="margin-top:10px"><button class="grow" data-a="training" data-v="career" ${c.trainingLeft <= 0 ? 'disabled' : ''}>Training (${c.trainingLeft} übrig)</button></div>
+          <div class="row" style="margin-top:10px"><button class="grow" data-a="training" data-v="career" ${c.trainingLeft <= 0 || c.verletzung ? 'disabled' : ''}>Training (${c.trainingLeft} übrig)</button></div>
           ${c.skillPoints ? `<p class="gold">Du hast ${c.skillPoints} Fähigkeitspunkte zu verteilen!</p>` : ''}
           <p class="dim klein">Wildcards in dieser Saison: ${c.wildcards}. Mit einer Wildcard (Einladung) darfst du bei einem Turnier mitspielen, für das dein Platz knapp nicht reicht.</p></div>
       </div>`;
@@ -948,11 +965,36 @@ function renderCareer() {
     body = `<div class="panel"><p>Freie Fähigkeitspunkte: <b class="gold">${c.skillPoints}</b> · Level ${c.level}. Punkte gibt es für jedes neue Level (Matches und Training bringen Erfahrung).</p>
       <table>${Object.keys(D.STAT_NAMES).map((k) => `<tr><td><b>${D.STAT_NAMES[k]}</b><br><small class="dim">${D.STAT_INFO[k]}</small></td>
         <td style="width:40%"><div class="stat" style="grid-template-columns:1fr 60px"><i><b style="width:${eff[k]}%"></b></i><span>${c.skills[k]}${eff[k] !== c.skills[k] ? ` <span class="${eff[k] > c.skills[k] ? 'gold' : 'minus'}">${eff[k] > c.skills[k] ? '+' : '−'}${Math.abs(eff[k] - c.skills[k])}</span>` : ''}</span></div></td>
-        <td class="right"><button data-a="skill" data-v="${k}" ${c.skillPoints <= 0 || c.skills[k] >= 95 ? 'disabled' : ''}>+1</button></td></tr>`).join('')}</table>
+        <td class="right"><button data-a="skill" data-v="${k}" ${c.skillPoints <= 0 || c.skills[k] >= AB.grenze(c, k) ? 'disabled' : ''}>+1</button><br><small class="dim">bis ${AB.grenze(c, k)}</small></td></tr>`).join('')}</table>
+      <p class="dim klein">Allein kommst du bei jeder Fähigkeit nur bis ${AB.GRENZE_OHNE}. Für mehr brauchst du Spezial-Trainer – die findest du unter „Profi-Service“.</p>
       ${eff.kraft || eff.praez ? `<p class="dim klein">Von deiner Ausrüstung: ${[eff.kraft ? bonusText({ p: eff.kraft }) : '', eff.praez ? bonusText({ c: eff.praez }) : ''].filter(Boolean).join(', ')}. Kraft macht Vorhand und Rückhand härter, Präzision macht beide genauer.</p>` : ''}</div>
       <div class="panel"><h3 style="margin-top:0">Woher kommen deine Pluspunkte?</h3>
         ${liste.length ? `<table>${liste.map((b) => `<tr><td>${esc(b.name)}</td><td class="gold">${bonusText(b.bonus)}</td></tr>`).join('')}</table>` : '<p class="dim">Noch keine. Ausrüstung und ein gutes Team bringen Pluspunkte.</p>'}
         <p class="dim klein">Schuhe zählen für den Belag des Turniers (hier: Hartplatz).</p></div>`;
+  } else if (careerTab === 'service') {
+    // Profi-Service: Bespanner, Werkstatt, Ärzte, Spezial-Trainer, Profi-Schläge (Listen in ausbau.js)
+    const stufenKarte = (id, B, liste, wirkung) => {
+      const hab = AB.stufe(c, id), k = AB.kannKaufen(c, id, rk);
+      return `<div class="panel"><h3 style="margin-top:0">${B.bild} ${esc(B.name)} <span class="tag">Stufe ${hab} von ${liste.length}</span></h3><p class="dim">${esc(B.text)}</p>
+        <table>${liste.map((S, i) => `<tr class="${i > hab ? 'dim' : ''}"><td>${i < hab ? '✓' : i === hab ? '➜' : '🔒'} <b>${esc(S.name)}</b>${S.text ? `<br><small>${esc(S.text)}</small>` : ''}<br><small class="gold">${wirkung(S)}</small></td>
+          <td class="right">${i < hab ? '<small class="dim">hast du</small>' : i === hab ? `<button data-a="ausbau" data-v="${id}" ${k.ok ? '' : 'disabled'}>${money(S.preis)}</button>${k.ok ? '' : `<br><small class="dim">${esc(k.warum)}</small>`}` : `<small>ab Platz ${S.abPlatz}<br>${money(S.preis)}</small>`}</td></tr>`).join('')}</table></div>`;
+    };
+    const wirkB = (S) => [S.bonus ? bonusText(S.bonus) : '', S.saiten ? `Saiten halten ${S.saiten} Match länger` : '', S.risiko ? `Verletzungsrisiko −${Math.round((1 - S.risiko) * 100)} %` : '', S.heilung ? `Verletzungen heilen ${Math.round((1 - S.heilung) * 100)} % schneller` : ''].filter(Boolean).join(' · ');
+    const K = c.koerper && AB.KOERPER.find((x) => x.teil === c.koerper.teil);
+    body = `<p>Dein Geld: <b class="gold">${money(c.money)}</b> · Platz ${rk}. <span class="dim">Je weiter vorn du stehst, desto mehr Fachleute arbeiten für dich. Jede Stufe kaufst du einmal.</span></p>
+      <div class="panel"><h3 style="margin-top:0">🩹 Dein Körper</h3>
+        ${c.verletzung ? `<div class="verletzt"><b>Verletzt: ${esc(c.verletzung.name)}</b> – noch ${c.verletzung.wochen} ${c.verletzung.wochen === 1 ? 'Woche' : 'Wochen'} Pause.</div>`
+          : K ? `<p><b class="minus">Beschwerden: ${esc(K.leicht)}</b> (−${AB.BESCHWERDEN_ABZUG} ${D.STAT_NAMES[K.trifft]}). Mach eine Woche Pause oder geh auf der Turnieranlage zum Physio.</p>`
+          : '<p><b class="plus">Alles in Ordnung.</b> Nichts zwickt.</p>'}
+        <p class="dim klein">So bleibt man gesund: nicht müde spielen (Frische über ${AB.MUEDE} %), nach spätestens ${AB.SERIE_LANG - 1} Turnierwochen eine Pause machen (du bist bei ${c.serie || 0}),
+          und bei Beschwerden nicht einfach weiterspielen. Wer das missachtet, fällt wochenlang aus und rutscht in der Rangliste ab. Alle Zahlen dazu sind geschätzt.</p></div>
+      ${Object.entries(AB.BEREICHE).map(([id, B]) => stufenKarte(id, B, B.stufen, wirkB)).join('')}
+      <h2>Spezial-Trainer</h2><p class="dim">Allein kommst du bei jeder Fähigkeit nur bis ${AB.GRENZE_OHNE}. Ein Spezial-Trainer hebt diese Grenze für seine Fähigkeiten. Die Punkte verteilst du weiter unter „Fähigkeiten“.</p>
+      ${Object.entries(AB.SPEZIAL).map(([id, B]) => stufenKarte(id, B, AB.TRAINER_STUFEN, (S) => `${B.fuer.map((f) => D.STAT_NAMES[f]).join(' und ')} bis ${S.grenze}`)).join('')}
+      <h2>Profi-Schläge</h2><p class="dim">Stärkere Arten von Schlägen, die du schon kennst. Lernen kann sie nur, wer die Fähigkeit dafür hat.</p>
+      <div class="grid">${Object.entries(AB.TECHNIKEN).map(([id, T]) => { const k = AB.kannLernen(c, id);
+        return `<div class="panel teil"><b>${T.bild} ${esc(T.name)}</b><br><small class="dim">${esc(T.text)}</small><br><small class="gold">braucht ${Object.entries(T.braucht).map(([f, w]) => `${D.STAT_NAMES[f]} ${w}`).join(', ')}</small><br>
+          ${k.gelernt ? '<button class="sel" disabled style="margin-top:8px">✓ Gelernt</button>' : `<button data-a="technik" data-v="${id}" ${k.ok ? '' : 'disabled'} style="margin-top:8px">Lernen · ${money(T.preis)}</button>${k.ok ? '' : `<br><small class="dim">${k.key ? `Deine ${D.STAT_NAMES[k.key]} muss erst ${k.wert} sein (jetzt ${c.skills[k.key]}).` : esc(k.warum)}</small>`}`}</div>`; }).join('')}</div>`;
   } else if (careerTab === 'shop') {
     const karte = (s) => {
       const frei = CA.gratis(c, s, stufe), own = c.owned.includes(s.id) || frei, on = c.equipped[s.cat] === s.id;
@@ -1013,6 +1055,8 @@ function renderCareer() {
     <div class="tabs">${tabs.map(([k, n]) => `<button class="${careerTab === k ? 'sel' : ''}" data-a="career" data-v="${k}">${n}</button>`).join('')}</div>${body}`);
 }
 actions.ranglisteTab = (v) => { ranglisteTab = v; keepScroll(renderCareer); };
+actions.ausbau = (v) => { if (CA.ausbauKaufen(career, v)) sound.coin(); keepScroll(renderCareer); };
+actions.technik = (v) => { if (CA.technikLernen(career, v)) sound.coin(); keepScroll(renderCareer); };
 actions.skill = (v) => { CA.raiseSkill(career, v); keepScroll(renderCareer); };
 actions.buy = (v) => { if (CA.buy(career, v)) sound.coin(); keepScroll(renderCareer); };
 actions.equip = (v) => { CA.equip(career, v); keepScroll(renderCareer); };
@@ -1029,7 +1073,7 @@ actions.careerPlay = (v) => {
   ctxT = { T, def: D.tournamentById(T.defId), career: true };
   renderTournament();
 };
-actions.careerLiga = () => { const T = CA.ligaSpiel(career); ctxT = { T, def: D.tournamentById(T.defId), career: true }; renderTournament(); };
+actions.careerLiga = () => { const T = CA.ligaSpiel(career); if (!T) return renderCareer(); ctxT = { T, def: D.tournamentById(T.defId), career: true }; renderTournament(); };
 actions.careerWoche = (v) => wocheZeigen(CA.wocheOhneTurnier(career, v));
 let delArmed = false;
 actions.careerDelete = (v, el) => {
