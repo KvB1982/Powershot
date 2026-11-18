@@ -8,7 +8,7 @@ import * as SE from './season.js';
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const flag = (c) => D.FLAGS[c] || '🏳️';
 const zahl = (n) => n.toLocaleString('de-DE');
-const KURZ = { W: 'Sieg', F: 'Finale', SF: 'Halbfinale', QF: 'Viertelfinale', R16: 'Achtelfinale', R32: '1. Runde', RR: 'Gruppenphase' };
+const KURZ = { W: 'Sieg', F: 'Finale', SF: 'Halbfinale', QF: 'Viertelfinale', R16: 'Achtelfinale', R32: 'Runde der 32', R64: 'Runde der 64', R128: 'Runde der 128', RR: 'Gruppenphase' };
 const catClass = (def) => (def.cat === 'GS' ? 'gs' : def.cat === 'M' ? 'm' : 'f');
 
 // ---------------------------------------------------------------
@@ -26,12 +26,13 @@ function saetze(T, m) {
 
 // Eine Zeile im Baum: Setzplatz, Flagge, Name, Satzergebnisse
 function zeile(T, m, id, games, otherGames) {
+  if (!id && m.bye) return '<div class="bp leer"><span class="sd"></span><span class="nm">Freilos</span></div>';
   if (!id) return '<div class="bp leer"><span class="sd"></span><span class="nm">noch offen</span></div>';
   const p = T.players[id];
   const cls = [id === T.humanId ? 'me' : '', m.winner === id ? 'w' : '', m.winner && m.winner !== id ? 'l' : ''].join(' ');
   let sc = games.map((g, i) => `<b class="${g > otherGames[i] ? 'hi' : ''}">${g}</b>`).join('');
   if (m.winner === id && !games.length) sc = '<b class="hi">✓</b>';
-  return `<div class="bp ${cls}"><span class="sd">${p.seed}</span><span class="nm">${flag(p.country)} ${esc(p.short)}</span><span class="sc">${sc}</span></div>`;
+  return `<div class="bp ${cls}"><span class="sd">${p.seed || ''}</span><span class="nm">${flag(p.country)} ${esc(p.short)}</span><span class="sc">${sc}</span></div>`;
 }
 
 function kasten(T, m, aktuell) {
@@ -43,7 +44,7 @@ function kasten(T, m, aktuell) {
 
 // Der K.-o.-Baum: eine Spalte pro Runde, von links (erste Runde) nach rechts (Finale).
 // rounds: Liste von { label, matches }. Runden, die noch nicht dran waren, zeigen leere Kästen.
-function baum(T, def, rounds, aktuellIdx) {
+function baum(T, def, rounds, aktuellIdx, ohnePokal) {
   const cols = rounds.map((r, i) => {
     const pts = def.cat === 'F' || def.cat === 'LIGA' ? '' : `<small>raus = ${zahl(def.points[r.label] || 0)} P.</small>`;
     const kopf = `<div class="bh ${i === aktuellIdx ? 'cur' : ''}"><b>${D.ROUND_NAMES[r.label]}</b>${pts}</div>`;
@@ -54,21 +55,39 @@ function baum(T, def, rounds, aktuellIdx) {
   const champ = T.champion ? T.players[T.champion] : null;
   const pokal = `<div class="bcol pokal"><div class="bh"><b>Sieger</b>${def.cat === 'F' || def.cat === 'LIGA' ? '' : `<small>${zahl(def.points.W)} P.</small>`}</div>
     <div class="bms"><div class="bw"><div class="bsieger ${champ && T.champion === T.humanId ? 'me' : ''}">🏆<span>${champ ? flag(champ.country) + ' ' + esc(champ.short) : '?'}</span></div></div></div></div>`;
-  return `<div class="bscroll"><div class="bracket">${cols}${pokal}</div></div>`;
+  return `<div class="bscroll"><div class="bracket">${cols}${ohnePokal ? '' : pokal}</div></div>`;
 }
 
 const leer = (n) => Array.from({ length: n }, () => ({ a: null, b: null, winner: null, score: '' }));
 
+// In welchem Achtel des Baums steht dieser Spieler? (0 bis 7; -1 = nicht dabei)
+export function abschnittVon(T, id) {
+  const erste = T.rounds[0] || [];
+  const i = erste.findIndex((m) => m.a === id || m.b === id);
+  return i < 0 ? -1 : Math.floor(i / (erste.length / 8));
+}
+
 // Der ganze Turnierbaum für ein Turnier (K.-o.-Turnier oder ATP Finals)
-export function bracketHtml(T, def) {
+// teil: Bei großen Feldern (mehr als 32 Plätze) zeigen wir nicht alles auf einmal, sondern ein Achtel des Baums
+//       (teil = 0 bis 7) und darunter die Endrunde ab dem Viertelfinale. Ohne Angabe: dein eigenes Achtel.
+export function bracketHtml(T, def, teil) {
   if (T.format === 'ko') {
+    const size = T.size || T.rounds[0].length * 2;
+    const LABEL = { 64: 'R128', 32: 'R64', 16: 'R32', 8: 'R16', 4: 'QF', 2: 'SF', 1: 'F' };
     const rounds = [];
-    for (let n = Object.keys(T.players).length / 2, i = 0; n >= 1; n /= 2, i++) {
-      const label = { 16: 'R32', 8: 'R16', 4: 'QF', 2: 'SF', 1: 'F' }[n];
-      rounds.push({ label, matches: T.rounds[i] || leer(n) });
-    }
-    return `<div class="panel bpanel"><div class="bhint dim">Zum Blättern nach links und rechts wischen. Die kleine Zahl ist der Setzplatz.</div>
-      ${baum(T, def, rounds, T.done ? -1 : T.rounds.length - 1)}</div>`;
+    for (let n = size / 2, i = 0; n >= 1; n /= 2, i++) rounds.push({ label: LABEL[n], matches: T.rounds[i] || leer(n) });
+    const aktuell = T.done ? -1 : T.rounds.length - 1;
+    const hint = '<div class="bhint dim">Zum Blättern nach links und rechts wischen. Die kleine Zahl ist der Setzplatz.</div>';
+    if (size <= 32) return `<div class="panel bpanel">${hint}${baum(T, def, rounds, aktuell)}</div>`;
+    // Großes Feld: ein Achtel (bis zum Achtelfinale) und die Endrunde
+    const meins = T.humanId ? abschnittVon(T, T.humanId) : -1;
+    const t = teil != null && teil >= 0 && teil < 8 ? teil : Math.max(0, meins);
+    const vorn = rounds.slice(0, rounds.length - 3).map((r) => { const k = r.matches.length / 8; return { label: r.label, matches: r.matches.slice(t * k, (t + 1) * k) }; });
+    const knoepfe = Array.from({ length: 8 }, (_, i) => `<button class="${i === t ? 'sel' : ''}" data-a="baumTeil" data-v="${i}">${i + 1}${i === meins ? ' (du)' : ''}</button>`).join('');
+    const endIdx = aktuell - (rounds.length - 3);
+    return `<div class="panel bpanel"><div class="bhint dim">${Object.keys(T.players).length} Spieler – der Baum ist in 8 Teile geteilt. Der Sieger jedes Teils kommt ins Viertelfinale.</div>
+      <div class="row tabs">${knoepfe}</div>${hint}${baum(T, def, vorn, aktuell, true)}</div>
+      <div class="panel bpanel"><h3 style="margin-top:0">Endrunde</h3>${baum(T, def, rounds.slice(-3), T.done ? -1 : endIdx)}</div>`;
   }
   // ATP Finals: erst zwei Gruppen (jeder gegen jeden), dann Halbfinale und Finale
   const gruppen = T.groups.map((g, gi) => {
@@ -156,9 +175,10 @@ export function pointsHtml() {
     <p>Im <b>ATP Race</b> starten im Januar alle bei 0 Punkten. Je weiter du in einem Turnier kommst, desto mehr Punkte bekommst du.
     Die Zahlen sind die echten Punkte der ATP (Regeln 2026).</p>
     <div class="scrollx"><table><tr><th>Ergebnis</th><th class="num"><span class="tag gs">Grand Slam</span></th><th class="num"><span class="tag m">Masters 1000</span></th></tr>
-    ${['W', 'F', 'SF', 'QF', 'R16', 'R32'].map(z).join('')}</table></div>
-    <p class="dim">In echt spielen bei einem Grand Slam 128 Spieler, bei uns 32 (Masters: 16). Wir tun so, als hätten alle die ersten Runden schon gewonnen.
-    Darum bekommst du hier in der 1. Runde schon so viele Punkte wie in echt in der gleichen Runde (Runde der letzten 32 oder 16).</p></div>
+    ${['W', 'F', 'SF', 'QF', 'R16', 'R32', 'R64', 'R128'].map(z).join('')}</table></div>
+    <p class="dim">Die Felder sind so groß wie in echt: Bei einem Grand Slam spielen 128 Spieler (7 Runden bis zum Titel), bei den meisten Masters 96.
+    Dort haben die 32 gesetzten Spieler in der ersten Runde ein Freilos. Wer nach einem Freilos sein erstes Match verliert, bekommt nur die Punkte der ersten Runde.
+    Monte-Carlo und Paris haben 56 Spieler.</p></div>
     <div class="panel"><h3 style="margin-top:0"><span class="tag f">ATP Finals</span> in Turin</h3>
     <p>Nach dem Paris Masters dürfen die <b>besten 8</b> im Race zu den ATP Finals. Dort gibt es:</p>
     <ul><li><b>${D.FINALS_POINTS.RR} Punkte</b> für jeden Sieg in der Gruppe (3 Spiele)</li><li><b>${D.FINALS_POINTS.SF} Punkte</b> für den Sieg im Halbfinale</li>

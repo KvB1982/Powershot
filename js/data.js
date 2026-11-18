@@ -342,17 +342,25 @@ export const STAT_NAMES = { s: 'Aufschlag', p: 'Kraft', t: 'Tempo', c: 'Präzisi
 // Punkte wie bei der echten ATP (Regeln 2026): Die Zahl sagt, was man bekommt, wenn man in dieser Runde ausscheidet.
 // Echt:    Grand Slam   W 2000 · F 1300 · HF 800 · VF 400 · Achtelfinale 200 · Runde der 32: 100 · Runde der 64: 50 · 1. Runde: 10
 //          Masters 1000 W 1000 · F  650 · HF 400 · VF 200 · Achtelfinale 100 · Runde der 32:  50 · davor 30 oder 10
-// Bei uns sind die Felder kleiner (Grand Slam 32 Spieler, Masters 16). Wir tun so, als hätten alle die
-// ersten Runden schon gewonnen. Darum gilt: gleiche Runde = gleiche Punkte wie in echt.
-const GS_P = { W: 2000, F: 1300, SF: 800, QF: 400, R16: 200, R32: 100 };
-const M_P = { W: 1000, F: 650, SF: 400, QF: 200, R16: 100 };
-const GS_M = { W: 3000000, F: 1600000, SF: 800000, QF: 430000, R16: 250000, R32: 120000 };
-const M_M = { W: 1100000, F: 600000, SF: 330000, QF: 180000, R16: 90000 };
+const GS_P = { W: 2000, F: 1300, SF: 800, QF: 400, R16: 200, R32: 100, R64: 50, R128: 10 };
+const M_P = { W: 1000, F: 650, SF: 400, QF: 200, R16: 100, R32: 50, R64: 30, R128: 10 };   // Masters mit 96 Spielern
+const M56_P = { W: 1000, F: 650, SF: 400, QF: 200, R16: 100, R32: 50, R64: 10 };            // Masters mit 56 Spielern
+// Preisgeld: echte Größenordnung, gerundet
+const GS_M = { W: 3000000, F: 1600000, SF: 800000, QF: 430000, R16: 250000, R32: 150000, R64: 100000, R128: 70000 };
+const M_M = { W: 1100000, F: 600000, SF: 330000, QF: 180000, R16: 90000, R32: 52000, R64: 30000, R128: 20000 };
+// Die Felder sind so groß wie in echt:
+//   Grand Slam: 128 Spieler, 7 Runden, 32 Gesetzte.
+//   Masters: 96 Spieler (die 32 Gesetzten haben in der ersten Runde ein Freilos) – nur Monte-Carlo und Paris haben 56 Spieler (8 Freilose).
+//   ATP Finals: die besten 8 des Jahres in zwei Gruppen.
+const KLEINES_MASTERS = ['mc', 'par'];
 
 const T = (id, name, city, month, cat, surface, theme) => ({
   id, name, city, month, cat, surface, theme,
-  draw: cat === 'GS' ? 32 : cat === 'M' ? 16 : 8,
-  points: cat === 'GS' ? GS_P : M_P, money: cat === 'GS' ? GS_M : M_M,
+  draw: cat === 'GS' ? 128 : cat === 'M' ? (KLEINES_MASTERS.includes(id) ? 56 : 96) : 8,
+  setz: cat === 'GS' ? 32 : cat === 'M' ? (KLEINES_MASTERS.includes(id) ? 16 : 32) : 8,
+  // direkt = so viele kommen über ihren Weltranglistenplatz ins Feld. Der Rest sind Qualifikanten und Wildcards.
+  direkt: cat === 'GS' ? 104 : cat === 'M' ? (KLEINES_MASTERS.includes(id) ? 45 : 76) : 8,
+  points: cat === 'GS' ? GS_P : KLEINES_MASTERS.includes(id) ? M56_P : M_P, money: cat === 'GS' ? GS_M : M_M,
   catName: cat === 'GS' ? 'Grand Slam' : cat === 'M' ? 'Masters 1000' : 'ATP Finals',
 });
 
@@ -366,7 +374,7 @@ export const TOURNAMENTS = [
   T('rom', 'Rom Masters', 'Rom', 'Mai', 'M', 'clay', { court: 0xc4603a, outer: 0xb45632, wall: 0x2a5a3a, seats: 0xb8b0a0, sky: 0x9fd0ff, night: false }),
   T('rg', 'Roland Garros', 'Paris', 'Juni', 'GS', 'clay', { court: 0xcc6a3c, outer: 0xbc5e36, wall: 0x1f5a3a, seats: 0x2a6a4a, sky: 0xa8d0f0, night: false }),
   T('wim', 'Wimbledon', 'London', 'Juli', 'GS', 'grass', { court: 0x4a9a3c, outer: 0x3f8a34, wall: 0x1a4a2a, seats: 0x2a5a3a, sky: 0xb8d4e8, night: false }),
-  T('can', 'Canadian Open', 'Toronto', 'August', 'M', 'hard', { court: 0x2a66b8, outer: 0x3a7a9a, wall: 0x1a3a6a, seats: 0x3a5a8a, sky: 0x7fb8f0, night: false }),
+  T('can', 'Canadian Open', 'Montreal', 'August', 'M', 'hard', { court: 0x2a66b8, outer: 0x3a7a9a, wall: 0x1a3a6a, seats: 0x3a5a8a, sky: 0x7fb8f0, night: false }),
   T('cin', 'Cincinnati Open', 'Cincinnati', 'August', 'M', 'hard', { court: 0x2a5aa8, outer: 0x2a8a6a, wall: 0x1a4a5a, seats: 0x5a6a7a, sky: 0x8fc0f8, night: false }),
   T('uso', 'US Open', 'New York', 'September', 'GS', 'hard', { court: 0x2f5fb0, outer: 0x3f8a4a, wall: 0x14285a, seats: 0x1f3a7a, sky: 0x0a1228, night: true }),
   T('sha', 'Shanghai Masters', 'Shanghai', 'Oktober', 'M', 'hard', { court: 0x3a4aa8, outer: 0x2a6a8a, wall: 0x6a1a2a, seats: 0x7a2a3a, sky: 0x1a2038, night: true }),
@@ -379,7 +387,7 @@ export const FINALS_POINTS = { RR: 200, SF: 400, F: 500 };
 export const FINALS_MONEY = { RR: 400000, SF: 1100000, F: 2200000 };
 
 export const SURFACE_NAMES = { hard: 'Hartplatz', clay: 'Sand', grass: 'Rasen', indoor: 'Halle' };
-export const ROUND_NAMES = { R32: '1. Runde', R16: 'Achtelfinale', QF: 'Viertelfinale', SF: 'Halbfinale', F: 'Finale', W: 'Sieg', RR: 'Gruppenphase' };
+export const ROUND_NAMES = { R128: 'Runde der 128', R64: 'Runde der 64', R32: 'Runde der 32', R16: 'Achtelfinale', QF: 'Viertelfinale', SF: 'Halbfinale', F: 'Finale', W: 'Sieg', RR: 'Gruppenphase' };
 
 // ---------------------------------------------------------------
 // Schwierigkeit: ai = Faktoren für den Gegner, me = Hilfen für dich

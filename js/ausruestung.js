@@ -200,10 +200,10 @@ export const REISEN = {
 //    geld = Dollar pro Turnier. Bei ganz jungen Spielern gibt es in echt auch nur Material und noch kein Geld.
 export const VERTRAGS_STUFEN = [
   { bisPlatz: 800, name: 'Material-Vertrag', geld: 0 },
-  { bisPlatz: 300, name: 'Nachwuchs-Vertrag', geld: 400 },
-  { bisPlatz: 100, name: 'Profi-Vertrag', geld: 4000 },
-  { bisPlatz: 20, name: 'Star-Vertrag', geld: 40000 },
-  { bisPlatz: 5, name: 'Weltstar-Vertrag', geld: 150000 },
+  { bisPlatz: 300, name: 'Nachwuchs-Vertrag', geld: 150 },
+  { bisPlatz: 100, name: 'Profi-Vertrag', geld: 1500 },
+  { bisPlatz: 20, name: 'Star-Vertrag', geld: 15000 },
+  { bisPlatz: 5, name: 'Weltstar-Vertrag', geld: 60000 },
 ];
 export const PROFI_AB = 2;            // ab dieser Stufe (Profi-Vertrag) baut dir die Marke einen Schläger nach Maß: +1 Kraft, +1 Präzision
 export const SCHLAEGER_MARKEN = ['Head', 'Wilson', 'Babolat', 'Yonex', 'Tecnifibre', 'Dunlop', 'Prince', 'Diadem'];
@@ -214,13 +214,13 @@ export const VERTRAG_CATS = { schlaeger: ['Schläger', 'Saiten', 'Tasche'], klei
 // 2. Kleine und große Geldgeber mit einem Aufnäher auf dem Hemd (alle erfunden). Sie kommen von selbst, wenn du Erfolg hast.
 //    wenn = Bedingung: siege (gewonnene Matches), titel, platz
 export const GELDGEBER = [
-  { id: 'verein', name: 'Dein Tennisverein', text: 'Der Verein sammelt für dich.', geld: 100, wenn: {} },
-  { id: 'baecker', name: 'Bäckerei Krümel', text: 'Der Bäcker aus deinem Ort ist dein erster Fan.', geld: 150, wenn: { siege: 3 } },
-  { id: 'rad', name: 'Fahrradladen Speiche', text: 'Dein erster Titel stand in der Zeitung!', geld: 300, wenn: { titel: 1 } },
-  { id: 'auto', name: 'Autohaus Flitz', text: 'Top 500 der Welt – das ist Werbung wert.', geld: 800, wenn: { platz: 500 } },
-  { id: 'limo', name: 'Limo-Fabrik Zisch', text: 'Top 200: Du bist jetzt im Fernsehen zu sehen.', geld: 2500, wenn: { platz: 200 } },
-  { id: 'uhr', name: 'Uhrenmarke Tick & Tack', text: 'Top 50: Die großen Firmen rufen an.', geld: 20000, wenn: { platz: 50 } },
-  { id: 'flug', name: 'Fluglinie Wolke 7', text: 'Top 10! Ab jetzt fliegst du gratis (außer im Privatjet).', geld: 80000, wenn: { platz: 10 }, freiflug: true },
+  { id: 'verein', name: 'Dein Tennisverein', text: 'Der Verein sammelt für dich.', geld: 40, wenn: {} },
+  { id: 'baecker', name: 'Bäckerei Krümel', text: 'Der Bäcker aus deinem Ort ist dein erster Fan.', geld: 60, wenn: { siege: 3 } },
+  { id: 'rad', name: 'Fahrradladen Speiche', text: 'Dein erster Titel stand in der Zeitung!', geld: 120, wenn: { titel: 1 } },
+  { id: 'auto', name: 'Autohaus Flitz', text: 'Top 500 der Welt – das ist Werbung wert.', geld: 300, wenn: { platz: 500 } },
+  { id: 'limo', name: 'Limo-Fabrik Zisch', text: 'Top 200: Du bist jetzt im Fernsehen zu sehen.', geld: 1000, wenn: { platz: 200 } },
+  { id: 'uhr', name: 'Uhrenmarke Tick & Tack', text: 'Top 50: Die großen Firmen rufen an.', geld: 8000, wenn: { platz: 50 } },
+  { id: 'flug', name: 'Fluglinie Wolke 7', text: 'Top 10! Ab jetzt fliegst du gratis (außer im Privatjet).', geld: 30000, wenn: { platz: 10 }, freiflug: true },
 ];
 export const FAN_PROZENT = 3;         // jeder Fan-Stern bringt so viel Prozent mehr Sponsorengeld
 export const FAN_MAX = 20;            // mehr Sterne zählen nicht

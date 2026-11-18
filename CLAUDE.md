@@ -15,7 +15,7 @@ Repository: https://github.com/KvB1982/Powershot · läuft auf GitHub Pages unte
 ```bash
 python tools/server.py          # http://localhost:8765, ohne Zwischenspeicher
 node tools/sim.mjs 0 1 mittel hard 3    # Computer gegen Computer, ohne Grafik
-node tools/logic.mjs            # Turnier, Karriere und Saison (ATP Race) durchrechnen
+node tools/logic.mjs            # Turnier, Karriere (3 Jahre, Ranglisten-Regeln, Freilose) und Saison (ATP Race) durchrechnen – dauert etwa eine halbe Minute
 node tools/rookie.mjs           # Neuling gegen Profi auf jeder Schwierigkeit
 node tools/seitenwechsel.mjs hard 10   # Seitenwechsel prüfen: nur nach ungeraden Spielen, nie nach einem Aufschlagfehler
 node tools/wichtig.mjs          # Hinweise Breakball, Satzball, Matchball, Championship Point prüfen (`wichtigerPunkt` in `js/rules.js`)
@@ -53,7 +53,8 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 | `js/requisiten.js` | Fertige 3D-Modelle aus 3D AI Studio (`assets/*.glb`): Schiedsrichterstuhl, Bank, Ballkind, Linienrichter, Ballmaschine, drei Pokale, Schläger. Einmal laden, mehrfach hinstellen; `requisit(name, { farbe })` färbt graue Stellen um |
 | `assets/zuschauer.webp` | 48 erfundene Zuschauer in einem Bild (8 × 6, je 128 × 192 Pixel; 32 von vorn, 16 von der Seite); `stadium.js` zeigt sie als flache Bildtafeln |
 | `js/tournament.js`, `js/career.js`, `js/app.js` | Turnierbaum, Karriere (localStorage), Menüs |
-| `js/kleinetour.js` | Kleine Tour für die Karriere: Stufen (`STUFEN`: ITF M15/M25, Challenger, ATP 250/500), 56 kleine Turniere, Flugpreise, Liga-Spiel, 40 erfundene Nachwuchsspieler – ohne three.js |
+| `js/kalender.js` | Tour-Kalender der Karriere: 52 Wochen nach dem echten ATP-Kalender 2026 (`WOCHEN`: großes Turnier, zweite Woche, Off-Season, kleine Turniere je Woche), Regeln der Weltrangliste (`ZAEHLT_HOECHSTENS` 18, `PFLICHT_MASTERS`), Datum einer Woche – ohne three.js und ohne andere Dateien |
+| `js/kleinetour.js` | Kleine Tour für die Karriere: Stufen (`STUFEN`: ITF M15/M25, Challenger, ATP 250/500, echte Feldgrößen), die kleinen Turniere aus dem Kalender, Flugpreise, Liga-Spiel, 400 erfundene Nachwuchsspieler (`NACHWUCHS`), `KURVE` (Punkte → Platz hinter den Top 200) – ohne three.js |
 | `js/ausruestung.js` | Shop mit echten Marken und Modellreihen (nur Namen als Text), Trainer, Physios, Reise-Arten, Ausrüster-Verträge, Geldgeber – ohne three.js |
 | `js/season.js` | Saison mit einem echten Profi: ATP Race (alle starten bei 0), Finals-Qualifikation (Top 8, Grand-Slam-Regel), localStorage – ohne three.js |
 | `js/saisonansicht.js` | Baut HTML für Turnierbaum, Saison-Zeitleiste, Race-Tabelle und Punkte-Erklärung (Aussehen in `css/style.css`) |
@@ -113,9 +114,13 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 
 ## Karriere: Geld, Reisen, Ausrüstung
 
-- Start auf Platz 2000 mit 4.000 $. Jede Woche (14 pro Saison, eine je großem Turnier) wählt man: kleines Turnier, großes Turnier, Liga-Spiel, Tennisstunden geben oder Pause.
+- Start ungefähr auf Platz 2000 mit 4.000 $. Das Jahr hat 52 Wochen (`js/kalender.js`, echter ATP-Kalender 2026). Jede Woche wählt man: ein Turnier der Woche, Liga-Spiel, Tennisstunden geben, Pause/Urlaub oder (nur in der Off-Season im Dezember) Saisonvorbereitung.
   `career.js`: `angebot`, `zugang` (Platz-Grenzen, Wildcards), `reiseKosten`, `sponsorGeld`, `startTournament`, `matchGespielt`, `finishTournament`, `wocheOhneTurnier`.
-- Der Platz hinter den Top 200 wird aus den Punkten geschätzt (`KURVE` in `career.js`). Das große Turnier der Woche wird ohne den Spieler durchgerechnet, wenn er woanders spielt.
+- Weltrangliste nach ATP-Regelbuch 2026: Jeder Spieler hat eine Liste von Ergebnissen `c.erg[id] = [{ a, p, k }]` (`a` = Woche durchgezählt, `k` 1 = Pflichtturnier, 2 = ATP Finals). `zaehlen` rechnet: 52 Wochen, höchstens 18 Turniere, Pflichtturniere (4 Grand Slams, 8 Masters) zählen immer – auch mit 0 Punkten, wenn man mitspielen dürfte und nicht antritt –, Finals obendrauf. `race` zählt nur das laufende Jahr; `finalsFeld` = Top 8 des Race (mit Grand-Slam-Regel). Nicht eingebaut: die Pflicht der Top 30, vier ATP-500-Turniere zu spielen.
+- Die Welt spielt mit (`wochenFelder`, `weltWoche`): Jede Woche verteilen sich die 200 echten Profis und 400 erfundenen Nachwuchsspieler auf die Turniere der Woche (plus ein paar unsichtbare Challenger/ITF-Turniere), alle Turniere werden ausgerechnet, alle bekommen Punkte. Zum Start werden die echten Punkte jedes Profis auf Turniere der letzten 52 Wochen verteilt (`vorjahr`). Geschätzt: wie oft jemand spielt (`SPIELT_OFT`), Tagesform (`FORM`), `CHALLENGER_DAZU`.
+- Turnier über zwei Wochen (Grand Slam, großes Masters): wird in der ersten Woche ausgespielt; wer weit kommt (`ZWEITE_WOCHE`), überspringt die zweite Woche.
+- Hinter den Top 200 wird die Platznummer aus den Punkten geschätzt (`KURVE` in `kleinetour.js`) – für den Spieler und die Nachwuchsspieler gleich.
+- Alte Spielstände (14 Wochen, `c.points`) rechnet `vonAltemKalender` um.
 - Frische (0–100): Matches kosten, Wochen erholen (Physio); unter 70 gibt es Abzüge. Saiten halten nur ein paar Matches und werden automatisch neu bespannt.
 - Echt sind Marken, Modellreihen, Punkte pro Runde und die Turnierorte. Geschätzt sind alle Pluspunkte, Preisgelder (Größenordnung), Platz-Grenzen, Flugpreise, Löhne und Sponsorengeld.
 - Marken nur als Text, keine Logos; das Spiel ist für den Privatgebrauch.
@@ -151,4 +156,5 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
   liegt in `mocap/bewegungen.json` eine Aufnahme `walk` (Eintrag in `tools/mocap.mjs`, mit einer echten Datei noch nicht erprobt), ersetzt sie den gebauten Gang. Slice-Topspin-Unterschiede bei einhändigen Spielern fehlen.
 - Spielstärke und Ballwechsel-Länge sind nur grob eingestellt.
 - Drall: Der Schlag des Gegners nimmt den Drall des ankommenden Balls nicht auf. Die Figur hat für die neuen Schlagarten und den Aufschlag von unten keine eigenen Bewegungen (Topspin- bzw. Vorhand-Slice-Bewegung).
-- Punkte: echte ATP-Werte je Runde (Regeln 2026), aber kleinere Felder (Grand Slam 32, Masters 16) und keine ATP-500/250-Turniere.
+- Turnierfelder wie in echt (auch im Turnier- und Saison-Modus): Grand Slam 128, Masters 96 mit 32 Freilosen (Monte-Carlo und Paris 56 mit 8), ATP 500 32, ATP 250 28 mit 4 Freilosen, Challenger und ITF 32. Nur die Gesetzten (`def.setz`) stehen fest im Baum, der Rest wird gelost (`createTournament`). Wer nach einem Freilos sein erstes Match verliert, bekommt die Punkte der ersten Runde. Vereinfacht: alle ATP-500-Turniere haben 32 Spieler, keine Qualifikation zum Mitspielen, Grand Slams nur zwei Gewinnsätze. Große Bäume zeigt `bracketHtml` in 8 Teilen plus Endrunde.
+- Kalender: ATP-Turniere in ihrer echten Woche 2026; Challenger- und ITF-Orte gibt es wirklich, ihre Woche stimmt nur ungefähr. Jedes Jahr hat denselben Kalender. Der Saison-Modus hat weiter nur die 14 großen Turniere.
