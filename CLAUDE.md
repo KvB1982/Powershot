@@ -37,6 +37,7 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 |---|---|
 | `js/data.js` | Top 200 (Stand 16.11.2026, Werte geschätzt; ab Platz 21 aus der Textliste `REST` berechnet), Turniere, Shop, Schwierigkeit, `EINHAND`, `STIL` (Größe, Statur, Figur, Ball prellen, Jubel der Top 20) |
 | `js/physics.js`, `js/rules.js` | Ballflug (Luftwiderstand, Magnus-Kraft, Reibung beim Aufprall), Zählweise – ohne three.js, in node testbar |
+| `js/faehigkeiten.js` | Die acht Fähigkeiten (`STAT_NAMES`: Aufschlag `s`, Vorhand `vh`, Rückhand `rh`, Volley `v`, Beinarbeit `b`, Ausdauer `a`, Mental `m`, Taktik `k`), Erklärtexte, `achtWerte` (rechnet die fünf alten Werte um), `gesamt` (Gesamtstärke) – ohne three.js und ohne andere Dateien |
 | `js/schlaege.js` | Tabelle aller Schlagarten (`SCHLAEGE`) und Aufschlagarten (`AUFSCHLAEGE`): Tempo, Drall in U/min (`top`, `seite`, `drall`), Höhe über dem Netz – ohne three.js |
 | `js/match.js` | Zustände: intro → serveReady → toss → rally → pointOver → (changeover) → over; Computergegner |
 | `js/controls.js` | Steuerung: `klassik` (Maus), `touch` (iPad), `profi` (Tastatur), `controller` (Switch-Controller; Schwung-Zahlen `SWING_…` oben in der Datei) |
@@ -121,6 +122,8 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 - Turnier über zwei Wochen (Grand Slam, großes Masters): wird in der ersten Woche ausgespielt; wer weit kommt (`ZWEITE_WOCHE`), überspringt die zweite Woche.
 - Hinter den Top 200 wird die Platznummer aus den Punkten geschätzt (`KURVE` in `kleinetour.js`) – für den Spieler und die Nachwuchsspieler gleich.
 - Alte Spielstände (14 Wochen, `c.points`) rechnet `vonAltemKalender` um.
+- Acht Fähigkeiten statt fünf (`js/faehigkeiten.js`). Im Match (`mkPlayer` in `match.js`): Vorhand und Rückhand haben je eigene Härte und Genauigkeit (`p.p`/`p.c` gelten für den Schlag, der gerade gemacht wird); Beinarbeit = Lauftempo; Ausdauer: gerannte Meter machen müde (`MUEDE_…`, langsamer und ungenauer, nur in langen Matches spürbar) und ein Match kostet weniger Frische; Mental: bei Breakball, Satzball, Matchball streut der Schlag mehr oder weniger (`NERVEN`); Taktik: der Computergegner reagiert später (`TAKTIK_TARNT`), und der Computer selbst spielt klüger. Alle diese Zahlen sind geschätzt und nicht von Hand erspielt.
+- Ausrüstung behält ihre Eigenschaften Kraft (`p`), Präzision (`c`), Tempo (`t`): `effectiveStats` legt Tempo auf die Beinarbeit und gibt Kraft/Präzision als `kraft`/`praez` mit, die im Match auf Vorhand und Rückhand wirken. Die Werte der Profis für Vorhand/Rückhand, Ausdauer, Mental, Taktik sind aus den alten fünf Werten berechnet (mit kleinen ausgedachten Unterschieden), nicht einzeln recherchiert. Alte Spielstände rechnet `vonFuenfAufAcht` um.
 - Frische (0–100): Matches kosten, Wochen erholen (Physio); unter 70 gibt es Abzüge. Saiten halten nur ein paar Matches und werden automatisch neu bespannt.
 - Echt sind Marken, Modellreihen, Punkte pro Runde und die Turnierorte. Geschätzt sind alle Pluspunkte, Preisgelder (Größenordnung), Platz-Grenzen, Flugpreise, Löhne und Sponsorengeld.
 - Marken nur als Text, keine Logos; das Spiel ist für den Privatgebrauch.

@@ -781,7 +781,7 @@ function renderCreate() {
       <label>Muster der Kleidung</label><div class="row">${['Einfarbig', 'Bruststreifen', 'Farbige Ärmel', 'Seitenstreifen', 'Schulterpartie'].map((n, k) => `<button class="${draft.pattern === k ? 'sel' : ''}" data-a="draft" data-v="pattern:${k}">${n}</button>`).join('')}</div>
       <label>Zweite Farbe</label>${sw('trim', [0xffffff, 0x1a1a1a, 0x1a2a4a, 0xe84a3a, 0xf2e85c, 0x1fb87a])}
     </div>
-    <p class="dim">Du startest ganz unten: ungefähr Platz 2000 der Weltrangliste, ${money(CA.START_GELD)} und 10 Fähigkeitspunkte. Zuerst spielst du kleine ITF-Turniere – und arbeitest dich hoch bis nach Wimbledon.</p>
+    <p class="dim">Du startest ganz unten: ungefähr Platz 2000 der Weltrangliste, ${money(CA.START_GELD)} und ${CA.START_PUNKTE} Fähigkeitspunkte. Zuerst spielst du kleine ITF-Turniere – und arbeitest dich hoch bis nach Wimbledon.</p>
     <button class="primary" data-a="createCareer">Karriere starten ›</button>`);
 }
 actions.draft = (v) => {
@@ -804,7 +804,7 @@ actions.createCareer = () => {
 };
 
 // '+2 Kraft, +1 Präzision' aus { p: 2, c: 1 }
-const bonusText = (b) => Object.entries(b).map(([k, v]) => `${v > 0 ? '+' : '−'}${Math.abs(v)} ${D.STAT_NAMES[k]}`).join(', ');
+const bonusText = (b) => Object.entries(b).map(([k, v]) => `${v > 0 ? '+' : '−'}${Math.abs(v)} ${D.BONUS_NAMES[k]}`).join(', ');
 const sterne = (n) => (n ? '⭐'.repeat(n) : '');
 const BELAG_KURZ = { hard: 'Hartplatz', clay: 'Sand', grass: 'Rasen', indoor: 'Halle' };
 let shopCat = 'Schläger';
@@ -946,9 +946,10 @@ function renderCareer() {
   } else if (careerTab === 'skills') {
     const eff = CA.effectiveStats(c), liste = CA.bonusListe(c);
     body = `<div class="panel"><p>Freie Fähigkeitspunkte: <b class="gold">${c.skillPoints}</b> · Level ${c.level}. Punkte gibt es für jedes neue Level (Matches und Training bringen Erfahrung).</p>
-      <table>${Object.keys(D.STAT_NAMES).map((k) => `<tr><td><b>${D.STAT_NAMES[k]}</b><br><small class="dim">${SKILL_INFO[k]}</small></td>
+      <table>${Object.keys(D.STAT_NAMES).map((k) => `<tr><td><b>${D.STAT_NAMES[k]}</b><br><small class="dim">${D.STAT_INFO[k]}</small></td>
         <td style="width:40%"><div class="stat" style="grid-template-columns:1fr 60px"><i><b style="width:${eff[k]}%"></b></i><span>${c.skills[k]}${eff[k] !== c.skills[k] ? ` <span class="${eff[k] > c.skills[k] ? 'gold' : 'minus'}">${eff[k] > c.skills[k] ? '+' : '−'}${Math.abs(eff[k] - c.skills[k])}</span>` : ''}</span></div></td>
-        <td class="right"><button data-a="skill" data-v="${k}" ${c.skillPoints <= 0 || c.skills[k] >= 95 ? 'disabled' : ''}>+1</button></td></tr>`).join('')}</table></div>
+        <td class="right"><button data-a="skill" data-v="${k}" ${c.skillPoints <= 0 || c.skills[k] >= 95 ? 'disabled' : ''}>+1</button></td></tr>`).join('')}</table>
+      ${eff.kraft || eff.praez ? `<p class="dim klein">Von deiner Ausrüstung: ${[eff.kraft ? bonusText({ p: eff.kraft }) : '', eff.praez ? bonusText({ c: eff.praez }) : ''].filter(Boolean).join(', ')}. Kraft macht Vorhand und Rückhand härter, Präzision macht beide genauer.</p>` : ''}</div>
       <div class="panel"><h3 style="margin-top:0">Woher kommen deine Pluspunkte?</h3>
         ${liste.length ? `<table>${liste.map((b) => `<tr><td>${esc(b.name)}</td><td class="gold">${bonusText(b.bonus)}</td></tr>`).join('')}</table>` : '<p class="dim">Noch keine. Ausrüstung und ein gutes Team bringen Pluspunkte.</p>'}
         <p class="dim klein">Schuhe zählen für den Belag des Turniers (hier: Hartplatz).</p></div>`;
@@ -1011,10 +1012,6 @@ function renderCareer() {
   show(`<div class="bar">${back()}<h2>${flag(c.country)} ${esc(c.name)}</h2><button class="ghost" data-a="careerDelete">Karriere löschen</button></div>
     <div class="tabs">${tabs.map(([k, n]) => `<button class="${careerTab === k ? 'sel' : ''}" data-a="career" data-v="${k}">${n}</button>`).join('')}</div>${body}`);
 }
-const SKILL_INFO = {
-  s: 'Schnellere und genauere Aufschläge', p: 'Härtere Grundschläge', t: 'Du läufst schneller und erreichst mehr Bälle',
-  c: 'Deine Bälle landen näher am Ziel', v: 'Bessere Volleys und Schmetterbälle am Netz',
-};
 actions.ranglisteTab = (v) => { ranglisteTab = v; keepScroll(renderCareer); };
 actions.skill = (v) => { CA.raiseSkill(career, v); keepScroll(renderCareer); };
 actions.buy = (v) => { if (CA.buy(career, v)) sound.coin(); keepScroll(renderCareer); };

@@ -4,6 +4,7 @@
 import { COURT as C, SURFACES, Ball, solveSafe, solveShot, solveBogen, predict, gauss } from './physics.js';
 import { MatchScore } from './rules.js';
 import { DIFFICULTY } from './data.js';
+import { achtWerte } from './faehigkeiten.js';
 import { GRUNDSCHLAEGE, AUFSCHLAEGE, schlagWerte, aufschlagWerte, standardAufschlag } from './schlaege.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -16,6 +17,15 @@ export const TOSS_TIME = 1.4;      // Dauer der Aufschlagbewegung vom Stand bis 
 const WALK_SPEED = 1.5;            // Gehen beim Seitenwechsel (m/s) – gemütliches Gehen, kein Eilen
 const CHANGEOVER_TIME = 8.0;       // Dauer des Seitenwechsels (s)
 export const TOSS_FLIGHT = 0.85;   // so lange fliegt der Ball frei, bevor er getroffen wird (davor ist er in der Hand)
+// Die neuen Fähigkeiten im Match (alle Zahlen geschätzt, noch nicht von Hand erspielt):
+const NERVEN = 0.35;               // Mental: so viel ungenauer wird ein nervöser Spieler bei wichtigen Punkten
+const NERVEN_MITTE = 0.6;          // ab diesem Wert (0 bis 1) hilft Mental sogar, darunter schadet der Druck
+const TAKTIK_TARNT = 0.3;          // Taktik: so viel später reagiert der Gegner auf den Schlag eines klugen Spielers
+const MUEDE_AB = 500;              // Ausdauer: so viele Meter rennt jeder, ohne etwas zu merken
+const MUEDE_METER = 1500;          // … und nach so vielen weiteren Metern ist ein Spieler mit wenig Ausdauer ganz müde (mit viel Ausdauer: viermal so spät)
+const MUEDE_BREMST = 0.12;         // ganz müde läuft man so viel langsamer
+const MUEDE_STREUT = 0.2;          // … und trifft so viel ungenauer
+const PAUSE_ERHOLT = 0.06;         // beim Seitenwechsel erholt man sich um diesen Anteil
 const PRELL_TIME = 0.42;           // Ball prellen vor dem Aufschlag: so lange dauert einmal Boden und zurück (s)
 export const UNTEN_TIME = 0.75;    // Aufschlag von unten: so lange dauert es vom Loslassen des Balls bis zum Treffen
 
@@ -46,14 +56,23 @@ export class Match {
     // Der Computer hat eine Tagesform: mal etwas besser, mal etwas schlechter
     const k = isHuman ? 1 : this.diff.aiStat * (0.95 + Math.random() * 0.1);
     const q = (v) => clamp((v * k - 40) / 60, 0.03, 1);
-    const st = data.stats;
+    // Die acht Fähigkeiten (siehe faehigkeiten.js). Kraft und Präzision kommen von der Ausrüstung dazu.
+    const st = achtWerte(data.stats), kraft = st.kraft || 0, praez = st.praez || 0;
     const dz = side === 0 ? 1 : -1;
     return {
       side, data, isHuman, dz, hand: data.hand || 1,
       gross: clamp(((data.look && data.look.groesse) || 183) / 183, 0.9, 1.12),   // Körpergröße im Vergleich zu 1,83 m
       prellen: data.stil ? data.stil.prellen : 2,                                // so oft prellt er den Ball vor dem Aufschlag
-      s: q(st.s), p: q(st.p), t: q(st.t), c: q(st.c), v: q(st.v),
-      maxSpeed: 4.1 + 2.6 * q(st.t), accel: 11 + 8 * q(st.t),
+      s: q(st.s), t: q(st.b), v: q(st.v),
+      // Vorhand und Rückhand haben jede ihre eigene Härte (P) und Genauigkeit (C)
+      vhP: q(st.vh + kraft), vhC: q(st.vh + praez), rhP: q(st.rh + kraft), rhC: q(st.rh + praez),
+      // p und c gelten immer für den Schlag, den der Spieler gerade macht ('fh' = Vorhand, 'bh' = Rückhand)
+      get p() { return this.stroke === 'bh' ? this.rhP : this.vhP; },
+      get c() { return this.stroke === 'bh' ? this.rhC : this.vhC; },
+      aus: q(st.a), men: q(st.m), tak: q(st.k),
+      gelaufen: 0, muede: 0,                // so viele Meter ist er schon gerannt, und wie müde er davon ist (0 bis 1)
+      topSpeed: 4.1 + 2.6 * q(st.b),        // so schnell läuft er, wenn er frisch ist
+      maxSpeed: 4.1 + 2.6 * q(st.b), accel: 11 + 8 * q(st.b),
       x: 0, z: dz * (C.L + 0.6), vx: 0, vz: 0,
       homeX: 0, homeZ: C.L + 0.7, netRush: false,
       plan: null, planAge: 9, react: 0, missed: false, lastDist: 99,
@@ -151,6 +170,7 @@ export class Match {
     this.wechselPruefen = false;
     if (wechsel) {
       this.state = 'changeover';
+      for (const q of this.P) q.gelaufen *= 1 - PAUSE_ERHOLT;     // auf der Bank kurz durchatmen
       this.timer = CHANGEOVER_TIME;
       for (const p of this.P) { p.mood = null; p.plan = null; p.prep = 0; }
       this.ball.live = false;
@@ -268,7 +288,7 @@ export class Match {
     let art;
     if (first) art = r2 < 0.65 ? 'gerade' : r2 < 0.92 ? 'slice' : 'kick';
     else art = r2 < 0.70 ? 'kick' : r2 < 0.95 ? 'slice' : 'gerade';
-    if (first && this.mode === 'match' && Math.random() < 0.012 + 0.02 * p.c * (this.diff.aiStat > 0.9 ? 1 : 0)) art = 'unten';
+    if (first && this.mode === 'match' && Math.random() < 0.012 + 0.02 * p.tak * (this.diff.aiStat > 0.9 ? 1 : 0)) art = 'unten';
     let x = bs * (r < 0.42 ? C.W - edge : r < 0.84 ? edge : C.W / 2);
     // Slice und Kick dorthin, wo ihre Kurve am meisten weh tut: Der Slice zieht nach außen weg,
     // der Kick springt zur anderen Seite hoch weg.
@@ -367,6 +387,10 @@ export class Match {
     // (dz dreht die Zahlen für den Spieler auf der anderen Platzseite nicht um: "rechts" heißt immer rechts in Flugrichtung.)
     spin = { top: S.top || 0, seite: (S.seite || 0) * p.hand, drall: (S.drall || 0) * p.hand };
     sigma *= sigK; pNet *= netK;
+    // Mental: Bei Breakball, Satzball und Matchball zittert die Hand – bei nervenstarken Spielern weniger.
+    if (this.mode === 'match' && this.score.wichtigerPunkt()) sigma *= 1 + NERVEN * (NERVEN_MITTE - p.men);
+    // Ausdauer: Wer müde ist, trifft ungenauer.
+    sigma *= 1 + MUEDE_STREUT * p.muede;
     tx += gauss() * sigma;
     td += gauss() * sigma * 1.3;
     if (p.isHuman && d.autoReturn && type !== 'serve') {   // Stufe "Leicht": deine Bälle bleiben drin
@@ -402,7 +426,8 @@ export class Match {
     const opp = this.P[1 - p.side];
     opp.plan = null; opp.planAge = 9; opp.missed = false; opp.lastDist = 99;
     opp.spaetSeit = null;        // Controller: ab wann der beste Moment zum Schlagen vorbei ist
-    opp.react = opp.isHuman ? 0.04 : this.diff.aiReact * (1.15 - 0.3 * opp.t) * (isServe ? 0.65 : 1);
+    // Taktik des Schlägers: Ein kluger Spieler verrät spät, wohin er spielt – der Gegner reagiert später.
+    opp.react = opp.isHuman ? 0.04 : this.diff.aiReact * (1.15 - 0.3 * opp.t) * (isServe ? 0.65 : 1 + TAKTIK_TARNT * (p.tak - 0.5));
     p.plan = null; p.prep = 0;
     p.homeX = f ? clamp(f.x * 0.2, -1.2, 1.2) : 0;
     p.homeZ = p.netRush ? 3.2 : C.L + 0.7;
@@ -572,6 +597,12 @@ export class Match {
     if (al <= am) { p.vx = wx; p.vz = wz; } else { p.vx += ax / al * am; p.vz += az / al * am; }
     p.x = clamp(p.x + p.vx * dt, -9, 9);
     p.z = p.dz * clamp((p.z + p.vz * dt) * p.dz, 0.9, C.L + 6);
+    // Ausdauer: Jeder gerannte Meter im Ballwechsel macht ein bisschen müde. Müde Beine sind langsamer.
+    if (this.mode === 'match' && this.state === 'rally') {
+      p.gelaufen += Math.hypot(p.vx, p.vz) * dt;
+      p.muede = clamp((p.gelaufen - MUEDE_AB) / (MUEDE_METER * (1 + 3 * p.aus)), 0, 1);
+      p.maxSpeed = p.topSpeed * (1 - MUEDE_BREMST * p.muede);
+    }
   }
 
   // Wo kann der Spieler den Ball am besten erwischen?
@@ -689,10 +720,10 @@ export class Match {
       x = (Math.random() - 0.5) * 3; d = C.L * 0.72; power = 0.4;
     } else if (oppAtNet && r < 0.4) {
       type = 'lob'; x = away * wide * 0.6; d = C.L * 0.85;
-    } else if (!oppAtNet && Math.abs(opp.z) > C.L + 1.5 && inside && r < 0.08 + 0.1 * p.c) {
+    } else if (!oppAtNet && Math.abs(opp.z) > C.L + 1.5 && inside && r < 0.08 + 0.1 * p.tak) {
       type = 'drop'; x = away * wide * 0.7; d = 2.5;
     } else {
-      const smart = Math.random() < 0.35 + 0.5 * p.c;
+      const smart = Math.random() < 0.35 + 0.5 * p.tak;      // Taktik: öfter dorthin, wo der Gegner nicht steht
       x = (smart ? away : (Math.random() < 0.5 ? -1 : 1)) * wide * (0.6 + 0.4 * Math.random());
       d = C.L * (0.7 + 0.22 * Math.random());
       if (inside) power = Math.min(1, power + 0.15);

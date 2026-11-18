@@ -3,6 +3,7 @@
 // Die Fähigkeitswerte und das Aussehen sind frei geschätzt (nur fürs Spiel).
 
 import { KLEINE_TURNIERE, LIGA, NACHWUCHS } from './kleinetour.js';
+import { STAT_NAMES, STAT_INFO, BONUS_NAMES, achtWerte, gesamt } from './faehigkeiten.js';
 
 // Die besten Spieler mit von Hand eingestellten Werten.
 // Werte: s = Aufschlag, p = Kraft, t = Tempo, c = Präzision, v = Volley
@@ -242,7 +243,7 @@ function star(a) {
   const [rank, id, full, country, points, s, p, t, c, v, hand, skin, hair, shirt, shorts, head] = a;
   return {
     id, ...names(full), country, rank, basePoints: points,
-    stats: { s, p, t, c, v }, hand,
+    stats: achtWerte({ s, p, t, c, v }, rank), hand,
     look: { skin, hair, shirt, shorts, head, shoes: 0xffffff, racket: 0x202020 },
   };
 }
@@ -257,7 +258,7 @@ function other(line) {
   const w = (key, k) => Math.round(Math.max(48, Math.min(93, base + (((i * 37 + k * 53) % 9) - 4) + (key === strong ? 7 : -1))));
   return {
     id: n.short.toLowerCase().replace(/[^a-z]/g, ''), ...n, country, rank, basePoints: +pts,
-    stats: { s: w('s', 1), p: w('p', 2), t: w('t', 3), c: w('c', 4), v: w('v', 5) },
+    stats: achtWerte({ s: w('s', 1), p: w('p', 2), t: w('t', 3), c: w('c', 4), v: w('v', 5) }, rank),
     hand: extra.includes('L') ? -1 : 1,
     look: {
       skin: HAUT[(i * 5 + 2) % HAUT.length], hair: HAAR[(i * 7 + 1) % HAAR.length], shirt: HEMDEN[(i * 3 + 1) % HEMDEN.length],
@@ -332,9 +333,10 @@ PLAYERS.forEach((p, i) => {
 export const TOP_PLAYERS = PLAYERS.slice(0, 20);
 // Sucht einen Spieler: zuerst bei den echten Top 200, dann bei den erfundenen Nachwuchsspielern der kleinen Tour
 export const playerById = (id) => PLAYERS.find((p) => p.id === id) || NACHWUCHS.find((p) => p.id === id);
-export const overall = (st) => Math.round((st.s + st.p + st.t + st.c + st.v) / 5);
+// Gesamtstärke eines Spielers aus seinen acht Fähigkeiten (siehe faehigkeiten.js)
+export const overall = gesamt;
 
-export const STAT_NAMES = { s: 'Aufschlag', p: 'Kraft', t: 'Tempo', c: 'Präzision', v: 'Volley' };
+export { STAT_NAMES, STAT_INFO, BONUS_NAMES };
 
 // ---------------------------------------------------------------
 // Turniere der Saison (Grand Slams, Masters 1000, ATP Finals)

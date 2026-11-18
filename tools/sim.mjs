@@ -23,6 +23,6 @@ for (let i = 0; i < +n; i++) {
   if (m.state !== 'over') { console.log('HÄNGT! state', m.state, m.score.scoreLine()); continue; }
   wins[m.score.winner]++;
   console.log(`${a.short} - ${b.short}: ${m.score.scoreLine()} | ${Math.round(t / 60)} min | Punkte ${stat.points}, Ø Ballwechsel ${(stat.rallies / stat.points).toFixed(1)} (max ${stat.maxRally}), Ø Aufschlag ${Math.round(stat.serveSpeed / stat.serves)} km/h`);
-  console.log('   ', JSON.stringify(stat.reasons), 'Asse', m.score.stats.map(s => s.aces), '1.Aufschlag', m.score.stats.map(s => Math.round(100 * s.firstIn / Math.max(1, s.firstTotal)) + '%'));
+  console.log('   ', 'gelaufen', m.P.map((q) => Math.round(q.gelaufen) + ' m, müde ' + q.muede.toFixed(2)).join(' | '), JSON.stringify(stat.reasons), 'Asse', m.score.stats.map(s => s.aces), '1.Aufschlag', m.score.stats.map(s => Math.round(100 * s.firstIn / Math.max(1, s.firstTotal)) + '%'));
 }
 console.log('Siege:', wins);

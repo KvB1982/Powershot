@@ -6,6 +6,7 @@
 //
 // Diese Datei enthält nur Listen und Zahlen (kein three.js). Hier kannst du gut selbst etwas ändern.
 import { WOCHEN } from './kalender.js';
+import { achtWerte } from './faehigkeiten.js';
 //
 // Was ist echt, was geschätzt?
 //   echt:      Ranglistenpunkte pro Runde (ATP-Regeln), Namen der Turnierstufen, die Orte gibt es als Turnierorte wirklich
@@ -164,7 +165,7 @@ export const NACHWUCHS = Array.from({ length: NACHWUCHS_ZAHL }, (_, i) => {
   return {
     id: 'nw' + i, name: first + ' ' + last, short: last, country, erfunden: true,
     rank, basePoints: punkteFuerPlatz(rank),
-    stats: { s: w('s', 1), p: w('p', 2), t: w('t', 3), c: w('c', 4), v: w('v', 5) },
+    stats: achtWerte({ s: w('s', 1), p: w('p', 2), t: w('t', 3), c: w('c', 4), v: w('v', 5) }, i),
     hand: i % 8 === 3 ? -1 : 1,
     look: {
       skin: HAUT[(i * 5 + 1) % HAUT.length], hair: HAAR[(i * 7 + 2) % HAAR.length], shirt: HEMD[(i * 4 + 3) % HEMD.length],

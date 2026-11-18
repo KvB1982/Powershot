@@ -4,7 +4,8 @@
 // Jede Turnierwoche entscheidest du: Wohin reise ich? Kann ich mir den Flug leisten? Bin ich noch frisch?
 // Diese Datei rechnet nur – sie zeichnet nichts. Darum kann man sie ohne Browser testen (tools/logic.mjs).
 
-import { PLAYERS, TOURNAMENTS, tournamentById, playerById } from './data.js';
+import { PLAYERS, TOURNAMENTS, tournamentById, playerById, overall } from './data.js';
+import { STAT_NAMES } from './faehigkeiten.js';
 import { createTournament, payout, simulateRest } from './tournament.js';
 import {
   KLEINE_TURNIERE, LIGA, NACHWUCHS, KURVE, STUFEN, BIS_PLATZ_GROSS, ERDTEIL_GROSS, HEIMAT,
@@ -17,6 +18,8 @@ import {
 import { WOCHEN, WOCHEN_PRO_JAHR, ZAEHLT_HOECHSTENS, PFLICHT_MASTERS, wocheVon, zweiWochen } from './kalender.js';
 
 const KEY = 'powershot.karriere.v1';
+export const START_PUNKTE = 16;       // so viele Fähigkeitspunkte darfst du am Anfang verteilen
+export const PUNKTE_PRO_LEVEL = 4;    // und so viele gibt es für jedes neue Level
 export const START_GELD = 4000;       // damit fängst du an (in echt helfen am Anfang oft Eltern und Verein)
 export const WILDCARDS_PRO_SAISON = 2;
 export const TITEL_FANS = 2;          // so viele Fan-Sterne bringt jeder Titel
@@ -30,10 +33,19 @@ const ALLE = [...PLAYERS, ...NACHWUCHS];
 const heimat = (c) => HEIMAT[c.country] || 'eu';
 const begrenzen = (x, a, b) => Math.max(a, Math.min(b, x));
 
+// Ein Spielstand aus der Zeit mit fünf Fähigkeiten (Aufschlag, Kraft, Tempo, Präzision, Volley):
+// Kraft und Präzision werden zu Vorhand und Rückhand, Tempo wird zur Beinarbeit.
+// Die drei neuen Fähigkeiten starten beim Durchschnitt der alten.
+function vonFuenfAufAcht(alt) {
+  const schlag = (alt.p + alt.c) / 2, mitte = Math.round((alt.s + alt.p + alt.t + alt.c + alt.v) / 5);
+  return { s: alt.s, vh: Math.ceil(schlag), rh: Math.floor(schlag), v: alt.v, b: alt.t, a: mitte, m: mitte, k: mitte };
+}
+
 // Alte Spielstände kennen manches noch nicht (oder Dinge, die es nicht mehr gibt). Hier wird alles nachgetragen.
 function reparieren(c) {
   if (!c || !(c.points || c.erg)) return c;
   if ((c.v || 0) < 3) vonAltemKalender(c);
+  if (c.skills.vh == null) c.skills = vonFuenfAufAcht(c.skills);
   const known = new Set(['me', ...ALLE.map((p) => p.id)]);
   for (const id of Object.keys(c.erg)) if (!known.has(id)) delete c.erg[id];
   for (const p of ALLE) if (!c.erg[p.id]) c.erg[p.id] = vorjahr(p, jetzt(c));
@@ -68,7 +80,7 @@ export function deleteCareer() {
 export function newCareer(opts) {
   return reparieren({
     name: opts.name || 'Spieler', country: opts.country || 'GER', hand: opts.hand || 1, look: opts.look,
-    skills: { s: 52, p: 52, t: 52, c: 52, v: 52 }, skillPoints: 10,
+    skills: { s: 52, vh: 52, rh: 52, v: 52, b: 52, a: 52, m: 52, k: 52 }, skillPoints: START_PUNKTE,
     xp: 0, level: 1, money: START_GELD,
     owned: [], equipped: {},
     season: 2026, week: 0, erg: { me: [] }, stand: 0, v: 3, tournament: null, trainingLeft: 2,
@@ -303,10 +315,14 @@ export function bonusListe(c, def = laufendesTurnier(c)) {
   return out;
 }
 
+// Deine acht Fähigkeiten mit allen Pluspunkten. Ausrüstung und Team bringen zum Teil eigene Eigenschaften mit:
+//   Tempo (t) zählt zur Beinarbeit. Kraft (p) und Präzision (c) sind keine Fähigkeiten – sie stehen als
+//   kraft und praez dabei und machen im Match Vorhand und Rückhand härter bzw. genauer.
 export function effectiveStats(c, def) {
-  const st = { ...c.skills };
-  for (const e of bonusListe(c, def)) for (const k in e.bonus) st[k] += e.bonus[k];
-  for (const k in st) st[k] = begrenzen(st[k], 1, 99);
+  const st = { ...c.skills, kraft: 0, praez: 0 };
+  const ziel = { t: 'b', p: 'kraft', c: 'praez' };
+  for (const e of bonusListe(c, def)) for (const k in e.bonus) st[ziel[k] || k] += e.bonus[k];
+  for (const k in STAT_NAMES) st[k] = begrenzen(st[k], 1, 99);
   return st;
 }
 
@@ -441,7 +457,7 @@ export function angebot(c) {
 }
 
 const zufall = (liste, n) => [...liste].sort(() => Math.random() - 0.5).slice(0, n);
-const staerke = (p) => (p.stats.s + p.stats.p + p.stats.t + p.stats.c + p.stats.v) / 5;
+const staerke = (p) => overall(p.stats);
 
 // ---------------------------------------------------------------
 // Die ganze Tennis-Welt spielt mit
@@ -614,7 +630,9 @@ export const ligaSpiel = (c) => startTournament(c, LIGA.id);
 export function matchGespielt(c, gewonnen, runde = 1) {
   // Bei den Turnieren über zwei Wochen ist zwischen den Matches ein freier Tag: Das kostet weniger Kraft.
   const ruhetag = c.tournament && zweiWochen(c.tournament.defId);
-  c.frische = begrenzen(c.frische - Math.round(meinPhysio(c).last * (ruhetag ? RUHETAG : 1)), 0, 100);
+  // Ausdauer: Wer viel Ausdauer hat, den kostet ein Match weniger Frische (bei 52 wie bisher, bei 92 nur noch 60 %).
+  const ausdauer = 1 - (c.skills.a - 52) / 100;
+  c.frische = begrenzen(c.frische - Math.round(meinPhysio(c).last * (ruhetag ? RUHETAG : 1) * ausdauer), 0, 100);
   c.tag = null;                        // der Tag ist vorbei, seine Pluspunkte auch
   if (gewonnen) c.siege++;
   const saite = traegt(c, 'Saiten');
@@ -735,7 +753,7 @@ export function addXp(c, n) {
   while (c.xp >= xpNeed(c.level)) {
     c.xp -= xpNeed(c.level);
     c.level++;
-    c.skillPoints += 3;
+    c.skillPoints += PUNKTE_PRO_LEVEL;
     ups++;
   }
   saveCareer(c);
