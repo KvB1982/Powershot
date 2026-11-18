@@ -31,7 +31,7 @@ export function loadCareer() {
 
 // Alle Spieler der Rangliste außer dir: die 200 echten Profis und die erfundenen Nachwuchsspieler
 const ALLE = [...PLAYERS, ...NACHWUCHS];
-const heimat = (c) => HEIMAT[c.country] || 'eu';
+export const heimat = (c) => HEIMAT[c.country] || 'eu';
 const begrenzen = (x, a, b) => Math.max(a, Math.min(b, x));
 
 // Ein Spielstand aus der Zeit mit fünf Fähigkeiten (Aufschlag, Kraft, Tempo, Präzision, Volley):
@@ -73,6 +73,7 @@ function reparieren(c) {
   c.serie = c.serie || 0;              // so viele Wochen hintereinander hast du Matches gespielt
   c.koerper = c.koerper || null;       // Beschwerden: { teil, wochen }
   c.verletzung = c.verletzung || null; // Verletzung: { name, teil, wochen, gesamt, fehler }
+  c.plan = c.plan && c.plan.jahr === c.season ? c.plan : { jahr: c.season, wochen: {} };   // dein Turnierplan für dieses Jahr (siehe planer.js)
   c.handtuecher = c.handtuecher || []; // Sammlung: von jedem Turnier, bei dem du gespielt hast, ein Handtuch
   c.v = 3;
   return c;
@@ -135,7 +136,7 @@ function eintragen(c, id, e) {
   (c.erg[id] = c.erg[id] || []).push(e);
   c.stand = (c.stand || 0) + 1;
 }
-const istPflicht = (def) => def.cat === 'GS' || (def.cat === 'M' && PFLICHT_MASTERS.includes(def.id));
+export const istPflicht = (def) => def.cat === 'GS' || (def.cat === 'M' && PFLICHT_MASTERS.includes(def.id));
 const kVon = (def) => (def.cat === 'F' ? 2 : istPflicht(def) ? 1 : 0);
 
 // Womit startet ein echter Profi? Seine echten Punkte (Stand der Liste in data.js) werden auf Turniere
@@ -267,6 +268,46 @@ export function traegt(c, cat, stufe) {
   if (!item) return null;
   if (cat === 'Saiten') return item;
   return hat(c, item, stufe) ? item : null;
+}
+
+// Passen deine Schuhe zu diesem Belag?
+// Am Anfang hast du nur alte Turnschuhe. Die gehen auf Hartplatz und in der Halle – aber auf Sand rutscht man damit weg,
+// und auf Rasen sind sie verboten (glatte Sohle). Ein gekaufter Schuh passt, wenn er auf dem Belag mindestens +2 Tempo bringt.
+export const ALTE_SCHUHE_GEHEN = ['hard', 'indoor'];
+export function schuhePassen(c, surface, stufe) {
+  if (ALTE_SCHUHE_GEHEN.includes(surface)) return true;
+  const s = besteSchuhe(c, surface, stufe);
+  return !!s && s.tempo[surface] >= 2;
+}
+// Was fehlt dir für dieses Turnier? Gibt eine Liste zurück: [{ was: 'schuhe' | 'weiss', text, muss }]
+//   muss = true: Ohne das darfst du nicht antreten. (Weiß in Wimbledon kann man leihen – das kostet nur Geld.)
+export function fehltFuer(c, def) {
+  const out = [];
+  if (!def || def.cat === 'LIGA') return out;          // im eigenen Verein darfst du mit allem spielen
+  if (!schuhePassen(c, def.surface)) out.push({ was: 'schuhe', muss: true, text: def.surface === 'clay' ? 'Sandplatz-Schuhe fehlen' : 'Rasen-Schuhe fehlen' });
+  const outfit = traegt(c, 'Outfit');
+  if (def.id === 'wim' && !(outfit && outfit.weiss)) out.push({ was: 'weiss', muss: false, text: `Weißes Outfit fehlt (Leihen kostet ${WIMBLEDON_LEIHE} $)` });
+  return out;
+}
+
+// Deine Ausrüstung auf einen Blick – auch das, was du von Anfang an hast (für die Übersicht).
+// Jede Zeile: { cat, name, info, eigen } – eigen = false: das ist noch die Sache vom Anfang
+export function ausruestungJetzt(c) {
+  const stufe = vertragsStufe(c), zeilen = [];
+  const r = traegt(c, 'Schläger', stufe), s = traegt(c, 'Saiten', stufe), o = traegt(c, 'Outfit', stufe);
+  const k = traegt(c, 'Kopf', stufe), b = traegt(c, 'Schweißband', stufe), t = traegt(c, 'Tasche', stufe);
+  zeilen.push(r ? { cat: 'Schläger', name: r.name, bonus: r.bonus, eigen: true } : { cat: 'Schläger', name: 'Alter Vereinsschläger', info: 'vom Anfang · keine Pluspunkte' });
+  zeilen.push(s ? { cat: 'Saiten', name: s.name, bonus: c.saitenRest > 0 ? s.bonus : null, info: c.saitenRest > 0 ? `noch ${c.saitenRest} ${c.saitenRest === 1 ? 'Match' : 'Matches'} frisch` : 'müde – bringen nichts mehr', eigen: true }
+    : { cat: 'Saiten', name: 'Alte Saiten vom Verein', info: 'vom Anfang · keine Pluspunkte' });
+  const schuhe = SHOP.filter((x) => x.cat === 'Schuhe' && hat(c, x, stufe));
+  const belaege = ['hard', 'clay', 'grass', 'indoor'].filter((bel) => schuhePassen(c, bel, stufe));
+  zeilen.push(schuhe.length ? { cat: 'Schuhe', name: schuhe.map((x) => x.name).join(', '), belaege, eigen: true }
+    : { cat: 'Schuhe', name: 'Alte Turnschuhe', belaege, info: 'vom Anfang · nur für Hartplatz und Halle' });
+  zeilen.push(o ? { cat: 'Outfit', name: o.name, sterne: o.sterne, info: o.weiss ? 'weiß – passt für Wimbledon' : '', eigen: true } : { cat: 'Outfit', name: 'Dein eigenes T-Shirt', info: 'vom Anfang · bringt keine Fans' });
+  zeilen.push(k ? { cat: 'Kopf', name: k.name, sterne: k.sterne, eigen: true } : { cat: 'Kopf', name: '–', info: 'keine Kappe, kein Stirnband' });
+  zeilen.push(b ? { cat: 'Schweißband', name: b.name, bonus: b.bonus, eigen: true } : { cat: 'Schweißband', name: '–', info: 'keins' });
+  zeilen.push(t ? { cat: 'Tasche', name: t.name, info: t.text, eigen: true } : { cat: 'Tasche', name: 'Alter Rucksack', info: 'vom Anfang · Platz für einen Schläger' });
+  return zeilen;
 }
 
 // Das beste Paar Schuhe aus deinem Schrank für diesen Belag
@@ -439,7 +480,7 @@ export function setReise(c, art) { if (REISEN[art]) { c.reise = art; saveCareer(
 // art: 'schlaeger' oder 'kleidung'; marke: Name der Marke oder null (Vertrag beenden)
 export function setVertrag(c, art, marke) { c.vertrag[art] = marke || null; saveCareer(c); }
 
-const erdteil = (c, def) => (def.cat === 'LIGA' ? heimat(c) : def.erdteil || ERDTEIL_GROSS[def.id] || 'eu');
+export const erdteil = (c, def) => (def.cat === 'LIGA' ? heimat(c) : def.erdteil || ERDTEIL_GROSS[def.id] || 'eu');
 const hatFreiflug = (c) => c.sponsoren.some((id) => (GELDGEBER.find((g) => g.id === id) || {}).freiflug);
 
 // Was kostet die Reise zu diesem Turnier? { flug, hotel, essen, summe }
@@ -494,7 +535,7 @@ export function angebot(c) {
   const kleine = KLEINE_TURNIERE.filter((t) => t.woche === c.week).sort((a, b) => a.points.W - b.points.W);
   return [...kleine, ...(gross ? [gross] : [])].map((def) => {
     const kosten = reiseKosten(c, def), z = zugang(c, def, platz);
-    return { def, zugang: z, kosten, fehlt: Math.max(0, kosten.summe + lohn(c) - c.money - sp), pflicht: istPflicht(def) && z.ok };
+    return { def, zugang: z, kosten, fehlt: Math.max(0, kosten.summe + lohn(c) - c.money - sp), pflicht: istPflicht(def) && z.ok, sachen: fehltFuer(c, def) };
   });
 }
 
@@ -650,6 +691,7 @@ export function startTournament(c, defId, mitWildcard = false) {
   if (!def || c.verletzung) return null;   // verletzt: erst gesund werden
   const z = zugang(c, def);
   if (!z.ok && !(mitWildcard && z.wildcard)) return null;
+  if (fehltFuer(c, def).some((f) => f.muss)) return null;    // ohne passende Schuhe geht es nicht
   const verpasst = pflichtVerpasst(c, def);
   const rechnung = wocheBezahlen(c, def);
   if (!rechnung) return null;
@@ -745,7 +787,7 @@ function wocheFertig(c, summary, erholung, wochen = 1) {
   c.trainingLeft = meinTrainer(c).training;
   for (let i = 0; i < wochen; i++) {
     c.week++;
-    if (c.week >= WOCHEN_PRO_JAHR) { c.week = 0; c.season++; c.wildcards = WILDCARDS_PRO_SAISON; summary.seasonOver = true; }
+    if (c.week >= WOCHEN_PRO_JAHR) { c.week = 0; c.season++; c.wildcards = WILDCARDS_PRO_SAISON; summary.seasonOver = true; c.plan = { jahr: c.season, wochen: {} }; }
     // In der zweiten Woche spielt die Welt ohne dich weiter (du bist ja noch beim großen Turnier)
     if (i < wochen - 1) weltWoche(c, null);
   }

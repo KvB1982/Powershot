@@ -19,6 +19,7 @@ import * as AU from './ausruestung.js';
 import * as KT from './kleinetour.js';
 import * as KA from './kalender.js';
 import * as AB from './ausbau.js';
+import * as PL from './planer.js';
 import * as SE from './season.js';
 import { bracketHtml, timelineHtml, raceHtml, pointsHtml } from './saisonansicht.js';
 
@@ -914,14 +915,134 @@ function angebotKarte(a) {
   const reise = `Reise: <b>${money(kosten.summe)}</b> <span class="dim">(${teile.join(' + ')}${kosten.hotel ? '' : ' · das Hotel zahlt das Turnier'})</span>`;
   let knopf;
   if (!zugang.ok && !zugang.wildcard) knopf = `<button disabled>🔒 ${zugang.race ? 'Nur für die besten 8 im ATP Race' : 'Erst ab Platz ' + zugang.bis}</button>`;
+  else if ((a.sachen || []).some((f) => f.muss)) knopf = `<button data-a="schuheKaufen">👟 ${a.sachen.find((f) => f.muss).text} – zum Shop</button>`;
   else if (fehlt) knopf = `<button disabled>Dir fehlen ${money(fehlt)}</button>`;
   else if (!zugang.ok) knopf = `<button data-a="careerPlay" data-v="${def.id}:wc">🎟️ Mit Wildcard hinreisen (noch ${c.wildcards})</button>`;
   else knopf = `<button class="primary" data-a="careerPlay" data-v="${def.id}">Hinreisen und spielen ›</button>`;
   return `<div class="angebot ${zugang.ok ? '' : 'zu'}">
-    <div class="kopf"><b>${esc(def.name)}</b> ${catTag(def)}</div>
-    <div class="dim">${esc(ort)} · ${BELAG_KURZ[def.surface]} · ${sieg}</div>
+    <div class="kopf"><b>${esc(def.name)}</b> ${catTag(def)}${PL.wahlVon(c, c.week) === def.id ? ' <span class="tag plan">📌 in deinem Plan</span>' : ''}</div>
+    <div class="dim">${esc(ort)} · <span class="belag ${def.surface}">${BELAG_KURZ[def.surface]}</span> · ${sieg}</div>
+    ${(a.sachen || []).filter((f) => !f.muss).map((f) => `<div class="klein minus">👕 ${esc(f.text)}</div>`).join('')}
     ${a.pflicht ? '<div class="klein gold">Pflichtturnier: Wenn du nicht antrittst, zählt es mit 0 Punkten.</div>' : ''}
     <div>${reise}</div>${knopf}</div>`;
+}
+
+// ---------------------------------------------------------------
+// Saison-Planer: das ganze Jahr nach Monaten, dein Turnierplan, Kosten und Bedarf (Rechnung in planer.js)
+// ---------------------------------------------------------------
+let planWoche = null;        // diese Woche ist im Planer gerade aufgeklappt
+function planerHtml(c) {
+  const V = PL.vorschau(c), rk = CA.myRank(c);
+  const done = Object.fromEntries(c.history.filter((h) => h.season === c.season && h.w != null).map((h) => [h.w, h]));
+  const zeile = Object.fromEntries(V.wochen.map((z) => [z.nr, z])), monat = Object.fromEntries(V.monate.map((m) => [m.monat, m]));
+  const kurz = { GS: 'Grand Slam', M: 'Masters', F: 'Finals', A500: 'ATP 500', A250: 'ATP 250', CH: 'Challenger', ITF: 'ITF' };
+  const geld = (n) => `<span class="${n < 0 ? 'minus' : ''}">${n < 0 ? '−' : ''}${money(Math.abs(n))}</span>`;
+  // Das Jahr als Streifen: 52 Kästchen in der Farbe der Phase, deine geplanten Turniere als Punkt
+  const streifen = `<div class="jahr">${KA.WOCHEN.map((w) => { const P = KA.phaseVon(w.nr), z = zeile[w.nr], h = done[w.nr];
+    const punkt = h ? (h.label ? '●' : '') : z && z.def ? (z.def.cat === 'LIGA' ? '·' : '●') : z && z.wahl === 'pause' ? '☾' : '';
+    return `<i class="${w.nr === c.week ? 'heute' : w.nr < c.week ? 'war' : ''}" style="background:${P.farbe}" title="KW ${KA.kw(w.nr)}: ${P.name}" data-a="planAuf" data-v="${w.nr}">${punkt}</i>`; }).join('')}</div>
+    <div class="row klein">${KA.PHASEN.map((P) => `<span><i class="punkt" style="background:${P.farbe}"></i>${P.bild} ${P.name}${P.belag ? ' · ' + BELAG_KURZ[P.belag] : ''}</span>`).join('')}</div>`;
+  const sterneNote = V.note ? '⭐'.repeat(V.note) + '☆'.repeat(5 - V.note) : '–';
+  const zeichen = { schlecht: '🔴', achtung: '🟡', info: 'ℹ️', gut: '🟢' };
+  const kopf = `<div class="panel"><h3 style="margin-top:0">🗓️ Dein Tennisjahr ${c.season}</h3>${streifen}
+      <p class="dim klein">● = Turnier in deinem Plan oder schon gespielt · ☾ = Pause · weißer Rahmen = diese Woche. Tippe auf ein Kästchen, um zu der Woche zu springen.</p></div>
+    <div class="cols breit"><div class="panel"><h3 style="margin-top:0">💰 Was kostet dein Plan?</h3>
+      <div class="kpi"><div><b>${V.turniere}</b><span>Turniere geplant</span></div>
+        <div><b class="minus">${money(V.kosten)}</b><span>Kosten bis Jahresende</span></div>
+        <div><b class="plus">${money(V.sicher)}</b><span>sichere Einnahmen</span></div>
+        <div><b class="${V.bedarf ? 'minus' : 'plus'}">${V.bedarf ? money(V.bedarf) : 'reicht'}</b><span>${V.bedarf ? `fehlen dir schlimmstenfalls (KW ${KA.kw(V.tiefWoche)})` : `tiefster Kontostand: ${money(V.tief)}`}</span></div></div>
+      <p class="dim klein"><b>Kosten</b> = Flüge, Hotel, Essen, dein Team und Ausrüstung, die dir für den Plan noch fehlt. <b>Sichere Einnahmen</b> = Sponsoren, Tennisstunden und das Preisgeld,
+        das es sogar bei einer Niederlage in der ersten Runde gibt. Jedes gewonnene Match bringt mehr – darauf verlässt sich ein kluger Plan aber nicht.
+        ${V.maxPunkte ? `Und wenn du alles gewinnst? Dann wären es ${V.maxPunkte.toLocaleString('de-DE')} Punkte. 😄` : ''}</p>
+      ${V.braucht.length ? `<p><b>🛒 Einkaufszettel für diesen Plan</b></p><table>${V.braucht.map((b) => `<tr><td>${esc(b.text.replace(/ \(.*/, ''))}<br><small class="dim">für ${esc(b.fuer)} · ab KW ${KA.kw(b.woche)}</small></td>
+        <td class="right">${b.teil ? `<small>${esc(b.teil.name)}</small><br><button data-a="planKauf" data-v="${b.teil.id}" ${c.money < b.teil.price ? 'disabled' : ''}>Kaufen · ${money(b.teil.price)}</button>` : ''}</td></tr>`).join('')}</table>` : ''}</div>
+    <div class="panel"><h3 style="margin-top:0">🧑‍🏫 Der Trainer schaut auf deinen Plan <span class="gold">${sterneNote}</span></h3>
+      ${V.hinweise.map((h) => `<p class="klein">${zeichen[h.art]} ${esc(h.text)}</p>`).join('')}
+      <p><b>Vorschlag vom Trainer</b> <span class="dim klein">– füllt nur die Wochen, die noch frei sind</span></p>
+      <div class="row">${Object.entries(PL.AUTO).map(([id, A]) => `<button data-a="planAuto" data-v="${id}" title="${A.text}">${A.bild} ${A.name}</button>`).join('')}
+        <button class="ghost" data-a="planLeeren">Plan leeren</button></div>
+      <p class="dim klein">${Object.values(PL.AUTO).map((A) => `${A.bild} ${A.name}: ${A.text}`).join(' ')} Der Trainer rechnet mit deinem Platz von heute (${rk}). Wenn du kletterst, lohnt sich ein neuer Blick.</p></div></div>`;
+  // Die Wochen, nach Monaten getrennt
+  let letzter = -1;
+  const reihen = KA.WOCHEN.map((w) => {
+    const mo = KA.monatVon(c.season, w.nr), P = KA.phaseVon(w.nr), z = zeile[w.nr], h = done[w.nr], g = w.gross ? D.tournamentById(w.gross) : null;
+    let out = '';
+    if (mo !== letzter) {
+      letzter = mo;
+      const m = monat[mo];
+      out += `<tr class="monat"><td colspan="5"><b>${KA.MONATE[mo]}</b>${m ? ` <span class="klein">· ${m.turniere} ${m.turniere === 1 ? 'Turnier' : 'Turniere'} · Kosten ${money(m.kosten)} · sicher ${money(m.sicher)} · Konto am Monatsende mindestens ${geld(m.konto)}</span>` : ' <span class="dim klein">· vorbei</span>'}</td></tr>`;
+    }
+    const kleine = KT.KLEINE_TURNIERE.filter((t) => t.woche === w.nr);
+    let was = g ? `<b>${esc(g.name)}</b> ${catTag(g)}` : w.zweite ? `<span class="dim">${esc(D.tournamentById(w.zweite).name)} · 2. Woche</span>` : w.off ? '<span class="dim">Off-Season</span>' : '';
+    const stufen = [...new Set(kleine.map((t) => t.cat))].reverse();
+    if (stufen.length) was += `${was ? '<br>' : ''}<span class="dim klein">${stufen.map((cat) => kurz[cat] + (cat[0] === 'A' ? ': ' + kleine.filter((t) => t.cat === cat).map((t) => esc(t.city)).join(', ') : '')).join(' · ')}</span>`;
+    let plan;
+    if (h) plan = `<span class="dim">${esc(h.name)}${h.label === 'W' ? ' · 🏆 Sieg' : h.label ? ' · ' + D.ROUND_NAMES[h.label] : ''}${h.label ? ` · ${h.points} P.` : ''} · ${geld(h.netto)}</span>`;
+    else if (w.nr < c.week) plan = '<span class="dim">–</span>';
+    else {
+      const name = z.def ? `${esc(z.def.name)}${z.def.klein || z.def.cat === 'LIGA' ? '' : ''}` : z.wahl ? `${PL.FREI[z.wahl].bild} ${PL.FREI[z.wahl].name}` : '';
+      const warn = [z.def && z.zugang && !z.zugang.ok ? `🔒 erst ab Platz ${z.zugang.bis}` : '', ...z.sachen.map((x) => '👟 ' + x), z.pflichtAus ? '⚠️ Pflichtturnier ausgelassen' : '', z.verteidigen ? `🛡️ ${z.verteidigen} Punkte verteidigen` : '', z.serie >= AB.SERIE_LANG ? `🩹 ${z.serie}. Woche ohne Pause` : ''].filter(Boolean);
+      plan = `<button class="${z.wahl ? 'sel' : 'ghost'} planknopf" data-a="planAuf" data-v="${w.nr}">${z.wahl ? '📌 ' + name : '＋ planen'}</button>
+        ${z.def && z.def.surface ? ` <span class="belag ${z.def.surface}">${BELAG_KURZ[z.def.surface]}</span>` : ''}${warn.length ? `<br><small class="minus">${warn.map(esc).join(' · ')}</small>` : ''}`;
+    }
+    out += `<tr class="${w.nr === c.week ? 'me' : ''}" id="kw${w.nr}"><td class="kwzelle" style="border-left:6px solid ${P.farbe}"><b>KW ${KA.kw(w.nr)}</b><br><small class="dim">${KA.datumKurz(c.season, w.nr)}</small></td>
+      <td>${was || '<span class="dim">–</span>'}</td><td>${plan}</td>
+      <td class="num">${z && (z.kosten || z.sicher) ? `<small class="minus">−${money(z.kosten)}</small><br><small class="plus">+${money(z.sicher)}</small>` : ''}</td>
+      <td class="num">${z ? geld(z.konto) : ''}</td></tr>`;
+    // Aufgeklappt: alle Möglichkeiten dieser Woche
+    if (planWoche === w.nr && w.nr >= c.week) {
+      const opt = PL.optionen(c, w.nr, rk);
+      out += `<tr class="planwahl"><td colspan="5"><b>KW ${KA.kw(w.nr)} · ${P.bild} ${esc(P.name)}</b> – was hast du vor?<div class="row">${opt.map((o) => {
+        const an = z.wahl === o.id;
+        if (!o.def) return `<button class="${an ? 'sel' : ''}" data-a="planSetzen" data-v="${w.nr}:${o.id}">${PL.FREI[o.id].bild} ${PL.FREI[o.id].name}</button>`;
+        const fehlt = CA.fehltFuer(c, o.def).filter((f) => f.muss);
+        return `<button class="${an ? 'sel' : ''} ${o.zugang.ok ? '' : 'zu'}" data-a="planSetzen" data-v="${w.nr}:${o.id}">${esc(o.def.cat === 'LIGA' ? '🏠 Liga-Spiel' : o.def.name)}
+          <small>${o.def.cat === 'LIGA' ? 'zu Hause' : `${kurz[o.def.cat]} · ${BELAG_KURZ[o.def.surface]} · ${KT.ERDTEILE[o.def.erdteil || KT.ERDTEIL_GROSS[o.def.id]] || ''}`}${o.zugang.ok ? '' : ` · 🔒 ab Platz ${o.zugang.bis || 8}`}${fehlt.length ? ' · 👟 Schuhe fehlen' : ''}</small></button>`; }).join('')}
+        ${z.wahl ? `<button class="ghost" data-a="planSetzen" data-v="${w.nr}:">✕ Woche wieder freigeben</button>` : ''}</div></td></tr>`;
+    }
+    return out;
+  }).join('');
+  return `${kopf}<div class="panel" style="overflow-x:auto"><table class="planer"><tr><th>Woche</th><th>Turniere der Woche</th><th>Dein Plan</th><th class="num">Kosten / sicher</th><th class="num">Konto mind.</th></tr>${reihen}</table>
+    <p class="dim klein">KW = Woche des Tennisjahres (KW 1 beginnt am ersten Montag im Januar). Der farbige Rand zeigt die Phase der Saison. „Konto mind.“ = so viel Geld hast du nach dieser Woche mindestens,
+      wenn du nach Plan spielst und überall in der ersten Runde verlierst. Der Plan verpflichtet dich zu nichts: Jede Woche entscheidest du in der Übersicht neu.
+      Der Kalender ist der echte ATP-Kalender 2026; die Wochen der Challenger und ITF-Turniere stimmen nur ungefähr. Alle Geldbeträge sind geschätzt.</p></div>`;
+}
+actions.planAuf = (v) => { planWoche = planWoche === +v ? null : +v; keepScroll(renderCareer); const el = document.getElementById('kw' + v); if (el && planWoche != null) el.scrollIntoView({ block: 'center' }); };
+actions.planSetzen = (v) => { const [w, wahl] = String(v).split(':'); PL.setzen(career, +w, wahl || null); planWoche = null; keepScroll(renderCareer); };
+actions.planAuto = (v) => { PL.autoPlan(career, v); keepScroll(renderCareer); };
+let planLeerArmed = false;
+actions.planLeeren = (v, el) => {
+  if (!planLeerArmed) { planLeerArmed = true; el.textContent = 'Wirklich leeren? Nochmal tippen'; setTimeout(() => { planLeerArmed = false; }, 4000); return; }
+  planLeerArmed = false; PL.leeren(career); keepScroll(renderCareer);
+};
+actions.planKauf = (v) => { if (CA.buy(career, v)) sound.coin(); keepScroll(renderCareer); };
+// Vom Turnier-Angebot direkt zu den Schuhen im Shop
+actions.schuheKaufen = () => { shopCat = 'Schuhe'; careerTab = 'shop'; renderCareer(); };
+
+// In welcher Phase der Saison sind wir? Ein farbiger Streifen mit Belag und dem, was als Nächstes kommt.
+function phaseBanner(c) {
+  const P = KA.phaseVon(c.week), danach = KA.PHASEN[(KA.PHASEN.indexOf(P) + 1) % KA.PHASEN.length];
+  const rest = P.bis - c.week;
+  return `<div class="phase" style="border-color:${P.farbe}"><b>${P.bild} ${esc(P.name)}</b>${P.belag ? ` <span class="belag ${P.belag}">${BELAG_KURZ[P.belag]}</span>` : ''}
+    <span class="dim klein">Woche ${c.week - P.von + 1} von ${P.bis - P.von + 1}</span><br><span class="klein">${esc(P.text)}</span>
+    <br><span class="dim klein">${rest ? `Noch ${rest} ${rest === 1 ? 'Woche' : 'Wochen'}, dann` : 'Nächste Woche beginnt'}: ${danach.bild} ${esc(danach.name)}${danach.belag ? ' (' + BELAG_KURZ[danach.belag] + ')' : ''}${danach.belag && !CA.schuhePassen(c, danach.belag) ? ` – <b class="minus">dafür fehlen dir noch die Schuhe!</b>` : ''}</span></div>`;
+}
+// Was steht für diese Woche in deinem Plan?
+function geplantText(c) {
+  const wahl = PL.wahlVon(c, c.week);
+  if (!wahl) return `<p class="dim klein">📌 Für diese Woche steht nichts in deinem Plan. <button class="ghost" data-a="career" data-v="kalender">Zum Saison-Planer</button></p>`;
+  const def = PL.defVon(wahl);
+  return `<p class="tipp">📌 Dein Plan für diese Woche: <b>${def ? esc(def.name) : PL.FREI[wahl].name}</b></p>`;
+}
+// Deine Ausrüstung auf einen Blick – auch die Sachen vom Anfang
+function ausruestungKasten(c) {
+  const z = CA.ausruestungJetzt(c), neu = z.every((x) => !x.eigen);
+  return `<div class="ausr"><b>🎒 Das hast du gerade</b>${neu ? ' <span class="dim klein">– noch nichts gekauft, nur die Sachen vom Anfang</span>' : ''}
+    <table>${z.map((x) => `<tr class="${x.eigen ? '' : 'dim'}"><td>${x.cat}</td><td><b>${esc(x.name)}</b>
+      ${x.bonus ? `<br><small class="gold">${bonusText(x.bonus)}</small>` : ''}${x.sterne ? ` <small>${sterne(x.sterne)}</small>` : ''}
+      ${x.belaege ? `<br><small>${['hard', 'clay', 'grass', 'indoor'].map((b) => `<span class="belag ${b} ${x.belaege.includes(b) ? '' : 'aus'}">${x.belaege.includes(b) ? '✓' : '✗'} ${BELAG_KURZ[b]}</span>`).join(' ')}</small>` : ''}
+      ${x.info ? `<br><small class="dim">${esc(x.info)}</small>` : ''}</td></tr>`).join('')}</table>
+    <button class="ghost" data-a="career" data-v="shop">Zum Shop ›</button></div>`;
 }
 
 function frischeBalken(f) {
@@ -931,7 +1052,7 @@ function frischeBalken(f) {
 
 function renderCareer() {
   const c = career, me = CA.mePlayer(c), rk = CA.myRank(c), stufe = CA.vertragsStufe(c), W = KA.WOCHEN[c.week];
-  const tabs = [['start', 'Übersicht'], ['shop', 'Ausrüstung'], ['team', 'Team & Sponsoren'], ['service', 'Profi-Service' + (c.koerper || c.verletzung ? ' 🩹' : '')], ['skills', 'Fähigkeiten' + (c.skillPoints ? ' ●' : '')], ['pokale', 'Pokalschrank' + (c.pokale.length ? ' ' + c.pokale.length : '')], ['kalender', 'Kalender'], ['rangliste', 'Weltrangliste']];
+  const tabs = [['start', 'Übersicht'], ['kalender', 'Saison-Planer'], ['shop', 'Ausrüstung'], ['team', 'Team & Sponsoren'], ['service', 'Profi-Service' + (c.koerper || c.verletzung ? ' 🩹' : '')], ['skills', 'Fähigkeiten' + (c.skillPoints ? ' ●' : '')], ['pokale', 'Pokalschrank' + (c.pokale.length ? ' ' + c.pokale.length : '')], ['rangliste', 'Weltrangliste']];
   let body = '';
   const raceIch = CA.race(c).find((p) => p.me);
   if (careerTab === 'start') {
@@ -969,6 +1090,8 @@ function renderCareer() {
           <div class="row"><button class="primary grow" data-a="careerWoche" data-v="reha">Eine Woche Reha machen</button></div></div>` : `
         <div class="panel"><div class="dim">${c.season} · Woche ${c.week + 1} von ${KA.WOCHEN_PRO_JAHR} · ab Montag, ${KA.datumText(c.season, c.week)}</div>
           <h2 style="margin:6px 0">${W.off ? 'Off-Season: Was machst du diese Woche?' : 'Wohin reist du diese Woche?'}</h2>
+          ${phaseBanner(c)}
+          ${geplantText(c)}
           ${W.hinweis ? `<p class="tipp">📅 ${esc(W.hinweis)}</p>` : ''}
           ${W.zweite ? `<p class="dim klein">${esc(D.tournamentById(W.zweite).name)} läuft in der zweiten Woche – ohne dich.</p>` : ''}
           ${weg.length ? `<p class="tipp">🛡️ Punkte verteidigen: Nach dieser Woche ${weg.length > 1 || weg[0].p !== 1 ? 'fallen' : 'fällt'} <b>${weg.reduce((x, e) => x + e.p, 0)} ${weg.reduce((x, e) => x + e.p, 0) === 1 ? 'Punkt' : 'Punkte'}</b> aus deiner Rangliste (${weg.map((e) => esc(e.n || 'Turnier')).join(', ')} vor einem Jahr).</p>` : ''}
@@ -987,6 +1110,7 @@ function renderCareer() {
         <div class="panel">${playerCard(me, 'career', false)}
           <div class="row" style="margin-top:10px"><button class="grow" data-a="training" data-v="career" ${c.trainingLeft <= 0 || c.verletzung ? 'disabled' : ''}>Training (${c.trainingLeft} übrig)</button></div>
           ${c.skillPoints ? `<p class="gold">Du hast ${c.skillPoints} Fähigkeitspunkte zu verteilen!</p>` : ''}
+          ${ausruestungKasten(c)}
           <p class="dim klein">Wildcards in dieser Saison: ${c.wildcards}. Mit einer Wildcard (Einladung) darfst du bei einem Turnier mitspielen, für das dein Platz knapp nicht reicht.</p></div>
       </div>`;
   } else if (careerTab === 'pokale') {
@@ -998,25 +1122,7 @@ function renderCareer() {
       : `<div class="panel center"><div style="font-size:56px">🏆</div><p>Dein Pokalschrank ist noch leer.</p>
         <p class="dim">Gewinne ein Turnier – dann steht hier dein Pokal mit dem Siegerfoto.</p></div>`;
   } else if (careerTab === 'kalender') {
-    // Das ganze Tennisjahr: 52 Wochen. Was läuft, was hast du gemacht, und welche Punkte vom Vorjahr musst du verteidigen?
-    const done = Object.fromEntries(c.history.filter((h) => h.season === c.season && h.w != null).map((h) => [h.w, h]));
-    const vorjahr = {};
-    for (const e of c.erg.me) if (e.p > 0 && e.a >= (c.season - 1) * KA.WOCHEN_PRO_JAHR && e.a < c.season * KA.WOCHEN_PRO_JAHR) vorjahr[e.a % KA.WOCHEN_PRO_JAHR] = (vorjahr[e.a % KA.WOCHEN_PRO_JAHR] || 0) + e.p;
-    const kurz = { A500: 'ATP 500', A250: 'ATP 250', CH: 'Challenger', ITF: 'ITF' };
-    body = `<div class="panel scroll"><table><tr><th>Woche ab</th><th>Turniere</th><th>Das hast du gemacht</th><th class="num">Punkte</th><th class="num">Vorjahr</th><th class="num">Geld</th></tr>
-      ${KA.WOCHEN.map((w) => {
-        const h = done[w.nr], g = w.gross ? D.tournamentById(w.gross) : null;
-        const kleine = KT.KLEINE_TURNIERE.filter((t) => t.woche === w.nr);
-        const atp = kleine.filter((t) => t.cat[0] === 'A');
-        let was = g ? `<b>${g.name}</b> ${catTag(g)}` : w.zweite ? `<span class="dim">${D.tournamentById(w.zweite).name} · 2. Woche</span>` : w.off ? '<span class="dim">Off-Season</span>' : '';
-        if (atp.length) was += `${was ? '<br>' : ''}${[...new Set(atp.map((t) => t.cat))].map((cat) => `<span class="dim">${kurz[cat]}:</span> ${atp.filter((t) => t.cat === cat).map((t) => esc(t.city)).join(', ')}`).join(' · ')}`;
-        else if (kleine.length && !g) was += `${was ? '<br>' : ''}<span class="dim klein">${[...new Set(kleine.map((t) => kurz[t.cat]))].join(' und ')}</span>`;
-        return `<tr class="${w.nr === c.week ? 'me' : ''}"><td>${KA.datumKurz(c.season, w.nr)}</td><td>${was || '<span class="dim">–</span>'}</td>
-        <td>${h ? esc(h.name) + (h.label && h.label !== 'W' ? ' · ' + D.ROUND_NAMES[h.label] : h.label === 'W' ? ' · 🏆 Sieg' : '') : w.nr === c.week ? 'diese Woche' : ''}</td>
-        <td class="num">${h && h.label ? h.points : ''}</td><td class="num dim">${vorjahr[w.nr] && w.nr >= c.week ? vorjahr[w.nr] : ''}</td><td class="num ${h && h.netto < 0 ? 'minus' : ''}">${h && h.netto != null ? money(h.netto) : ''}</td></tr>`; }).join('')}
-      </table><p class="dim klein">Der Kalender ist der echte ATP-Kalender 2026 (Grand Slams, Masters, ATP 500 und 250 in ihrer echten Woche). In jeder Woche außer um Weihnachten gibt es außerdem Challenger und ITF-Turniere.
-      „Vorjahr“ = diese Punkte hast du vor einem Jahr in dieser Woche geholt. Sie fallen dann aus der Rangliste – du musst sie verteidigen.
-      Geld = was in der Woche übrig blieb (Preisgeld und Sponsoren minus Reise und Team).</p></div>`;
+    body = planerHtml(c);
   } else if (careerTab === 'rangliste') {
     const knoepfe = `<div class="row tabs">${[['welt', 'Weltrangliste'], ['race', 'ATP Race ' + c.season], ['meine', 'Meine Punkte']].map(([k, n]) => `<button class="${ranglisteTab === k ? 'sel' : ''}" data-a="ranglisteTab" data-v="${k}">${n}</button>`).join('')}</div>`;
     const tabelle = (list, ich, text) => {

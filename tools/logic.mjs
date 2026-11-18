@@ -27,6 +27,7 @@ function karriere(siegChance, saisons, laut, stur) {
     const platz = CA.myRank(c);
     // Ausrüstung und Team wie ein vernünftiger Spieler
     if (!c.equipped['Schläger'] && c.money > 1500) CA.buy(c, 'r_12');
+    if (!c.owned.includes('h_0') && c.money > 400) CA.buy(c, 'h_0');      // Schuhe für alle Beläge (ohne geht es nicht auf Sand und Rasen)
     if (!c.equipped['Saiten'] && c.money > 1500) CA.buy(c, 's_2');
     if (!c.vertrag.schlaeger && CA.vertragsStufe(c) >= 0) CA.setVertrag(c, 'schlaeger', 'Babolat');
     if (c.money > 30000 && c.trainer === 't0') CA.setTeam(c, 't2');
@@ -35,7 +36,7 @@ function karriere(siegChance, saisons, laut, stur) {
     // Verletzt: gesund werden. Beschwerden: eine Woche Pause (so macht es ein vernünftiger Spieler).
     if (c.verletzung) { const s = CA.wocheOhneTurnier(c, 'pause'); verletzt++; if (s.cat !== 'reha') throw new Error('Verletzt muss Reha sein'); if (laut) console.log(`  Verletzungspause (${s.reha.name}, noch ${s.reha.rest} Wochen)  Platz ${s.rank}`); continue; }
     if (c.koerper && !stur) { const s = CA.wocheOhneTurnier(c, 'pause'); if (!s.geheilt || c.koerper) throw new Error('Pause muss Beschwerden heilen'); continue; }
-    const wahl = CA.angebot(c).filter((a) => a.zugang.ok && !a.fehlt).pop();
+    const wahl = CA.angebot(c).filter((a) => a.zugang.ok && !a.fehlt && !a.sachen.some((f) => f.muss)).pop();
     let T;
     if (c.frische < 40) { const s = CA.wocheOhneTurnier(c, 'pause'); if (laut) console.log(`  Pause                              Platz ${s.rank}  Geld ${c.money}`); continue; }
     if (wahl) T = CA.startTournament(c, wahl.def.id); else { T = CA.ligaSpiel(c); liga++; }
@@ -133,6 +134,32 @@ for (const stur of [false, true]) {
   if (CA.anprobeLook(t, 'e_rg').shirt !== 0xc8643a || CA.anprobeLook(t, null).shirt !== 0x3aa0f0) throw new Error('Anprobe falsch');
   if (!c.handtuecher.length || c.handtuecher.some((h) => !h.n || h.mal < 1)) throw new Error('Handtücher fehlen');
   console.log('Sammlung: ok ·', c.handtuecher.length, 'Handtücher nach 3 Jahren ·', c.owned.filter((id) => id[0] === 'x').join(','));
+}
+{
+  // Saison-Planer: Schuhe, Phasen, automatischer Plan, Kosten
+  const PL = await import('../js/planer.js');
+  const t = CA.newCareer({ name: 'Plan Test', look: {} });
+  for (let w = 0; w < 52; w++) if (!KA.phaseVon(w) || KA.phaseVon(w).von > w || KA.phaseVon(w).bis < w) throw new Error('Phase fehlt für Woche ' + w);
+  if (KA.phaseVon(KA.wocheVon('wim')).belag !== 'grass' || KA.phaseVon(KA.wocheVon('rg')).belag !== 'clay' || KA.phaseVon(KA.wocheVon('uso')).belag !== 'hard' || !KA.WOCHEN.every((w) => !w.off || KA.phaseVon(w.nr).id === 'off')) throw new Error('Phasen passen nicht zum Kalender');
+  if (!CA.schuhePassen(t, 'hard') || CA.schuhePassen(t, 'clay') || CA.schuhePassen(t, 'grass')) throw new Error('Alte Turnschuhe: nur Hartplatz und Halle');
+  const sand = KT.KLEINE_TURNIERE.find((x) => x.surface === 'clay');
+  t.week = sand.woche;
+  if (CA.startTournament(t, sand.id)) throw new Error('Ohne Sandplatz-Schuhe darf man nicht auf Sand antreten');
+  CA.buy(t, 'h_5');
+  if (!CA.schuhePassen(t, 'clay') || CA.fehltFuer(t, sand).length) throw new Error('Sandplatz-Schuhe müssen reichen');
+  t.week = 0;
+  if (CA.ausruestungJetzt(CA.newCareer({ name: 'x', look: {} })).some((z) => z.eigen)) throw new Error('Am Anfang gehört dir noch nichts Gekauftes');
+  for (const art of Object.keys(PL.AUTO)) {
+    PL.leeren(t); PL.autoPlan(t, art);
+    const v = PL.vorschau(t);
+    if (Object.keys(t.plan.wochen).length !== 52 || v.wochen.length !== 52 || v.tief < 0 || v.laengste > PL.AUTO[art].pauseNach + 1) throw new Error('Auto-Plan ' + art + ' falsch: ' + JSON.stringify({ n: Object.keys(t.plan.wochen).length, tief: v.tief, serie: v.laengste }));
+    const m = v.monate.reduce((a, x) => a + x.kosten, 0);
+    if (m !== v.kosten || v.monate.length !== 12) throw new Error('Monate zählen falsch');
+    console.log(`Planer ${art}: ${v.turniere} Turniere, Kosten ${v.kosten} $, sicher ${v.sicher} $, tiefster Kontostand ${v.tief} $, Note ${v.note}`);
+  }
+  PL.leeren(t); PL.setzen(t, KA.wocheVon('wim'), 'wim');
+  const v = PL.vorschau(t);
+  if (!v.braucht.some((b) => b.was === 'schuhe' && b.belag === 'grass') || !v.braucht.some((b) => b.was === 'weiss') || !v.hinweise.some((h) => h.text.startsWith('Platz'))) throw new Error('Wimbledon-Plan: Rasen-Schuhe, Weiß und Platz-Hinweis fehlen');
 }
 CA.addXp(c, 500); console.log('Level', c.level, 'Punkte', c.skillPoints, CA.effectiveStats(c), CA.bonusListe(c).map((b) => b.name).join(' | '));
 // Wimbledon ohne weißes Outfit kostet Leihgebühr; Schuhe passen sich dem Belag an

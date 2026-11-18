@@ -381,3 +381,20 @@ tr.cut td { text-align: center; font-size: 11px; font-weight: 700; color: var(--
 /* Anprobe im Shop: links die Figur, rechts der Text */
 .anprobe { display: flex; gap: 16px; align-items: center; }
 .anprobe canvas { width: 160px; height: 200px; border-radius: 12px; flex: none; }
+/* Saison-Planer */
+.belag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #111; }
+.belag.hard { background: #6ab0f0; } .belag.clay { background: #e8915a; } .belag.grass { background: #7ad88a; } .belag.indoor { background: #b89af0; }
+.belag.aus { background: rgba(255, 255, 255, .1); color: var(--dim); text-decoration: line-through; }
+.phase { border-left: 6px solid; border-radius: 10px; background: rgba(255, 255, 255, .06); padding: 8px 12px; margin: 8px 0; }
+.tag.plan { background: #e8f04a; color: #111; }
+.ausr { margin-top: 12px; background: rgba(255, 255, 255, .05); border-radius: 12px; padding: 10px 12px; }
+.ausr table { margin: 6px 0; } .ausr td { padding: 4px 6px; vertical-align: top; font-size: 14px; }
+.jahr { display: grid; grid-template-columns: repeat(52, 1fr); gap: 2px; margin: 8px 0; }
+.jahr i { height: 30px; border-radius: 4px; font-style: normal; font-size: 11px; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid transparent; }
+.jahr i.war { opacity: .45; } .jahr i.heute { border-color: #fff; box-shadow: 0 0 8px #fff; }
+table.planer tr.monat td { background: rgba(255, 255, 255, .1); padding-top: 12px; font-size: 16px; border-top: 2px solid rgba(255, 255, 255, .25); }
+table.planer .kwzelle { white-space: nowrap; }
+table.planer tr.planwahl td { background: rgba(232, 240, 74, .08); }
+table.planer button.zu { opacity: .6; }
+.planknopf { padding: 6px 12px; font-size: 14px; }
+@media (max-width: 700px) { .jahr i { height: 20px; font-size: 0; } }

@@ -108,9 +108,28 @@ export const wocheVon = (grossId) => WOCHEN.findIndex((w) => w.gross === grossId
 export const zweiWochen = (grossId) => WOCHEN.some((w) => w.zweite === grossId);
 
 // ---------------------------------------------------------------
+// Die Phasen der Saison: Das Tennisjahr zieht in Abschnitten um die Welt – und wechselt dabei den Belag.
+// ---------------------------------------------------------------
+// von/bis = erste und letzte Woche (gezählt ab 0) · belag = worauf in dieser Phase meistens gespielt wird ·
+// farbe = Farbe im Saison-Planer · text = ein Satz dazu
+export const PHASEN = [
+  { id: 'australien', name: 'Australien-Sommer', belag: 'hard', von: 0, bis: 3, bild: '🦘', farbe: '#2f7fd8', text: 'Hartplatz bei großer Hitze. Höhepunkt: die Australian Open.' },
+  { id: 'februar', name: 'Februar-Tour', belag: 'indoor', von: 4, bis: 7, bild: '🧣', farbe: '#7a6ad8', text: 'Gemischt: Halle in Europa, Hartplatz am Golf und in Amerika, Sand in Südamerika.' },
+  { id: 'sunshine', name: 'Sunshine Double', belag: 'hard', von: 8, bis: 11, bild: '🌴', farbe: '#2f9fd8', text: 'Hartplatz in den USA: erst Indian Wells in der Wüste, dann Miami.' },
+  { id: 'sand', name: 'Sandplatz-Saison', belag: 'clay', von: 12, bis: 21, bild: '🧱', farbe: '#d8703a', text: 'Roter Sand in Europa: lange Ballwechsel, viel Rutschen. Höhepunkt: Roland Garros in Paris.' },
+  { id: 'rasen', name: 'Rasen-Saison', belag: 'grass', von: 22, bis: 26, bild: '🌱', farbe: '#3aa85a', text: 'Nur fünf Wochen im Jahr wird auf Rasen gespielt: schnell und flach. Höhepunkt: Wimbledon – ganz in Weiß.' },
+  { id: 'sommersand', name: 'Sommer-Sand', belag: 'clay', von: 27, bis: 28, bild: '⛰️', farbe: '#c8843a', text: 'Kleine Sandplatz-Turniere in den Bergen und am Meer. Viele Stars machen Urlaub.' },
+  { id: 'ushart', name: 'US-Hartplatz-Sommer', belag: 'hard', von: 29, bis: 35, bild: '🗽', farbe: '#2f6fd8', text: 'Hartplatz in Nordamerika. Höhepunkt: die US Open in New York.' },
+  { id: 'asien', name: 'Asien-Tour', belag: 'hard', von: 36, bis: 40, bild: '🏯', farbe: '#2fb8b8', text: 'Hartplatz in China und Japan. Höhepunkt: das Masters in Shanghai.' },
+  { id: 'halle', name: 'Hallen-Saison', belag: 'indoor', von: 41, bis: 46, bild: '🏟️', farbe: '#8a5ad8', text: 'Draußen ist es kalt: Hartplatz in der Halle, ohne Wind und Sonne. Höhepunkt: die ATP Finals.' },
+  { id: 'off', name: 'Off-Season', belag: null, von: 47, bis: 51, bild: '🏖️', farbe: '#6a7388', text: 'Urlaub und Vorbereitung auf das neue Jahr.' },
+];
+export const phaseVon = (woche) => PHASEN.find((p) => woche >= p.von && woche <= p.bis) || PHASEN[PHASEN.length - 1];
+
+// ---------------------------------------------------------------
 // Datum: An welchem Montag beginnt eine Woche?
 // ---------------------------------------------------------------
-const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+export const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 // Woche 0 beginnt am ersten Montag ab dem 4. Januar (2026 ist das der 5. Januar – so wie in echt).
 export function montag(jahr, woche) {
   const d = new Date(Date.UTC(jahr, 0, 4));
@@ -122,6 +141,10 @@ export function datumText(jahr, woche) {
   const d = montag(jahr, woche);
   return d.getUTCDate() + '. ' + MONATE[d.getUTCMonth()];
 }
+// In welchem Monat liegt eine Woche? (0 = Januar; es zählt der Montag)
+export const monatVon = (jahr, woche) => montag(jahr, woche).getUTCMonth();
+// Kalenderwoche, wie sie im Kalender an der Wand steht (unsere Woche 0 ist KW 2, weil das Jahr 2026 an einem Donnerstag beginnt – vereinfacht: Woche + 1)
+export const kw = (woche) => woche + 1;
 // '5.1.'
 export function datumKurz(jahr, woche) {
   const d = montag(jahr, woche);
