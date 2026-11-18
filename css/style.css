@@ -372,3 +372,9 @@ tr.cut td { text-align: center; font-size: 11px; font-weight: 700; color: var(--
 /* Verletzung: roter Kasten mit Erklärung */
 .verletzt { border: 1px solid #ff8a7a; border-radius: 10px; padding: 10px 12px; margin: 8px 0; background: rgba(255, 90, 70, .12); }
 .verletzt ul { margin: 6px 0 6px 18px; padding: 0; }
+/* Kraftraum-Spiel: Balken mit grünem Feld und laufendem Zeiger */
+.kraftbalken { position: relative; height: 34px; border-radius: 17px; background: rgba(255, 255, 255, .12); margin: 10px 0 14px; overflow: hidden; }
+.kraftbalken i { position: absolute; top: 0; bottom: 0; background: #3ecf6e; opacity: .8; }
+.kraftbalken b { position: absolute; top: -2px; bottom: -2px; width: 6px; margin-left: -3px; left: 0; background: #fff; border-radius: 3px; box-shadow: 0 0 6px #000; }
+.spalte { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+.spalte button { text-align: left; }

@@ -321,6 +321,8 @@ export function bonusListe(c, def = laufendesTurnier(c)) {
   if (weh) out.push(weh);
   // Was du heute vor dem Match auf der Anlage getan hast (siehe turniertag.js)
   if (c.tag && Object.keys(c.tag.bonus || {}).length) out.push({ name: 'Heute auf der Anlage', bonus: c.tag.bonus });
+  // Was du gestern Abend getan hast (siehe ABEND in turniertag.js)
+  if (c.abend && c.abend.bonus) out.push({ name: 'Gestern Abend', bonus: c.abend.bonus });
   const f = frischeAbzug(c.frische);
   if (Object.keys(f).length) out.push({ name: c.frische >= 95 ? 'Topfit' : 'Müde', bonus: f });
   return out;
@@ -651,6 +653,8 @@ export function matchGespielt(c, gewonnen, runde = 1) {
   c.tiefFrische = Math.min(c.tiefFrische ?? 100, c.frische);
   c.frische = begrenzen(c.frische - Math.round(meinPhysio(c).last * (ruhetag ? RUHETAG : 1) * ausdauer), 0, 100);
   c.tag = null;                        // der Tag ist vorbei, seine Pluspunkte auch
+  c.abend = null;
+  c.abendOffen = !!gewonnen;           // nach einem Sieg darfst du dir aussuchen, was du am Abend machst
   if (gewonnen) c.siege++;
   const saite = traegt(c, 'Saiten');
   if (saite && c.saitenRest > 0) {
@@ -705,6 +709,8 @@ function wocheFertig(c, summary, erholung, wochen = 1) {
   }
   c.matchesWoche = 0;
   c.tiefFrische = 100;
+  c.abend = null;
+  c.abendOffen = false;
   c.frische = begrenzen(c.frische + erholung, 0, 100);
   c.tournament = null;
   c.trainingLeft = meinTrainer(c).training;

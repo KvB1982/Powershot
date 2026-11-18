@@ -88,6 +88,34 @@ for (const stur of [false, true]) {
   const l = { money: 50000, skills: { s: 80, vh: 60 }, techniken: [] };
   if (!AB.lernen(l, 'kick') || AB.lernen(l, 'peitsche') || !AB.technikWerte(l).aufschlag.kick) throw new Error('Profi-Schläge lernen falsch');
 }
+{
+  // Der Turniertag: Zeitfenster, Zufälle, Essen, Presse, Kraftraum, Abend
+  const TT = await import('../js/turniertag.js');
+  const t = CA.newCareer({ name: 'Tag Test', look: {} });
+  const ao = D.tournamentById('ao'), itf = KT.KLEINE_TURNIERE.find((x) => x.cat === 'ITF');
+  if (TT.fensterVon(ao) !== 3 || TT.fensterVon(itf) !== 2) throw new Error('Zeitfenster falsch');
+  for (const id in TT.EREIGNISSE) for (const w of TT.EREIGNISSE[id].wahl) if (w.length !== 3) throw new Error('Ereignis ' + id + ' unvollständig');
+  for (const f of TT.FRAGEN) if (f.antworten.map((a) => a[0]).sort().join() !== 'nett,patzig,witzig') throw new Error('Presse-Frage braucht je eine nette, witzige und patzige Antwort');
+  // Zufall fest: 0 → Frage 0, Ereignis ja, das erste mögliche (Regen: ein Zeitfenster mehr)
+  TT.tagStart(t, ao, () => 0);
+  if (TT.ereignis(t).id !== 'regen' || TT.fensterName(t) !== 'Freier Tag') throw new Error('Ereignis oder Fenstername falsch');
+  TT.ereignisWahl(t, 0);
+  if (TT.freieFenster(t) !== 4 || TT.ereignis(t)) throw new Error('Regen muss ein Zeitfenster bringen');
+  t.frische = 80;
+  if (!TT.tun(t, 'essen', ao, { wahl: 1 }) || t.frische !== 77) throw new Error('Burger muss Frische kosten');
+  if (TT.tun(t, 'essen', ao, { wahl: 0 })) throw new Error('Zweimal essen geht nicht');
+  if (!TT.tun(t, 'presse', ao, { wahl: 0 }) || t.tagFans !== 1) throw new Error('Nette Antwort muss einen Fan-Stern bringen');
+  const k = TT.tun(t, 'kraft', ao, { treffer: 5 });
+  if (!k || t.tag.bonus.s !== 1 || t.tag.bonus.p !== 1) throw new Error('Kraftraum falsch');
+  if (TT.fensterName(t) !== 'Mittag') throw new Error('Fenstername nach drei Tätigkeiten: ' + TT.fensterName(t));
+  // Abend: nur nach einem Sieg
+  if (TT.abend(t, 'video')) throw new Error('Abend ohne Sieg');
+  t.abendOffen = true;
+  if (!TT.abend(t, 'video') || !CA.bonusListe(t).some((b) => b.name === 'Gestern Abend' && b.bonus.k === 2) || t.abendOffen) throw new Error('Abend falsch');
+  // Wie oft kommt ein Zufall?
+  let n = 0; for (let i = 0; i < 400; i++) { TT.tagStart(t, itf); if (TT.ereignis(t)) { n++; if (TT.EREIGNISSE[t.tag.ereignis].ab > 0) throw new Error('Ereignis passt nicht zum ITF-Turnier'); } }
+  console.log('Turniertag: ok · Zufälle an', Math.round(n / 4), '% der Tage');
+}
 CA.addXp(c, 500); console.log('Level', c.level, 'Punkte', c.skillPoints, CA.effectiveStats(c), CA.bonusListe(c).map((b) => b.name).join(' | '));
 // Wimbledon ohne weißes Outfit kostet Leihgebühr; Schuhe passen sich dem Belag an
 {

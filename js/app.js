@@ -486,6 +486,10 @@ function renderTournament() {
       <p>gewinnt ${def.name}${T.champion === T.humanId ? ' – das bist du! Glückwunsch!' : '.'}</p>
       ${pay && pay.label && def.cat !== 'LIGA' ? `<p class="dim">Dein Ergebnis: ${D.ROUND_NAMES[pay.label]}</p>` : ''}
       <button class="primary" data-a="tourDone">Weiter</button></div>`;
+  } else if (m && ctxT.career && career.abendOffen && def.cat !== 'LIGA') {
+    // Nach einem Sieg: Was machst du am Abend? (Liste ABEND in turniertag.js)
+    top = `<div class="panel"><h3 style="margin-top:0">🌙 Der Abend nach deinem Sieg</h3><p class="dim">Morgen geht das Turnier für dich weiter. Was machst du heute Abend noch?</p>
+      <div class="row">${Object.entries(TT.ABEND).map(([id, A]) => `<button data-a="abend" data-v="${id}">${A.name} <small>${A.bringt}</small></button>`).join('')}</div></div>`;
   } else if (m) {
     const oppId = m.a === T.humanId ? m.b : m.a;
     const opp = getPlayer(oppId), me = getPlayer(T.humanId);
@@ -493,7 +497,7 @@ function renderTournament() {
       <div class="vs"><div><div class="who">${flag(me.country)} ${esc(me.short)}</div><div class="dim">Stärke ${D.overall(me.stats)}</div></div>
       <div class="x">gegen</div>
       <div><div class="who">${flag(opp.country)} ${esc(opp.short)}</div><div class="dim">${def.cat === 'LIGA' ? 'Spieler des anderen Vereins' : T.players[oppId].seed ? 'Nr. ' + T.players[oppId].seed + ' der Setzliste' : 'nicht gesetzt'} · Stärke ${D.overall(opp.stats)}</div></div></div>
-      <div class="center">${ctxT.career && def.cat !== 'LIGA' ? `<button data-a="tagAnlage">🚶 Erst auf die Anlage <small>${career.tag ? `noch ${TT.freieFenster(career)} Zeitfenster` : `${TT.ZEIT_FENSTER} Zeitfenster vor dem Match`}</small></button> ` : ''}<button class="primary" data-a="tourPlay">Match spielen ›</button></div></div>`;
+      <div class="center">${ctxT.career && def.cat !== 'LIGA' ? `<button data-a="tagAnlage">🚶 Erst auf die Anlage <small>${career.tag ? `noch ${TT.freieFenster(career)} Zeitfenster` : `${TT.fensterVon(def)} Zeitfenster vor dem Match`}</small></button> ` : ''}<button class="primary" data-a="tourPlay">Match spielen ›</button></div></div>`;
   } else {
     top = `<div class="panel center"><p>${T.humanId ? 'Du bist ausgeschieden.' : 'Du spielst dieses Turnier nicht mit.'}</p>
       <button class="primary" data-a="tourSim">Turnier zu Ende spielen lassen</button></div>`;
@@ -537,6 +541,11 @@ actions.tourPlay = () => {
   });
 };
 actions.tourShow = () => renderTournament();
+actions.abend = (v) => {
+  const r = TT.abend(career, v);
+  if (!r) return renderTournament();
+  showInfo(TT.ABEND[v].name, `${r.text}<br><b class="gold">${r.bringt.join(' · ')}</b>`, 'tourShow');
+};
 
 // ---------------------------------------------------------------
 // Turnieranlage (Probe): herumlaufen, entweder durch Antippen oder selbst gesteuert
@@ -547,6 +556,11 @@ anlageEl.id = 'anlage';
 document.body.appendChild(anlageEl);
 let anlageTag = null;        // { def } wenn die Anlage gerade der Tag vor einem Karriere-Match ist, sonst null
 let anlageErgebnis = null;   // was die letzte Tätigkeit gebracht hat: { ort, text, bringt }
+let anlageMeldung = null;    // was nach einem Zufall (Ereignis) passiert ist: { text, bringt }
+let kraftSpiel = null;       // läuft gerade das Spiel im Kraftraum? { n, treffer, mitte, start, uhr, letzter }
+// Wo steht der Zeiger im Kraftraum-Spiel gerade? (0 = ganz links, 1 = ganz rechts; er läuft hin und her)
+const kraftZeiger = () => 0.5 - 0.5 * Math.cos(2 * Math.PI * (performance.now() - kraftSpiel.start) / 1000 / TT.KRAFT_SPIEL.dauer);
+function kraftEnde() { if (kraftSpiel) clearInterval(kraftSpiel.uhr); kraftSpiel = null; }
 function anlageZeigen() {
   const A = game.anlage, ort = A.amOrt;
   const hilfe = 'Laufen: W A S D oder mit einem Finger ziehen. Tippe auf ein Gebäude, dann läuft deine Figur von selbst hin. Kamera: Knöpfe rechts, zwei Finger oder rechte Maustaste.';
@@ -555,13 +569,26 @@ function anlageZeigen() {
   if (anlageTag) {
     // Der Tag vor dem Match: oben steht, wie viel Zeit noch ist
     const frei = TT.freieFenster(career);
-    zeit = `<span class="zeit">${esc(anlageTag.def.name)} · ${TT.FENSTER_NAMEN[TT.ZEIT_FENSTER - frei]} · ${frei ? `noch ${frei} Zeitfenster` : 'dein Match beginnt gleich'} · Frische ${Math.round(career.frische)}</span>`;
+    zeit = `<span class="zeit">${esc(anlageTag.def.name)} · ${TT.fensterName(career)} · ${frei ? `noch ${frei} Zeitfenster` : 'dein Match beginnt gleich'} · Frische ${Math.round(career.frische)}</span>`;
     unten = `<p class="dim">${frei ? 'Such dir aus, was du vor dem Match machst. Für alles reicht die Zeit nicht!' : 'Die Zeit ist um. Geh zum <b>Centre Court</b> – dort wartet dein Match.'}</p>`;
   }
-  if (ort) {
+  const E = anlageTag ? TT.ereignis(career) : null;
+  if (E) {
+    // Heute ist etwas Besonderes passiert: erst entscheiden, dann geht der Tag weiter
+    unten = `<h3>${E.bild} Heute Morgen …</h3><p>${esc(E.text)}</p><div class="row">${E.wahl.map((w, i) => `<button class="${i ? '' : 'primary'}" data-a="tagEreignis" data-v="${i}">${esc(w[0])}</button>`).join('')}</div>`;
+  } else if (anlageMeldung && !ort) {
+    unten = `<p>${esc(anlageMeldung.text)}</p>${anlageMeldung.bringt.length ? `<p class="gold">${anlageMeldung.bringt.join(' · ')}</p>` : ''}<p class="dim">Und jetzt: Such dir aus, was du vor dem Match machst.</p>`;
+  } else if (ort) {
     unten = `<h3>${esc(ort.name)}</h3><p>${ort.text}</p><p class="dim klein">Hier passiert noch nichts. Später gehst du hier hinein.</p>`;
     const T = TT.TAETIGKEITEN[ort.id];
-    if (anlageTag && anlageErgebnis && anlageErgebnis.ort === ort.id) {
+    if (anlageTag && kraftSpiel && ort.id === 'kraft') {
+      // Kraftraum-Spiel: Der Zeiger läuft hin und her. Drücken, wenn er im grünen Feld ist.
+      const K = TT.KRAFT_SPIEL, b = K.breite[kraftSpiel.n];
+      unten = `<h3>${esc(ort.name)} · Wiederholung ${kraftSpiel.n + 1} von ${K.wdh}</h3>
+        <p>${kraftSpiel.letzter == null ? 'Drücke, wenn der Zeiger im grünen Feld steht. So hebst du das Gewicht sauber.' : kraftSpiel.letzter ? '<b class="plus">Sauber gehoben!</b>' : '<b class="minus">Verwackelt!</b>'} <span class="dim">Sauber: ${kraftSpiel.treffer}</span></p>
+        <div class="kraftbalken"><i style="left:${(kraftSpiel.mitte - b / 2) * 100}%;width:${b * 100}%"></i><b id="kraftzeiger"></b></div>
+        <button class="primary" data-a="kraftDruck">🏋️ Jetzt heben!</button>`;
+    } else if (anlageTag && anlageErgebnis && anlageErgebnis.ort === ort.id) {
       unten = `<h3>${esc(ort.name)}</h3><p>${anlageErgebnis.text}</p><p class="gold">${anlageErgebnis.bringt.join(' · ')}</p>`;
     } else if (anlageTag && ort.id === 'court') {
       unten = `<h3>${esc(ort.name)}</h3><p>Dein Gegner wartet schon. Bist du bereit?</p><button class="primary" data-a="anlageMatch">Match spielen ›</button>`;
@@ -572,6 +599,15 @@ function anlageZeigen() {
       const k = TT.kann(career, ort.id, anlageTag.def);
       unten = `<h3>${esc(ort.name)}</h3>` + (k.ok ? `<p>Je besser du triffst, desto mehr Pluspunkte hast du im Match. Braucht 1 Zeitfenster.</p><div class="row">${Object.entries(TT.UEBUNGEN).map(([id, U]) =>
         `<button class="primary" data-a="anlageUeben" data-v="${id}">${U.name} <small>${U.kurz}</small></button>`).join('')}</div>` : `<p>${k.warum}</p>`);
+    } else if (anlageTag && T && T.wahl) {
+      // Restaurant und Presse: Du suchst dir selbst eine Antwort aus
+      const k = TT.kann(career, ort.id, anlageTag.def);
+      const wahl = T.wahl === 'essen' ? TT.ESSEN.map((e) => e.name) : TT.FRAGEN[career.tag.frage || 0].antworten.map((a) => '„' + a[1] + '“');
+      unten = `<h3>${esc(ort.name)}</h3>` + (k.ok ? `<p>${T.wahl === 'essen' ? esc(T.text) : `Ein Reporter fragt: <b>„${esc(TT.FRAGEN[career.tag.frage || 0].frage)}“</b>`} <span class="dim">Braucht 1 Zeitfenster.</span></p>
+        <div class="${T.wahl === 'essen' ? 'row' : 'spalte'}">${wahl.map((w, i) => `<button data-a="anlageWahl" data-v="${ort.id}:${i}">${esc(w)}</button>`).join('')}</div>` : `<p>${k.warum}</p>`);
+    } else if (anlageTag && T && T.kraft) {
+      const k = TT.kann(career, ort.id, anlageTag.def);
+      unten = `<h3>${esc(ort.name)}</h3>` + (k.ok ? `<p>${ort.text}</p><button class="primary" data-a="kraftStart">${T.name} <small>${TT.KRAFT_SPIEL.wdh} Wiederholungen · braucht 1 Zeitfenster</small></button>` : `<p>${k.warum}</p>`);
     } else if (anlageTag && T) {
       const k = TT.kann(career, ort.id, anlageTag.def);
       unten = `<h3>${esc(ort.name)}</h3>` + (k.ok ? `<p>${ort.text}</p><button class="primary" data-a="anlageTun" data-v="${ort.id}">${T.name} <small>braucht 1 Zeitfenster</small></button>` : `<p>${k.warum}</p>`);
@@ -597,17 +633,22 @@ function anlageStart(ich, woher, ergebnis = null) {
   game.setPlayers(ich, ich);
   anlageErgebnis = ergebnis;
   // Das Ergebnis bleibt stehen, bis die Figur von der Tür weggeht
-  game.anlage.wennDa = (ort) => { if (!ort || !anlageErgebnis || anlageErgebnis.ort !== ort.id) anlageErgebnis = null; anlageZeigen(); };
+  game.anlage.wennDa = (ort) => {
+    if (!ort || !anlageErgebnis || anlageErgebnis.ort !== ort.id) anlageErgebnis = null;
+    if (ort) anlageMeldung = null;
+    if (!ort || ort.id !== 'kraft') kraftEnde();           // wer aus dem Kraftraum weggeht, bricht das Training ab
+    anlageZeigen();
+  };
   game.anlage.start(woher);
   anlageZeigen();
 }
-function anlageSchluss() { game.anlage.ende(); anlageEl.classList.remove('on'); anlageEl.innerHTML = ''; }
+function anlageSchluss() { kraftEnde(); anlageMeldung = null; game.anlage.ende(); anlageEl.classList.remove('on'); anlageEl.innerHTML = ''; }
 // Aus dem Hauptmenü: einfach nur herumlaufen (mit deinem Karriere-Spieler, sonst mit dem ersten Spieler der Liste)
 actions.anlage = () => { anlageTag = null; anlageStart(career ? CA.mePlayer(career) : D.PLAYERS[0]); };
 // In der Karriere: der Tag vor dem Match. Wer schon auf der Anlage war und zurückkommt, macht dort weiter.
 actions.tagAnlage = () => {
   if (!ctxT || !ctxT.career) return;
-  if (!career.tag) TT.tagStart(career);
+  if (!career.tag) TT.tagStart(career, ctxT.def);
   anlageTag = { def: ctxT.def };
   anlageStart(CA.mePlayer(career));
 };
@@ -615,6 +656,39 @@ actions.anlageTun = (v) => {
   if (!anlageTag) return;
   const bringt = TT.tun(career, v, anlageTag.def);
   if (bringt) anlageErgebnis = { ort: v, text: TT.TAETIGKEITEN[v].text, bringt };
+  anlageZeigen();
+};
+// Ein Zufall am Morgen: Antwort wählen
+actions.tagEreignis = (v) => { if (anlageTag) anlageMeldung = TT.ereignisWahl(career, +v); anlageZeigen(); };
+// Restaurant und Presse: v = 'ort:nummer'
+actions.anlageWahl = (v) => {
+  if (!anlageTag) return;
+  const [ort, nr] = String(v).split(':');
+  const bringt = TT.tun(career, ort, anlageTag.def, { wahl: +nr });
+  if (bringt) anlageErgebnis = { ort, text: bringt[0], bringt: bringt.slice(1) };
+  anlageZeigen();
+};
+// Kraftraum-Spiel starten, und: der Knopf „Jetzt heben!“
+function kraftRunde() { kraftSpiel.mitte = 0.3 + Math.random() * 0.4; kraftSpiel.start = performance.now(); }
+actions.kraftStart = () => {
+  if (!anlageTag || !TT.kann(career, 'kraft', anlageTag.def).ok) return;
+  kraftEnde();
+  kraftSpiel = { n: 0, treffer: 0, letzter: null, uhr: setInterval(() => { const z = document.getElementById('kraftzeiger'); if (z && kraftSpiel) z.style.left = kraftZeiger() * 100 + '%'; }, 30) };
+  kraftRunde();
+  anlageZeigen();
+};
+actions.kraftDruck = () => {
+  if (!kraftSpiel || !anlageTag) return;
+  const K = TT.KRAFT_SPIEL, gut = Math.abs(kraftZeiger() - kraftSpiel.mitte) <= K.breite[kraftSpiel.n] / 2;
+  kraftSpiel.letzter = gut;
+  if (gut) { kraftSpiel.treffer++; sound.coin(); }
+  kraftSpiel.n++;
+  if (kraftSpiel.n >= K.wdh) {
+    const treffer = kraftSpiel.treffer;
+    kraftEnde();
+    const bringt = TT.tun(career, 'kraft', anlageTag.def, { treffer });
+    if (bringt) anlageErgebnis = { ort: 'kraft', text: bringt[0], bringt: bringt.slice(1) };
+  } else kraftRunde();
   anlageZeigen();
 };
 // Minispiel auf dem Trainingsplatz: Ballmaschine oder Aufschlag. Danach geht es zurück auf die Anlage.
