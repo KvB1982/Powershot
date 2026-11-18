@@ -142,7 +142,7 @@ actions.home = () => {
       <button class="big" data-a="saison">Saison <small>${season ? esc(SE.seasonPlayer(season).short) + ' · ATP Race Platz ' + SE.myRace(season).rank : 'Mit einem Profi durchs Jahr · ATP Race'}</small></button>
       <button class="big" data-a="tourMenu">Turnier <small>Ein Turnier mit einem Profi spielen</small></button>
       <button class="big" data-a="training">Training <small>Ballmaschine · Aufschlag</small></button>
-      <button class="big" data-a="anlage">Turnieranlage <small>Probe: herumlaufen und ausprobieren</small></button>
+      <button class="big" data-a="anlage">Turnieranlage <small>Herumlaufen auf der Anlage (im Aufbau)</small></button>
       <div class="row"><button class="grow" data-a="settings" data-v="home">Einstellungen</button><button class="grow" data-a="help" data-v="home">Steuerung</button></div>
     </div>`);
 };
@@ -541,14 +541,21 @@ anlageEl.id = 'anlage';
 document.body.appendChild(anlageEl);
 function anlageZeigen() {
   const A = game.anlage, ort = A.amOrt;
-  const hilfe = A.art === 'tippen' ? 'Tippe auf ein Gebäude – deine Figur läuft von selbst hin.'
-    : 'Tasten W A S D oder Pfeile. Auf dem iPad: Finger aufsetzen und ziehen (nach oben = vorwärts, zur Seite = drehen). Antippen geht auch hier.';
-  anlageEl.innerHTML = `<div class="oben"><button class="ghost" data-a="anlageEnde">‹ Zurück</button>
-      <button class="${A.art === 'tippen' ? 'sel' : ''}" data-a="anlageArt" data-v="tippen">👆 Antippen</button>
-      <button class="${A.art === 'laufen' ? 'sel' : ''}" data-a="anlageArt" data-v="laufen">🕹️ Selbst laufen</button></div>
-    <div class="panel">${ort ? `<h3>${esc(ort.name)}</h3><p>${ort.text}</p><p class="dim klein">Probe: Hier passiert noch nichts. Später gehst du hier hinein.</p>` : `<p class="dim">${hilfe}</p>`}</div>`;
+  const hilfe = 'Laufen: W A S D oder mit einem Finger ziehen. Tippe auf ein Gebäude, dann läuft deine Figur von selbst hin. Kamera: Knöpfe rechts, zwei Finger oder rechte Maustaste.';
+  const kam = [['karte', '🗺️', 'Übersicht'], ['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg']];
+  anlageEl.innerHTML = `<div class="oben"><button class="ghost" data-a="anlageEnde">‹ Zurück</button></div>
+    <div class="kam">${kam.map(([k, z, t]) => `<button data-kam="${k}" title="${t}" aria-label="${t}">${z}</button>`).join('')}</div>
+    <div class="panel">${ort ? `<h3>${esc(ort.name)}</h3><p>${ort.text}</p><p class="dim klein">Hier passiert noch nichts. Später gehst du hier hinein.</p>` : `<p class="dim">${hilfe}</p>`}</div>`;
   anlageEl.classList.add('on');
 }
+// Kamera-Knöpfe: solange gedrückt, dreht oder zoomt die Kamera
+anlageEl.addEventListener('pointerdown', (e) => {
+  const b = e.target.closest('[data-kam]');
+  if (!b) return;
+  e.preventDefault();
+  if (b.dataset.kam === 'karte') game.anlage.uebersicht(); else game.anlage.kamTaste = b.dataset.kam;
+});
+for (const n of ['pointerup', 'pointercancel', 'pointerleave']) anlageEl.addEventListener(n, () => { game.anlage.kamTaste = null; }, true);
 actions.anlage = () => {
   hide();
   enterMenu();
@@ -559,7 +566,6 @@ actions.anlage = () => {
   game.anlage.start();
   anlageZeigen();
 };
-actions.anlageArt = (v) => { game.anlage.setArt(v); anlageZeigen(); };
 actions.anlageEnde = () => { game.anlage.ende(); anlageEl.classList.remove('on'); anlageEl.innerHTML = ''; actions.home(); };
 
 // ---------------------------------------------------------------

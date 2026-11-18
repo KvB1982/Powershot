@@ -421,8 +421,9 @@ export class Avatar {
     // Beim Gehen dreht sich der ganze Körper in Laufrichtung (sonst schaut die Figur immer zum Netz).
     // An der Bank angekommen, dreht sie sich zum Platz um.
     if (st.walk && moving) a.walked = true; else if (!st.walk) a.walked = false;
-    // (st.face: Bei der Siegerehrung sagt das Spiel selbst, wohin die Figur im Stehen schaut.)
-    const faceTo = st.face != null && !moving ? st.face : !st.walk ? 0 : moving ? Math.atan2(st.vx * d, -st.vz * d) : a.walked ? Math.atan2(-Math.sign(st.x || -1) * d, 0.5) : (a.face || 0);
+    // (st.face: Bei der Siegerehrung und auf der Turnieranlage sagt das Spiel selbst, wohin die Figur schaut –
+    //  im Stehen, und mit st.faceFest auch im Laufen.)
+    const faceTo = st.face != null && (!moving || st.faceFest) ? st.face : !st.walk ? 0 : moving ? Math.atan2(st.vx * d, -st.vz * d) : a.walked ? Math.atan2(-Math.sign(st.x || -1) * d, 0.5) : (a.face || 0);
     let turn = faceTo - (a.face || 0);
     turn = Math.atan2(Math.sin(turn), Math.cos(turn));
     a.face = (a.face || 0) + turn * Math.min(1, dt * 6);

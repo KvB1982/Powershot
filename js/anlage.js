@@ -1,9 +1,11 @@
 // Powershot – Die Turnieranlage (PROBE).
 //
-// Hier probieren wir aus, wie sich die Tage auf einer Turnieranlage anfühlen sollen. Es gibt zwei Arten:
-//   'tippen' = Blick von schräg oben. Du tippst auf ein Gebäude und deine Figur läuft von selbst hin.
-//   'laufen' = Die Kamera ist hinter der Figur und du steuerst selbst (Tasten W A S D / Pfeile oder mit dem Finger ziehen).
-// Die Gebäude sind noch einfache Klötze. In den Gebäuden passiert noch nichts – es geht nur ums Herumlaufen.
+// Du läufst frei über die Anlage. Gesteuert und geschaut wird wie auf dem Pferdehof im Spiel „Reitturnier“:
+//   Laufen: Tasten W A S D / Pfeile oder mit einem Finger ziehen (wie ein Steuerknüppel). „Oben“ heißt immer: von der Kamera weg.
+//           Ein kurzer Tipp auf ein Gebäude lässt die Figur von selbst hinlaufen.
+//   Kamera: kreist um die Figur. Knöpfe ⟲ ⟳ ＋ － und 🗺️ (Übersicht), Tasten Q/R drehen, T/G zoomen, M Übersicht,
+//           Maus: rechte Taste ziehen und Mausrad, iPad: mit zwei Fingern drehen, neigen und zoomen.
+// Die Gebäude sind noch einfache Klötze. In den Gebäuden passiert noch nichts.
 //
 // Alle Gebäude stehen im Kreis um einen Platz in der Mitte, die Türen zeigen zur Mitte.
 // So kommt man von jeder Tür geradeaus zu jeder anderen, ohne durch ein Haus zu laufen.
@@ -11,9 +13,10 @@ import * as THREE from 'three';
 import { requisit } from './requisiten.js';
 
 // ---- Zahlen zum Einstellen ----
-const TEMPO_TIPPEN = 2.6;     // so schnell läuft die Figur von selbst (Meter pro Sekunde)
-const TEMPO_LAUFEN = 2.4;     // so schnell läuft sie, wenn du steuerst
-const DREH_TEMPO = 2.2;       // so schnell dreht sie sich beim Selbst-Steuern
+const TEMPO = 3.4;            // so schnell läuft die Figur (Meter pro Sekunde)
+const GEH_BIS = 2.0;          // bis zu diesem Tempo wird gegangen, darüber gejoggt
+// Kamera: w = Drehung um die Figur (0 = von vorn/Süden), e = Neigung (0 flach … 1.5 von oben), d = Abstand in Metern
+const KAM_START = { w: 0, e: 0.7, d: 15 }, KAM_WEIT = { e: 1.05, d: 46 };
 const TUER_NAH = 1.6;         // so nah an der Tür (Meter) gilt: „du bist da“
 const RING_X = 17, RING_Z = 13;   // so groß ist der Kreis, auf dem die Gebäude stehen
 const RAND = 24;              // weiter als so kommt man nicht von der Mitte weg
@@ -38,24 +41,65 @@ export class Anlage {
   constructor(game) {
     this.game = game;
     this.an = false;
-    this.art = 'tippen';
     this.gruppe = null;
     this.tasten = {};
-    this.zug = null;           // Finger oder Maus wird gerade gezogen: { x0, y0, x, y }
+    this.finger = {};          // alle Finger (oder die Maus), die gerade aufliegen: id → { x0, y0, x, y, rechts }
+    this.knueppel = null;      // id des Fingers, der gerade läuft
+    this.kamTaste = null;      // welcher Kamera-Knopf gerade gedrückt ist ('links', 'rechts', 'nah', 'fern')
+    this.kam = { ...KAM_START, zw: KAM_START.w, ze: KAM_START.e, zd: KAM_START.d };    // z… = wohin die Kamera will
     this.amOrt = null;         // der Ort, an dessen Tür die Figur gerade steht
     this.wennDa = null;        // wird aufgerufen, wenn sich amOrt ändert (app.js zeigt dann das Fenster)
-    // Tasten und Finger – hören nur zu, solange die Anlage an ist
-    addEventListener('keydown', (e) => { if (this.an) this.tasten[e.code] = true; });
+    // Tasten, Maus und Finger – hören nur zu, solange die Anlage an ist
+    const meins = (e) => this.an && !e.target.closest('button, .panel');
+    addEventListener('keydown', (e) => { if (!this.an) return; this.tasten[e.code] = true; if (e.code === 'KeyM') this.uebersicht(); });
     addEventListener('keyup', (e) => { this.tasten[e.code] = false; });
-    addEventListener('pointerdown', (e) => { if (this.an && !e.target.closest('button, .panel')) this.zug = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY }; });
-    addEventListener('pointermove', (e) => { if (this.zug) { this.zug.x = e.clientX; this.zug.y = e.clientY; } });
-    addEventListener('pointerup', (e) => {
-      const z = this.zug;
-      this.zug = null;
-      if (!this.an || !z || e.target.closest('button, .panel')) return;
-      // Nur ein kurzer Tipp (kaum bewegt)? Dann ist das ein Ziel zum Hinlaufen.
-      if (Math.hypot(z.x - z.x0, z.y - z.y0) < 12) this.tipp(e.clientX, e.clientY);
+    addEventListener('contextmenu', (e) => { if (meins(e)) e.preventDefault(); });
+    addEventListener('wheel', (e) => { if (meins(e)) { this.kam.zd *= Math.exp(e.deltaY * 0.001); this.kamGrenzen(); } }, { passive: true });
+    addEventListener('pointerdown', (e) => {
+      if (!meins(e)) return;
+      this.finger[e.pointerId] = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, rechts: e.button === 2, weg: 0 };
+      const n = Object.keys(this.finger).length;
+      if (n === 1 && e.button !== 2) this.knueppel = e.pointerId; else this.knueppel = null;     // ein Finger läuft, zwei drehen die Kamera
     });
+    addEventListener('pointermove', (e) => {
+      const f = this.finger[e.pointerId];
+      if (!f) return;
+      const dx = e.clientX - f.x, dy = e.clientY - f.y, ids = Object.keys(this.finger), k = this.kam;
+      f.weg += Math.hypot(dx, dy);
+      if (f.rechts) { k.zw -= dx * 0.008; k.ze += dy * 0.006; }
+      else if (ids.length >= 2) {
+        // Zwei Finger: auseinander/zusammen = zoomen, gemeinsam schieben = drehen und neigen
+        const o = this.finger[ids[0] == e.pointerId ? ids[1] : ids[0]];
+        const alt = Math.hypot(f.x - o.x, f.y - o.y), neu = Math.hypot(e.clientX - o.x, e.clientY - o.y);
+        if (alt > 8 && neu > 8) k.zd *= alt / neu;
+        k.zw -= dx * 0.004; k.ze += dy * 0.003;
+      }
+      f.x = e.clientX; f.y = e.clientY;
+      this.kamGrenzen();
+    });
+    const los = (e) => {
+      const f = this.finger[e.pointerId];
+      delete this.finger[e.pointerId];
+      if (this.knueppel === e.pointerId) this.knueppel = null;
+      // Nur ein kurzer Tipp (kaum bewegt)? Dann ist das ein Ziel zum Hinlaufen.
+      if (this.an && f && !f.rechts && f.weg < 12 && e.type === 'pointerup' && !e.target.closest('button, .panel')) this.tipp(e.clientX, e.clientY);
+    };
+    addEventListener('pointerup', los);
+    addEventListener('pointercancel', los);
+  }
+
+  kamGrenzen() {
+    const k = this.kam;
+    k.ze = Math.max(0.12, Math.min(1.45, k.ze));
+    k.zd = Math.max(5, Math.min(60, k.zd));
+  }
+
+  // 🗺️ Übersicht: einmal drücken = von weit oben auf die ganze Anlage, noch einmal = zurück zur Figur
+  uebersicht() {
+    const k = this.kam, weit = k.zd > 30;
+    k.zd = weit ? KAM_START.d : KAM_WEIT.d;
+    k.ze = weit ? KAM_START.e : KAM_WEIT.e;
+    if (weit) k.zw = Math.round(k.zw / (Math.PI * 2)) * Math.PI * 2;
   }
 
   start() {
@@ -179,13 +223,8 @@ export class Anlage {
     g.ball.visible = g.blob.visible = g.trail.visible = false;
     if (g.maschine) g.maschine.visible = false;
     g.scene.fog.near = 60; g.scene.fog.far = 160;
-    this.setArt(this.art, true);
-  }
-
-  setArt(art, sofort) {
-    this.art = art;
-    this.ziel = null;
-    if (sofort) { this.kamera(1); }
+    Object.assign(this.kam, KAM_START, { zw: KAM_START.w, ze: KAM_START.e, zd: KAM_START.d });
+    this.kamera(1);
   }
 
   // Auf den Bildschirm getippt: Wohin soll die Figur laufen?
@@ -212,40 +251,41 @@ export class Anlage {
   }
 
   update(dt) {
-    const g = this.game, p = this.p, t = this.tasten;
-    // --- Selbst steuern: Tasten oder Ziehen mit dem Finger ---
-    let vor = 0, dreh = 0;
-    if (this.art === 'laufen') {
-      vor = (t.KeyW || t.ArrowUp ? 1 : 0) - (t.KeyS || t.ArrowDown ? 1 : 0);
-      dreh = (t.KeyA || t.ArrowLeft ? 1 : 0) - (t.KeyD || t.ArrowRight ? 1 : 0);
-      if (this.zug) {
-        // Ziehen: nach oben = vorwärts, zur Seite = drehen (wie ein Steuerknüppel, der dort ist, wo der Finger aufgesetzt hat)
-        const dx = (this.zug.x - this.zug.x0) / 70, dy = (this.zug.y0 - this.zug.y) / 70;
-        if (Math.hypot(dx, dy) > 0.2) { vor = Math.max(-1, Math.min(1, dy)); dreh = -Math.max(-1, Math.min(1, dx)); }
-      }
-      if (vor || dreh) this.ziel = null;       // wer selbst steuert, bricht das Hinlaufen ab
+    const g = this.game, p = this.p, t = this.tasten, k = this.kam;
+    // --- Selbst steuern: Tasten oder ein Finger als Steuerknüppel ---
+    let sx = (t.KeyD || t.ArrowRight ? 1 : 0) - (t.KeyA || t.ArrowLeft ? 1 : 0);
+    let sz = (t.KeyS || t.ArrowDown ? 1 : 0) - (t.KeyW || t.ArrowUp ? 1 : 0);
+    const f = this.finger[this.knueppel];
+    if (f) {
+      // Der Knüppel sitzt dort, wo der Finger aufgesetzt hat. Je weiter gezogen, desto schneller.
+      const dx = (f.x - f.x0) / 70, dz = (f.y - f.y0) / 70;
+      if (Math.hypot(dx, dz) > 0.18) { sx = dx; sz = dz; }
     }
+    // „Oben“ auf dem Bildschirm ist immer von der Kamera weg, egal wie sie gedreht ist
+    const kc = Math.cos(k.w), ks = Math.sin(k.w);
+    let ex = sx * kc + sz * ks, ez = -sx * ks + sz * kc;
+    const st = Math.min(1, Math.hypot(ex, ez));
+    if (st > 0.05) this.ziel = null;           // wer selbst steuert, bricht das Hinlaufen ab
     if (this.ziel) {
-      // Von selbst zum Ziel laufen
+      // Von selbst zum angetippten Ziel laufen
       const dx = this.ziel.x - p.x, dz = this.ziel.z - p.z, weit = Math.hypot(dx, dz);
       if (weit < 0.15) { p.vx = p.vz = 0; this.ziel = null; }
-      else {
-        const v = Math.min(TEMPO_TIPPEN, weit * 2.5 + 0.4);
-        p.vx = dx / weit * v; p.vz = dz / weit * v;
-        p.blick = Math.atan2(p.vx, p.vz);
-      }
-    } else {
-      p.blick += dreh * DREH_TEMPO * dt;
-      const v = vor * TEMPO_LAUFEN * (vor < 0 ? 0.5 : 1);
-      p.vx = Math.sin(p.blick) * v; p.vz = Math.cos(p.blick) * v;
+      else { const v = Math.min(TEMPO, weit * 2.5 + 0.4); p.vx = dx / weit * v; p.vz = dz / weit * v; }
+    } else if (st > 0.05) {
+      const v = TEMPO * Math.min(1, st * 1.2);
+      p.vx = ex / st * v; p.vz = ez / st * v;
+    } else { p.vx = p.vz = 0; }
+    const tempo = Math.hypot(p.vx, p.vz);
+    if (tempo > 0.2) {
+      // Die Figur dreht sich weich in die Laufrichtung
+      const soll = Math.atan2(p.vx, p.vz), diff = Math.atan2(Math.sin(soll - p.blick), Math.cos(soll - p.blick));
+      p.blick += diff * Math.min(1, dt * 12);
     }
     p.x += p.vx * dt; p.z += p.vz * dt;
-    // Nicht durch Häuser laufen (nur beim Selbst-Steuern nötig) und nicht vom Gelände herunter
-    if (!this.ziel) {
-      for (const h of this.hindernisse) {
-        const dx = p.x - h.x, dz = p.z - h.z, d = Math.hypot(dx, dz) || 0.001;
-        if (d < h.r + 0.4) { p.x = h.x + dx / d * (h.r + 0.4); p.z = h.z + dz / d * (h.r + 0.4); }
-      }
+    // Nicht durch Häuser laufen und nicht vom Gelände herunter
+    for (const h of this.hindernisse) {
+      const dx = p.x - h.x, dz = p.z - h.z, d = Math.hypot(dx, dz) || 0.001;
+      if (d < h.r + 0.4) { p.x = h.x + dx / d * (h.r + 0.4); p.z = h.z + dz / d * (h.r + 0.4); }
     }
     const weg = Math.hypot(p.x, p.z);
     if (weg > RAND) { p.x *= RAND / weg; p.z *= RAND / weg; }
@@ -255,38 +295,38 @@ export class Anlage {
     if (av) {
       av.group.visible = true;
       // (face: Die Figur von Spieler 0 schaut von sich aus nach −z, unser blick zählt ab +z. Darum wird umgerechnet.)
-      av.update(dt, { x: p.x, z: p.z, vx: p.vx, vz: p.vz, walk: true, face: Math.PI - p.blick, ohneSchlaeger: true });
+      // Langsam wird gegangen, schnell gejoggt.
+      av.update(dt, { x: p.x, z: p.z, vx: p.vx, vz: p.vz, walk: tempo < GEH_BIS, face: Math.PI - p.blick, faceFest: true, ohneSchlaeger: true });
     }
     if (g.avatars[1]) g.avatars[1].group.visible = false;
 
     // --- Stehe ich an einer Tür? ---
     let nah = null;
-    for (const o of this.orte) {
-      const d = Math.hypot(p.x - o.tx, p.z - o.tz);
-      if (d < TUER_NAH && Math.hypot(p.vx, p.vz) < 0.6) nah = o;
-    }
+    for (const o of this.orte) if (Math.hypot(p.x - o.tx, p.z - o.tz) < TUER_NAH && tempo < 0.6) nah = o;
     if (nah !== this.amOrt) { this.amOrt = nah; if (this.wennDa) this.wennDa(nah); }
     this.kamera(dt);
   }
 
+  // Die Kamera kreist um die Figur: Knöpfe und Tasten drehen und zoomen, dann fährt sie weich an ihre neue Stelle
   kamera(dt) {
-    const g = this.game, p = this.p;
-    let von, nach;
-    if (this.art === 'tippen') {
-      // Von schräg oben auf die ganze Anlage. Auf schmalen Bildschirmen weiter weg, damit alles ins Bild passt.
-      const weit = g.aspect < 1.3 ? 1.5 : 1;
-      von = new THREE.Vector3(p.x * 0.15, 31 * weit, 31 * weit + p.z * 0.15);
-      nach = new THREE.Vector3(p.x * 0.15, 0, p.z * 0.15 - 2);
-    } else {
-      // Hinter der Figur
-      von = new THREE.Vector3(p.x - Math.sin(p.blick) * 6.5, 3.6, p.z - Math.cos(p.blick) * 6.5);
-      nach = new THREE.Vector3(p.x + Math.sin(p.blick) * 3, 1.3, p.z + Math.cos(p.blick) * 3);
-    }
-    // Die Schilder: von oben gesehen groß (sonst kann man sie nicht lesen), aus der Nähe klein
-    const gross = this.art === 'tippen' ? 1.9 : 0.7;
+    const g = this.game, p = this.p, k = this.kam, t = this.tasten;
+    const knopf = this.kamTaste;
+    if (knopf === 'links' || t.KeyQ) k.zw += dt * 1.6; else if (knopf === 'rechts' || t.KeyR) k.zw -= dt * 1.6;
+    if (knopf === 'nah' || t.KeyT) k.zd *= Math.exp(-dt * 1.4); else if (knopf === 'fern' || t.KeyG) k.zd *= Math.exp(dt * 1.4);
+    this.kamGrenzen();
+    const weich = Math.min(1, dt * 8);
+    k.w += (k.zw - k.w) * weich; k.e += (k.ze - k.e) * weich; k.d += (k.zd - k.d) * weich;
+    // Auf einem hohen, schmalen Bildschirm geht die Kamera etwas weiter weg
+    const d = k.d * (g.aspect < 1 ? 1.35 : 1), c = Math.cos(k.e);
+    // In der Übersicht (weit weg) schaut die Kamera auf die Mitte der Anlage statt auf die Figur
+    const fern = Math.max(0, Math.min(1, (k.d - 22) / 16)), mx = p.x * (1 - fern), mz = p.z * (1 - fern);
+    const von = new THREE.Vector3(mx + Math.sin(k.w) * c * d, 0.5 + Math.sin(k.e) * d, mz + Math.cos(k.w) * c * d);
+    const nach = new THREE.Vector3(mx, 0.9 + Math.max(0, 0.6 - k.e) * 2.2, mz);      // flache Kamera schaut etwas höher
+    // Die Schilder: aus der Ferne groß (sonst kann man sie nicht lesen), aus der Nähe klein
+    const gross = Math.max(0.7, Math.min(2.2, k.d / 16));
     for (const o of this.orte) o.schild.scale.set(4.6 * gross, 0.86 * gross, 1);
-    const k = Math.min(1, dt * 3);
-    g.camPos.lerp(von, k); g.camLook.lerp(nach, k);
+    const kk = dt >= 1 ? 1 : 1 - Math.exp(-6 * dt);
+    g.camPos.lerp(von, kk); g.camLook.lerp(nach, kk);
     g.camera.position.copy(g.camPos);
     g.camera.lookAt(g.camLook);
   }
@@ -303,7 +343,9 @@ export class Anlage {
     this.gruppe.removeFromParent();
     this.gruppe = null;
     this.an = false;
-    this.zug = null;
+    this.finger = {};
+    this.knueppel = null;
+    this.kamTaste = null;
     this.tasten = {};
     if (g.stadium.group) g.stadium.group.visible = true;
     g.scene.fog.near = 70; g.scene.fog.far = 190;
