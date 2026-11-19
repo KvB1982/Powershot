@@ -566,9 +566,17 @@ anlageEl.id = 'anlage';
 document.body.appendChild(anlageEl);
 let anlageTag = null;        // { def } wenn die Anlage gerade der Tag vor einem Karriere-Match ist, sonst null
 let anlageWo = 'wim';        // welches Gelände man sich im Hauptmenü ansieht (Kürzel des Turniers)
+// Das Stempelheft: Welche Sehenswürdigkeiten (blaue Kreise ℹ️) hast du schon entdeckt? Gilt für alle Spielarten zusammen.
+const STEMPEL_KEY = 'powershot.stempel.v1';
+let stempel = {};
+try { stempel = JSON.parse(localStorage.getItem(STEMPEL_KEY)) || {}; } catch (e) { stempel = {}; }
+const stempelVon = (G) => stempel[G.name] || [];
 let anlageListe = false;     // ist die Liste „Gelände wechseln“ gerade aufgeklappt?
 // Welches Gelände wird gerade gezeigt? Die großen Turniere haben ihr eigenes, die kleinen die einfache Anlage (null).
-const anlageGelaende = () => (anlageTag ? (GL.gelaendeVon(anlageTag.def.id) ? anlageTag.def.id : null) : anlageWo);
+const anlageGelaende = () => GL.gelaendeFuer(anlageTag ? anlageTag.def : D.tournamentById(anlageWo));
+// Für die Auswahl im Hauptmenü: ein paar kleine Turniere als Beispiele (je Stadt das erste im Kalender) und dein Heimatverein
+const ANLAGE_KLEIN = ['Halle', 'Hamburg', 'London', 'Dubai', 'Tokio', 'Basel', 'Kitzbühel', 'Umag', 'Stuttgart', 'Hongkong', 'Heilbronn', 'Ortisei', 'Neapel', 'Saarlouis', 'Monastir', 'Nußloch']
+  .map((stadt) => KT.KLEINE_TURNIERE.find((t) => t.city === stadt)).filter(Boolean).concat([KT.LIGA]);
 let anlageErgebnis = null;   // was die letzte Tätigkeit gebracht hat: { ort, text, bringt }
 let anlageMeldung = null;    // was nach einem Zufall (Ereignis) passiert ist: { text, bringt }
 let kraftSpiel = null;       // läuft gerade das Spiel im Kraftraum? { n, treffer, mitte, start, uhr, letzter }
@@ -594,11 +602,15 @@ function anlageZeigen() {
     if (!anlageTag) {
       zeit = `<span class="zeit">${esc(G.name)} · <span class="dim">${esc(G.stadt)}</span></span><button data-a="anlageListe">🌍 Gelände wechseln</button>`;
       unten = anlageListe
-        ? `<h3>Welches Turniergelände möchtest du sehen?</h3><div class="row wahl">${GL.GELAENDE_LISTE.map((id) => `<button class="${id === anlageWo ? 'primary' : ''}" data-a="anlageWahlOrt" data-v="${id}">${esc(D.tournamentById(id).name)} <small>${esc(GL.GELAENDE[id].name)}</small></button>`).join('')}</div>`
-        : `<p class="dim">Dieses Gelände ist dem echten nachempfunden. Lauf herum und sieh dir alles an – an den blauen Kreisen ℹ️ erfährst du etwas über den Ort. ${hilfe}</p>`;
+        ? `<h3>Welches Turniergelände möchtest du sehen?</h3><div class="row wahl">${GL.GELAENDE_LISTE.map((id) => `<button class="${id === anlageWo ? 'primary' : ''}" data-a="anlageWahlOrt" data-v="${id}">${esc(D.tournamentById(id).name)} <small>${esc(GL.GELAENDE[id].name)}</small></button>`).join('')}</div>
+          <p class="dim klein">Kleinere Turniere (Beispiele – in der Karriere hat jedes Turnier sein eigenes Gelände):</p>
+          <div class="row wahl">${ANLAGE_KLEIN.map((t) => `<button class="${t.id === anlageWo ? 'primary' : ''}" data-a="anlageWahlOrt" data-v="${t.id}">${esc(t.city === 'Zu Hause' ? 'Heimatverein' : t.city)} <small>${esc(t.catName)}</small></button>`).join('')}</div>`
+        : `<p class="dim">${G.klein ? 'Dieses Gelände ist ausgedacht und nur an den echten Ort angelehnt.' : 'Dieses Gelände ist dem echten nachempfunden.'} Lauf herum und sieh dir alles an – an den blauen Kreisen ℹ️ erfährst du etwas über den Ort. ${hilfe}</p>`;
     }
-    const knopf = (o) => `<button data-a="anlageGeh" data-v="${o.id}">${o.info ? 'ℹ️ ' : ''}${esc(o.name)}</button>`;
-    wohin = `<div class="wohin"><span class="dim">Hinlaufen:</span> ${A.orte.filter((o) => !o.info && o.id !== 'hotel').map(knopf).join('')}${A.orte.filter((o) => o.info).map(knopf).join('')}</div>`;
+    const hab = stempelVon(G), infos = A.orte.filter((o) => o.info);
+    const knopf = (o) => `<button data-a="anlageGeh" data-v="${o.id}">${o.info ? (hab.includes(o.name) ? '✅ ' : 'ℹ️ ') : ''}${esc(o.name)}</button>`;
+    wohin = `<div class="wohin"><span class="dim">Hinlaufen:</span> ${A.orte.filter((o) => !o.info && o.id !== 'hotel').map(knopf).join('')}${infos.map(knopf).join('')}</div>
+      <p class="dim klein">📒 Stempelheft: ${infos.filter((o) => hab.includes(o.name)).length} von ${infos.length} Orten entdeckt${infos.length && infos.every((o) => hab.includes(o.name)) ? ' – alle gefunden! ⭐' : ''}${A.ball ? ' · 🟡 Irgendwo liegt heute ein goldener Glücksball …' : ''}</p>`;
   }
   const E = anlageTag ? TT.ereignis(career) : null;
   if (E) {
@@ -617,7 +629,7 @@ function anlageZeigen() {
         <p>${kraftSpiel.letzter == null ? 'Drücke, wenn der Zeiger im grünen Feld steht. So hebst du das Gewicht sauber.' : kraftSpiel.letzter ? '<b class="plus">Sauber gehoben!</b>' : '<b class="minus">Verwackelt!</b>'} <span class="dim">Sauber: ${kraftSpiel.treffer}</span></p>
         <div class="kraftbalken"><i style="left:${(kraftSpiel.mitte - b / 2) * 100}%;width:${b * 100}%"></i><b id="kraftzeiger"></b></div>
         <button class="primary" data-a="kraftDruck">🏋️ Jetzt heben!</button>`;
-    } else if (anlageTag && anlageErgebnis && anlageErgebnis.ort === ort.id) {
+    } else if (anlageErgebnis && anlageErgebnis.ort === ort.id && (anlageTag || ort.info)) {
       unten = `<h3>${esc(ort.name)}</h3><p>${anlageErgebnis.text}</p><p class="gold">${anlageErgebnis.bringt.join(' · ')}</p>`;
     } else if (anlageTag && ort.id === 'court') {
       unten = `<h3>${esc(ort.name)}</h3><p>Dein Gegner wartet schon. Bist du bereit?</p><button class="primary" data-a="anlageMatch">Match spielen ›</button>`;
@@ -665,17 +677,31 @@ function anlageStart(ich, woher, ergebnis = null) {
   game.anlage.wennDa = (ort) => {
     if (!ort || !anlageErgebnis || anlageErgebnis.ort !== ort.id) anlageErgebnis = null;
     if (ort) anlageMeldung = null;
+    // Eine Sehenswürdigkeit zum ersten Mal besucht? Dann gibt es einen Stempel ins Heft (und in der Karriere etwas Erfahrung).
+    const G = game.anlage.plan && game.anlage.plan.g;
+    if (ort && ort.info && G && !stempelVon(G).includes(ort.name)) {
+      stempel[G.name] = [...stempelVon(G), ort.name];
+      try { localStorage.setItem(STEMPEL_KEY, JSON.stringify(stempel)); } catch (e) { /* voller Speicher: dann eben ohne Stempel */ }
+      anlageErgebnis = { ort: ort.id, text: ort.text, bringt: ['📒 Neuer Stempel im Heft!', ...(anlageTag ? TT.entdeckt(career) : [])] };
+    }
     if (!ort || ort.id !== 'kraft') kraftEnde();           // wer aus dem Kraftraum weggeht, bricht das Training ab
     anlageZeigen();
   };
   game.anlage.start(woher, anlageGelaende());
+  // Der Glücksball: in der Karriere einer pro Turniertag, beim freien Herumlaufen immer einer
+  if (!anlageTag || !TT.ballGefunden(career)) game.anlage.ballLegen();
+  game.anlage.wennBall = () => {
+    const bringt = anlageTag ? TT.gluecksball(career) || [] : [];
+    anlageMeldung = { text: '🟡 Du hast den goldenen Glücksball gefunden! ' + (anlageTag ? 'Mit so einem Glücksbringer in der Tasche gehst du ganz ruhig ins Match.' : 'In der Karriere bringt er dir Glück für das Match des Tages.'), bringt };
+    anlageZeigen();
+  };
   anlageZeigen();
 }
 // Knopf „Hinlaufen“: Die Figur sucht sich den Weg selbst
 actions.anlageGeh = (v) => { game.anlage.geheZu(v); };
 actions.anlageListe = () => { anlageListe = !anlageListe; anlageZeigen(); };
 // Ein anderes Gelände ansehen (nur im Hauptmenü)
-actions.anlageWahlOrt = (v) => { if (anlageTag || !GL.gelaendeVon(v)) return; anlageWo = v; anlageListe = false; anlageStart(career ? CA.mePlayer(career) : D.PLAYERS[0]); };
+actions.anlageWahlOrt = (v) => { if (anlageTag || !D.tournamentById(v)) return; anlageWo = v; anlageListe = false; anlageStart(career ? CA.mePlayer(career) : D.PLAYERS[0]); };
 function anlageSchluss() { kraftEnde(); anlageMeldung = null; game.anlage.ende(); anlageEl.classList.remove('on'); anlageEl.innerHTML = ''; }
 // Aus dem Hauptmenü: einfach nur herumlaufen (mit deinem Karriere-Spieler, sonst mit dem ersten Spieler der Liste)
 actions.anlage = () => { anlageTag = null; anlageListe = false; anlageStart(career ? CA.mePlayer(career) : D.PLAYERS[0]); };

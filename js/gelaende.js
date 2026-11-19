@@ -21,6 +21,8 @@
 // Ein Baustein mit „ort“ ist eine Tür, an der man etwas tun kann (court, training, kraft, physio, essen, saiten, presse, hotel, fans).
 // Ein Baustein mit „info“ ist eine Sehenswürdigkeit: Wer hingeht, bekommt den Text zu lesen.
 
+import { kleinesGelaende } from './gelaendeklein.js';
+
 // So groß ist ein Tennisplatz auf dem Gelände (mit Auslauf) und so viel Abstand ist zum nächsten
 export const PLATZ_L = 13, PLATZ_B = 7, LUECKE_B = 1.2, LUECKE_L = 1.5;
 
@@ -454,8 +456,11 @@ const TUER_VOR = 1.9;        // so weit vor der Wand liegt der Punkt, an dem man
 //   sperren = Formen, durch die man nicht laufen kann
 //   orte    = alle Türen: { id, name, text, info, tx, tz (da steht man), wx, wz (da ist die Tür in der Wand), teil }
 //   punkte  = wo Bäume, Statuen, Schirme und Zelte genau stehen (je Baustein eine Liste [x, z, größe])
-export function planVon(id) {
-  const g = GELAENDE[id];
+export const planVon = (id) => (GELAENDE[id] ? planAus(GELAENDE[id], id) : null);
+// Das Gelände für ein Turnier: die großen haben einen eigenen Plan, für die kleinen wird einer zusammengebaut (gelaendeklein.js)
+export const gelaendeFuer = (def) => (def ? GELAENDE[def.id] || kleinesGelaende(def) : null);
+// g = ein Gelände (aus GELAENDE oder von kleinesGelaende) · id = ein Kürzel, nur für den Zufall der Bäume
+export function planAus(g, id = g.name) {
   if (!g) return null;
   const teile = g.teile.map((el) => (el.a === 'plaetze' ? { ...el, ...plaetzeMass(el) } : { ...el }));
   const sperren = [], orte = [], punkte = new Map();
@@ -470,6 +475,7 @@ export function planVon(id) {
     else if (el.a === 'bogen') sperren.push({ x: el.x, z: el.z, b: el.b, t: el.t });
     else if (el.a === 'tuerme') for (const [x, z, b, t, h] of el.p) sperren.push({ x, z, b, t, h });
     else if (el.a === 'obelisk') sperren.push({ x: el.x, z: el.z, b: 2.4, t: 2.4 });
+    else if (el.a === 'hecke') sperren.push({ x: el.x, z: el.z, b: el.b, t: el.t });
     else if (el.a === 'leinwand' && el.b > 1) { const quer = el.dreh === 90 || el.dreh === 270; sperren.push({ x: el.x, z: el.z, b: quer ? 1 : el.b, t: quer ? el.b : 1, h: el.h + 2 }); }
   }
   const fest = sperren.slice();
@@ -515,6 +521,11 @@ export function planVon(id) {
       const frei = liste.filter(([x, zz]) => !orte.some((o) => Math.hypot(o.tx - x, o.tz - zz) < 2.6 || Math.hypot(o.wx - x, o.wz - zz) < 2.6));
       punkte.set(nr, frei);
       for (const [x, zz] of frei) sperren.push({ x, z: zz, b: 0.7, t: 0.7 });
+    } else if (el.a === 'autos') {
+      // geparkte Autos in einer Reihe (das dritte Feld ist hier die Nummer der Farbe)
+      for (let i = 0; i < el.n; i++) liste.push([el.x + (el.n === 1 ? 0 : (i / (el.n - 1) - 0.5) * el.b), el.z, Math.floor(z() * 6)]);
+      punkte.set(nr, liste);
+      for (const [x, zz] of liste) sperren.push({ x, z: zz, b: 2, t: 4.4 });
     } else if (el.a === 'zelte') {
       for (let i = 0; i < el.n; i++) liste.push([el.x + (el.n === 1 ? 0 : (i / (el.n - 1) - 0.5) * el.b), el.z, 1]);
       punkte.set(nr, liste);

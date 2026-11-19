@@ -212,6 +212,24 @@ export function abend(c, id) {
   return { text: A.text, bringt };
 }
 
+// --- Leben auf dem Gelände ---
+// Der Glücksball: An jedem Turniertag liegt irgendwo auf dem Gelände ein goldener Ball. Wer ihn findet, geht mit einem
+// guten Gefühl ins Match (+1 Mental, nur heute). Gibt die Liste zurück, was er bringt – oder null, wenn er schon gefunden ist.
+export const GLUECKSBALL = { bonus: { m: 1 }, xp: 5 };
+export const ballGefunden = (c) => !!tag(c).ball;
+export function gluecksball(c) {
+  const t = tag(c);
+  if (t.ball) return null;
+  t.ball = true;
+  for (const k in GLUECKSBALL.bonus) t.bonus[k] = (t.bonus[k] || 0) + GLUECKSBALL.bonus[k];
+  addXp(c, GLUECKSBALL.xp);
+  saveCareer(c);
+  return ['+1 Mental im Match heute', `+${GLUECKSBALL.xp} Erfahrung`];
+}
+// Eine Sehenswürdigkeit zum ersten Mal entdeckt (blauer Kreis ℹ️): ein bisschen Erfahrung
+export const ENTDECKT_XP = 4;
+export function entdeckt(c) { addXp(c, ENTDECKT_XP); saveCareer(c); return [`+${ENTDECKT_XP} Erfahrung`]; }
+
 export const freieFenster = (c) => Math.max(0, (tag(c).max ?? ZEIT_FENSTER) - tag(c).fenster);
 
 // Darf ich das jetzt tun? Gibt { ok, warum } zurück.

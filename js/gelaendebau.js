@@ -118,6 +118,7 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
 
   const plaetze = {};        // Farbe → Liste aller Plätze dieser Farbe
   const netze = [], baeume = { laub: [], palme: [], pinie: [], zypresse: [] }, statuen = [], schirme = {}, zelte = [];
+  const autos = [], masten = [], stuehle = [], baenke = [], fahnenMasten = [], fahnen = [];
   const tuerenVon = (nr) => plan.orte.filter((o) => o.teil === nr);
   const tuerBauen = (o, breit = 1.3, hoch = 2.1) => {
     const quer = o.seite === 'o' || o.seite === 'w';
@@ -194,7 +195,13 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
         const x = el.x + (i - (el.nx - 1) / 2) * el.lx, z = el.z + (k - (el.nz - 1) / 2) * el.lz;
         plaetze[key].liste.push([x, 0.2, z, el.quer ? HALB : 0]);
         netze.push([x, 0.47, z, el.quer ? HALB : 0]);
+        // Kleinigkeiten an jedem Platz: Schiedsrichterstuhl am Netz und zwei Bänke für die Spieler
+        const qx = el.quer ? 0 : 1, qz = el.quer ? 1 : 0, seite = PLATZ_B * 0.36;
+        stuehle.push([x + qx * seite, 0.2, z + qz * seite]);
+        for (const s of [-1, 1]) baenke.push([x + qx * seite + qz * s * 1.8, 0.2, z + qz * seite + qx * s * 1.8, el.quer ? HALB : 0]);
       }
+      // Flutlicht-Masten an den vier Ecken der Platzgruppe
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) masten.push([el.x + sx * (el.b / 2 + 0.3), 0, el.z + sz * (el.t / 2 + 0.3)]);
       if (el.ort === 'training') {
         const maschine = requisit('ballmaschine');
         if (maschine) { maschine.position.set(el.x - (el.nx - 1) / 2 * el.lx, 0.2, el.z - (el.nz - 1) / 2 * el.lz + (el.quer ? 0 : 4)); if (el.quer) maschine.position.x += 4; G.add(maschine); }
@@ -211,6 +218,13 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
       (schirme[el.farbe] = schirme[el.farbe] || []).push(...(plan.punkte.get(nr) || []).map(([x, z, gr]) => [x, 0, z, 0, gr]));
     } else if (el.a === 'zelte') {
       for (const [x, z] of plan.punkte.get(nr) || []) zelte.push([x, 0, z]);
+    } else if (el.a === 'autos') {
+      for (const [x, z, f] of plan.punkte.get(nr) || []) autos.push([x, 0, z, 0, 1, f]);
+    } else if (el.a === 'hecke') {
+      neu(new THREE.BoxGeometry(el.b, 1.2, el.t), mat(0x2f6a34), el.x, 0.6, el.z, true);
+    } else if (el.a === 'fahnen') {
+      // Fahnenmasten in einer Reihe, jede Fahne hat ihre Farbe
+      for (let i = 0; i < el.n; i++) { fahnenMasten.push([el.x + i * 1.6, 0, el.z]); fahnen.push([el.x + i * 1.6 + 0.62, 5.3, el.z, 0, 1, el.farben[i % el.farben.length]]); }
     } else if (el.a === 'huegel') {
       haupt = neu(new THREE.SphereGeometry(0.5, 24, 10, 0, Math.PI * 2, 0, HALB).scale(el.b, el.h * 2, el.t), mat(el.farbe), el.x, 0, el.z, true);
     } else if (el.a === 'berge') {
@@ -346,6 +360,19 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
   viele(new THREE.BoxGeometry(3.6, 2.2, 3.6).translate(0, 1.1, 0), mat(0xf4f2ec), zelte, true);
   viele(new THREE.ConeGeometry(2.9, 1.4, 4).rotateY(Math.PI / 4).translate(0, 2.9, 0), mat(0xffffff), zelte, true);
 
+  // ---- Geparkte Autos (Karosserie in sechs Farben, darauf das dunkle Dach mit den Fenstern) ----
+  const farbig = (im, liste) => { if (!im) return; const c = new THREE.Color(); liste.forEach((e, i) => im.setColorAt(i, c.setHex(e[5]))); };
+  const LACK = [0xd8d8dc, 0x30343c, 0xb83a2a, 0x2a4a8a, 0x8a8e96, 0xe8e4d8];
+  farbig(viele(new THREE.BoxGeometry(1.8, 0.75, 4.2).translate(0, 0.7, 0), mat(0xffffff, { rau: 0.4 }), autos, true), autos.map((a) => [0, 0, 0, 0, 0, LACK[a[5]]]));
+  viele(new THREE.BoxGeometry(1.6, 0.55, 2.2).translate(0, 1.35, -0.2), mat(0x2a3440, { rau: 0.3 }), autos);
+  // ---- Flutlicht, Schiedsrichterstühle, Bänke, Fahnen ----
+  viele(new THREE.CylinderGeometry(0.09, 0.14, 9, 5).translate(0, 4.5, 0), mat(0x9a9ea6), masten);
+  viele(new THREE.BoxGeometry(1.3, 0.5, 0.5).translate(0, 9.1, 0), mat(0xf4f4e8), masten);
+  viele(new THREE.BoxGeometry(0.5, 1.5, 0.5).translate(0, 0.75, 0), mat(0x2a5a3a), stuehle);
+  viele(new THREE.BoxGeometry(0.4, 0.42, 1.3).translate(0, 0.21, 0), mat(0xe8e4d8), baenke);
+  viele(new THREE.CylinderGeometry(0.05, 0.06, 6, 5).translate(0, 3, 0), mat(0xd8d8d8), fahnenMasten);
+  farbig(viele(new THREE.BoxGeometry(1.2, 0.8, 0.04), mat(0xffffff, { beide: true }), fahnen), fahnen);
+
   // ---- Besucher: bunte Figuren, die in der Nähe der Türen herumstehen ----
   if (!wenig) {
     let z = 4711;
@@ -365,4 +392,26 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
   }
   bilder.fenster.userData.weg = bilder.publikum.userData.weg = true;
   return { gruppe: G, klick, boden, bilder };
+}
+
+// Besucher, die über das Gelände LAUFEN (die anderen stehen nur herum). Gibt zwei Formen zurück: Körper und Köpfe.
+// Bewegt werden sie in anlage.js.
+export function laeuferBauen(n, schatten = true) {
+  const koerper = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.2, 0.95, 2, 6).translate(0, 0.72, 0), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }), n);
+  const kopf = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 8, 6).translate(0, 1.55, 0), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }), n);
+  const kleider = [0xe84a3a, 0x3a6ae8, 0xf0d040, 0x3aa85a, 0xf4f4f0, 0xe89ac0, 0xf08a3a, 0x8a5ac8, 0x3ab8c8], haut = [0xf0c8a0, 0xd8a078, 0xa87850, 0x7a5236, 0xf4d8b8], c = new THREE.Color();
+  for (let i = 0; i < n; i++) { koerper.setColorAt(i, c.setHex(kleider[i % kleider.length])); kopf.setColorAt(i, c.setHex(haut[(i * 3) % haut.length])); }
+  for (const m of [koerper, kopf]) { m.userData.eigen = true; m.frustumCulled = false; m.castShadow = schatten; }
+  return { koerper, kopf };
+}
+// Der goldene Glücksball mit einem leuchtenden Ring auf dem Boden
+export function gluecksballBauen() {
+  const g = new THREE.Group();
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.34, 16, 12), new THREE.MeshStandardMaterial({ color: 0xffd23a, emissive: 0xc88a00, emissiveIntensity: 0.9, roughness: 0.35, metalness: 0.4 }));
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.72, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.8 }));
+  ball.position.y = 0.9; ring.position.y = 0.26;
+  ball.userData.eigen = ring.userData.eigen = true;
+  g.add(ball, ring);
+  g.userData.ball = ball;
+  return g;
 }

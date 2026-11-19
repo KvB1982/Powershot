@@ -14,8 +14,8 @@
 // So kommt man von jeder Tür geradeaus zu jeder anderen, ohne durch ein Haus zu laufen.
 import * as THREE from 'three';
 import { requisit } from './requisiten.js';
-import { planVon } from './gelaende.js';
-import { baueGelaende } from './gelaendebau.js';
+import { planVon, planAus } from './gelaende.js';
+import { baueGelaende, laeuferBauen, gluecksballBauen } from './gelaendebau.js';
 import { gitterBauen, frei, weg, naechsteFreie, hoeheBei } from './wege.js';
 
 // ---- Zahlen zum Einstellen ----
@@ -24,6 +24,9 @@ const TEMPO_GROSS = 5.4;      // auf den großen Geländen joggt sie schneller, 
 const GEH_BIS = 2.0;          // bis zu diesem Tempo wird gegangen, darüber gejoggt
 // Kamera: w = Drehung um die Figur (0 = von vorn/Süden), e = Neigung (0 flach … 1.5 von oben), d = Abstand in Metern
 const KAM_START = { w: 0, e: 0.7, d: 15 }, KAM_WEIT = { e: 1.05, d: 46 };
+const LAEUFER = 26;           // so viele Besucher laufen höchstens über ein großes Gelände (die übrigen stehen)
+const LAEUFER_TEMPO = 1.3;    // Meter pro Sekunde – gemütliches Schlendern
+const BALL_NAH = 1.4;         // so nah muss man an den Glücksball heran, um ihn aufzuheben
 const TUER_NAH = 1.6;         // so nah an der Tür (Meter) gilt: „du bist da“
 const RING_X = 17, RING_Z = 13;   // so groß ist der Kreis, auf dem die Gebäude stehen
 const RAND = 24;              // weiter als so kommt man nicht von der Mitte weg
@@ -143,6 +146,59 @@ export class Anlage {
     g.scene.fog.color.set(0xa8cdea);
     g.scene.fog.near = this.weit * 1.2; g.scene.fog.far = this.weit * 1.2 + 520;
     g.camera.near = 1; g.camera.far = 1500; g.camera.updateProjectionMatrix();
+    // Besucher, die herumlaufen: Jeder sucht sich eine Tür als Ziel, schlendert hin und sucht sich dann die nächste aus
+    const n = g.quality === 'niedrig' ? 0 : Math.min(LAEUFER, Math.round((plan.g.leute ?? 110) / 4));
+    this.laeufer = [];
+    if (n) {
+      this.laeuferForm = laeuferBauen(n, g.quality !== 'niedrig');
+      this.gruppe.add(this.laeuferForm.koerper, this.laeuferForm.kopf);
+      for (let i = 0; i < n; i++) { const o = plan.orte[(i * 7 + 3) % plan.orte.length]; this.laeufer.push({ x: o.tx + (i % 3) - 1, z: o.tz + ((i * 5) % 3) - 1, pfad: null, warte: i * 0.4, dreh: 0, tempo: LAEUFER_TEMPO * (0.8 + (i % 5) * 0.1) }); }
+    }
+  }
+
+  // Die laufenden Besucher ein Stück weiterbewegen
+  laeuferBewegen(dt) {
+    if (!this.laeufer || !this.laeufer.length) return;
+    const o3 = this.hilfe3 || (this.hilfe3 = new THREE.Object3D()), orte = this.plan.orte;
+    let gesucht = false;
+    this.laeufer.forEach((l, i) => {
+      if (l.warte > 0) l.warte -= dt;
+      else if (!l.pfad) {
+        // neues Ziel suchen – aber pro Bild nur für EINEN Besucher, das Suchen kostet Rechenzeit
+        if (!gesucht) {
+          gesucht = true;
+          const ziel = orte[Math.floor(Math.random() * orte.length)], w = Math.random() * 6.28, r = 2.5 + Math.random() * 4;
+          const stelle = naechsteFreie(this.gitter, ziel.tx + Math.sin(w) * r, ziel.tz + Math.cos(w) * r);
+          l.pfad = stelle ? weg(this.gitter, l.x, l.z, stelle.x, stelle.z) : null;
+          if (!l.pfad) l.warte = 2;
+        }
+      } else {
+        const n = l.pfad[0], dx = n.x - l.x, dz = n.z - l.z, weit = Math.hypot(dx, dz);
+        if (weit < 0.3) { l.pfad.shift(); if (!l.pfad.length) { l.pfad = null; l.warte = 3 + Math.random() * 9; } }       // angekommen: eine Weile stehen bleiben
+        else { l.x += dx / weit * l.tempo * dt; l.z += dz / weit * l.tempo * dt; l.dreh = Math.atan2(dx, dz); }
+      }
+      o3.position.set(l.x, l.pfad ? Math.abs(Math.sin(performance.now() / 160 + i)) * 0.06 : 0, l.z);
+      o3.rotation.set(0, l.dreh, 0);
+      o3.updateMatrix();
+      this.laeuferForm.koerper.setMatrixAt(i, o3.matrix); this.laeuferForm.kopf.setMatrixAt(i, o3.matrix);
+    });
+    this.laeuferForm.koerper.instanceMatrix.needsUpdate = this.laeuferForm.kopf.instanceMatrix.needsUpdate = true;
+  }
+
+  // Den goldenen Glücksball irgendwo auf dem Gelände verstecken (nur auf den Geländen mit Lageplan)
+  ballLegen() {
+    if (!this.gitter || this.ball) return;
+    const r = this.plan.g.rand;
+    for (let versuch = 0; versuch < 200; versuch++) {
+      const x = r.x0 + 3 + Math.random() * (r.x1 - r.x0 - 6), z = r.z0 + 3 + Math.random() * (r.z1 - r.z0 - 6);
+      // frei, nicht direkt an einer Tür und nicht gleich neben dem Start
+      if (!frei(this.gitter, x, z) || Math.hypot(x - this.p.x, z - this.p.z) < 18 || this.orte.some((o) => Math.hypot(o.tx - x, o.tz - z) < 4)) continue;
+      if (!weg(this.gitter, this.p.x, this.p.z, x, z)) continue;                // man muss auch hinkommen können
+      this.ball = gluecksballBauen();
+      this.ball.position.set(x, 0, z);
+      this.gruppe.add(this.ball);
+      return;
+    }
   }
 
   // woher = bei welchem Ort die Figur startet (ohne Angabe: beim Fahrdienst) · gelaende = Kürzel des Turniers (z. B. 'wim'), ohne = einfache Anlage
@@ -154,7 +210,7 @@ export class Anlage {
     this.pfad = null;
     this.gelaendeId = gelaende;
     if (g.stadium.group) g.stadium.group.visible = false;      // das Stadion macht Pause
-    const plan = gelaende ? planVon(gelaende) : null;
+    const plan = typeof gelaende === 'string' ? planVon(gelaende) : gelaende ? planAus(gelaende) : null;      // Kürzel eines großen Turniers oder ein fertiges Gelände
     if (plan) this.starteGelaende(plan); else this.starteKreis();
     // Die Figur startet beim Fahrdienst und schaut zur Mitte
     const startOrt = this.orte.find((o) => o.id === woher) || this.orte.find((o) => o.id === 'hotel');
@@ -408,6 +464,18 @@ export class Anlage {
     }
     if (g.avatars[1]) g.avatars[1].group.visible = false;
 
+    this.laeuferBewegen(dt);
+    // --- Der Glücksball hüpft auf der Stelle. Wer nah genug ist, hebt ihn auf. ---
+    if (this.ball) {
+      this.ball.userData.ball.position.y = 0.9 + Math.sin(performance.now() / 300) * 0.18;
+      this.ball.rotation.y += dt * 2;
+      if (Math.hypot(p.x - this.ball.position.x, p.z - this.ball.position.z) < BALL_NAH) {
+        this.ball.traverse((m) => { if (m.isMesh) { m.geometry.dispose(); m.material.dispose(); } });
+        this.ball.removeFromParent();
+        this.ball = null;
+        if (this.wennBall) this.wennBall();
+      }
+    }
     // --- Stehe ich an einer Tür? ---
     let nah = null;
     for (const o of this.orte) if (Math.hypot(p.x - o.tx, p.z - o.tz) < TUER_NAH && tempo < 0.6) nah = o;
@@ -475,7 +543,7 @@ export class Anlage {
       g.scene.fog.color.copy(this.alt.nebel);
       g.camera.near = this.alt.nah; g.camera.far = this.alt.fern; g.camera.updateProjectionMatrix();
     }
-    this.plan = null; this.gitter = null; this.sonne = null; this.pfad = null; this.namen = [];
+    this.plan = null; this.gitter = null; this.sonne = null; this.pfad = null; this.namen = []; this.laeufer = null; this.ball = null;
     this.an = false;
     this.finger = {};
     this.knueppel = null;
