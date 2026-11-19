@@ -15,6 +15,7 @@ import * as D from './data.js';
 import * as TN from './tournament.js';
 import * as CA from './career.js';
 import * as TT from './turniertag.js';
+import * as GL from './gelaende.js';
 import * as AU from './ausruestung.js';
 import * as KT from './kleinetour.js';
 import * as KA from './kalender.js';
@@ -154,7 +155,7 @@ actions.home = () => {
       <button class="big" data-a="saison">Saison <small>${season ? esc(SE.seasonPlayer(season).short) + ' · ATP Race Platz ' + SE.myRace(season).rank : 'Mit einem Profi durchs Jahr · ATP Race'}</small></button>
       <button class="big" data-a="tourMenu">Turnier <small>Ein Turnier mit einem Profi spielen</small></button>
       <button class="big" data-a="training">Training <small>Ballmaschine · Aufschlag</small></button>
-      <button class="big" data-a="anlage">Turnieranlage <small>Herumlaufen auf der Anlage (im Aufbau)</small></button>
+      <button class="big" data-a="anlage">Turniergelände <small>Wimbledon, New York, Paris … – die echten Anlagen zum Herumlaufen</small></button>
       <div class="row"><button class="grow" data-a="settings" data-v="home">Einstellungen</button><button class="grow" data-a="help" data-v="home">Steuerung</button></div>
     </div>`);
 };
@@ -564,6 +565,10 @@ const anlageEl = document.createElement('div');
 anlageEl.id = 'anlage';
 document.body.appendChild(anlageEl);
 let anlageTag = null;        // { def } wenn die Anlage gerade der Tag vor einem Karriere-Match ist, sonst null
+let anlageWo = 'wim';        // welches Gelände man sich im Hauptmenü ansieht (Kürzel des Turniers)
+let anlageListe = false;     // ist die Liste „Gelände wechseln“ gerade aufgeklappt?
+// Welches Gelände wird gerade gezeigt? Die großen Turniere haben ihr eigenes, die kleinen die einfache Anlage (null).
+const anlageGelaende = () => (anlageTag ? (GL.gelaendeVon(anlageTag.def.id) ? anlageTag.def.id : null) : anlageWo);
 let anlageErgebnis = null;   // was die letzte Tätigkeit gebracht hat: { ort, text, bringt }
 let anlageMeldung = null;    // was nach einem Zufall (Ereignis) passiert ist: { text, bringt }
 let kraftSpiel = null;       // läuft gerade das Spiel im Kraftraum? { n, treffer, mitte, start, uhr, letzter }
@@ -579,7 +584,21 @@ function anlageZeigen() {
     // Der Tag vor dem Match: oben steht, wie viel Zeit noch ist
     const frei = TT.freieFenster(career);
     zeit = `<span class="zeit">${esc(anlageTag.def.name)} · ${TT.fensterName(career)} · ${frei ? `noch ${frei} Zeitfenster` : 'dein Match beginnt gleich'} · Frische ${Math.round(career.frische)}</span>`;
-    unten = `<p class="dim">${frei ? 'Such dir aus, was du vor dem Match machst. Für alles reicht die Zeit nicht!' : 'Die Zeit ist um. Geh zum <b>Centre Court</b> – dort wartet dein Match.'}</p>`;
+    const court = A.orte.find((o) => o.id === 'court');
+    unten = `<p class="dim">${frei ? 'Such dir aus, was du vor dem Match machst. Für alles reicht die Zeit nicht!' : `Die Zeit ist um. Geh zum <b>${esc(court ? court.name : 'Centre Court')}</b> – dort wartet dein Match.`}</p>`;
+  }
+  // Auf einem großen Gelände: oben steht, wo man ist, und unten gibt es Knöpfe zum Hinlaufen (die Wege sind lang)
+  const G = A.plan ? A.plan.g : null;
+  let wohin = '';
+  if (G) {
+    if (!anlageTag) {
+      zeit = `<span class="zeit">${esc(G.name)} · <span class="dim">${esc(G.stadt)}</span></span><button data-a="anlageListe">🌍 Gelände wechseln</button>`;
+      unten = anlageListe
+        ? `<h3>Welches Turniergelände möchtest du sehen?</h3><div class="row wahl">${GL.GELAENDE_LISTE.map((id) => `<button class="${id === anlageWo ? 'primary' : ''}" data-a="anlageWahlOrt" data-v="${id}">${esc(D.tournamentById(id).name)} <small>${esc(GL.GELAENDE[id].name)}</small></button>`).join('')}</div>`
+        : `<p class="dim">Dieses Gelände ist dem echten nachempfunden. Lauf herum und sieh dir alles an – an den blauen Kreisen ℹ️ erfährst du etwas über den Ort. ${hilfe}</p>`;
+    }
+    const knopf = (o) => `<button data-a="anlageGeh" data-v="${o.id}">${o.info ? 'ℹ️ ' : ''}${esc(o.name)}</button>`;
+    wohin = `<div class="wohin"><span class="dim">Hinlaufen:</span> ${A.orte.filter((o) => !o.info && o.id !== 'hotel').map(knopf).join('')}${A.orte.filter((o) => o.info).map(knopf).join('')}</div>`;
   }
   const E = anlageTag ? TT.ereignis(career) : null;
   if (E) {
@@ -588,7 +607,8 @@ function anlageZeigen() {
   } else if (anlageMeldung && !ort) {
     unten = `<p>${esc(anlageMeldung.text)}</p>${anlageMeldung.bringt.length ? `<p class="gold">${anlageMeldung.bringt.join(' · ')}</p>` : ''}<p class="dim">Und jetzt: Such dir aus, was du vor dem Match machst.</p>`;
   } else if (ort) {
-    unten = `<h3>${esc(ort.name)}</h3><p>${ort.text}</p><p class="dim klein">Hier passiert noch nichts. Später gehst du hier hinein.</p>`;
+    unten = `<h3>${esc(ort.name)}</h3><p>${ort.text}</p>${ort.info || G ? '' : '<p class="dim klein">Hier passiert noch nichts. Später gehst du hier hinein.</p>'}`;
+    if (G && !ort.info && !anlageTag) unten += `<p class="dim klein">${esc({ court: 'In der Karriere spielst du hier dein Match.', hotel: 'In der Karriere bringt dich der Fahrdienst nach dem Match ins Hotel.' }[ort.id] || 'In der Karriere kannst du hier am Tag vor dem Match etwas tun.')}</p>`;
     const T = TT.TAETIGKEITEN[ort.id];
     if (anlageTag && kraftSpiel && ort.id === 'kraft') {
       // Kraftraum-Spiel: Der Zeiger läuft hin und her. Drücken, wenn er im grünen Feld ist.
@@ -624,7 +644,7 @@ function anlageZeigen() {
   }
   anlageEl.innerHTML = `<div class="oben"><button class="ghost" data-a="anlageEnde">‹ Zurück</button>${zeit}</div>
     <div class="kam">${kam.map(([k, z, t]) => `<button data-kam="${k}" title="${t}" aria-label="${t}">${z}</button>`).join('')}</div>
-    <div class="panel">${unten}</div>`;
+    <div class="panel">${unten}${anlageListe && !anlageTag ? '' : wohin}</div>`;
   anlageEl.classList.add('on');
 }
 // Kamera-Knöpfe: solange gedrückt, dreht oder zoomt die Kamera
@@ -648,12 +668,17 @@ function anlageStart(ich, woher, ergebnis = null) {
     if (!ort || ort.id !== 'kraft') kraftEnde();           // wer aus dem Kraftraum weggeht, bricht das Training ab
     anlageZeigen();
   };
-  game.anlage.start(woher);
+  game.anlage.start(woher, anlageGelaende());
   anlageZeigen();
 }
+// Knopf „Hinlaufen“: Die Figur sucht sich den Weg selbst
+actions.anlageGeh = (v) => { game.anlage.geheZu(v); };
+actions.anlageListe = () => { anlageListe = !anlageListe; anlageZeigen(); };
+// Ein anderes Gelände ansehen (nur im Hauptmenü)
+actions.anlageWahlOrt = (v) => { if (anlageTag || !GL.gelaendeVon(v)) return; anlageWo = v; anlageListe = false; anlageStart(career ? CA.mePlayer(career) : D.PLAYERS[0]); };
 function anlageSchluss() { kraftEnde(); anlageMeldung = null; game.anlage.ende(); anlageEl.classList.remove('on'); anlageEl.innerHTML = ''; }
 // Aus dem Hauptmenü: einfach nur herumlaufen (mit deinem Karriere-Spieler, sonst mit dem ersten Spieler der Liste)
-actions.anlage = () => { anlageTag = null; anlageStart(career ? CA.mePlayer(career) : D.PLAYERS[0]); };
+actions.anlage = () => { anlageTag = null; anlageListe = false; anlageStart(career ? CA.mePlayer(career) : D.PLAYERS[0]); };
 // In der Karriere: der Tag vor dem Match. Wer schon auf der Anlage war und zurückkommt, macht dort weiter.
 actions.tagAnlage = () => {
   if (!ctxT || !ctxT.career) return;

@@ -1,19 +1,26 @@
-// Powershot – Die Turnieranlage (PROBE).
+// Powershot – Die Turnieranlage.
+//
+// Die großen Turniere (Grand Slams, Masters, ATP Finals) haben jedes ihr eigenes Gelände, dem echten nachempfunden.
+// Die Lagepläne stehen in gelaende.js, gebaut werden sie in gelaendebau.js, die Wege um die Häuser herum sucht wege.js.
+// Kleine Turniere benutzen weiter die einfache Anlage unten in dieser Datei (Häuser im Kreis).
 //
 // Du läufst frei über die Anlage. Gesteuert und geschaut wird wie auf dem Pferdehof im Spiel „Reitturnier“:
 //   Laufen: Tasten W A S D / Pfeile oder mit einem Finger ziehen (wie ein Steuerknüppel). „Oben“ heißt immer: von der Kamera weg.
 //           Ein kurzer Tipp auf ein Gebäude lässt die Figur von selbst hinlaufen.
 //   Kamera: kreist um die Figur. Knöpfe ⟲ ⟳ ＋ － und 🗺️ (Übersicht), Tasten Q/R drehen, T/G zoomen, M Übersicht,
 //           Maus: rechte Taste ziehen und Mausrad, iPad: mit zwei Fingern drehen, neigen und zoomen.
-// Die Gebäude sind noch einfache Klötze. In den Gebäuden passiert noch nichts.
 //
-// Alle Gebäude stehen im Kreis um einen Platz in der Mitte, die Türen zeigen zur Mitte.
+// Einfache Anlage (kleine Turniere): Alle Gebäude stehen im Kreis um einen Platz in der Mitte, die Türen zeigen zur Mitte.
 // So kommt man von jeder Tür geradeaus zu jeder anderen, ohne durch ein Haus zu laufen.
 import * as THREE from 'three';
 import { requisit } from './requisiten.js';
+import { planVon } from './gelaende.js';
+import { baueGelaende } from './gelaendebau.js';
+import { gitterBauen, frei, weg, naechsteFreie, hoeheBei } from './wege.js';
 
 // ---- Zahlen zum Einstellen ----
 const TEMPO = 3.4;            // so schnell läuft die Figur (Meter pro Sekunde)
+const TEMPO_GROSS = 5.4;      // auf den großen Geländen joggt sie schneller, die Wege sind dort lang
 const GEH_BIS = 2.0;          // bis zu diesem Tempo wird gegangen, darüber gejoggt
 // Kamera: w = Drehung um die Figur (0 = von vorn/Süden), e = Neigung (0 flach … 1.5 von oben), d = Abstand in Metern
 const KAM_START = { w: 0, e: 0.7, d: 15 }, KAM_WEIT = { e: 1.05, d: 46 };
@@ -91,26 +98,86 @@ export class Anlage {
   kamGrenzen() {
     const k = this.kam;
     k.ze = Math.max(0.12, Math.min(1.45, k.ze));
-    k.zd = Math.max(5, Math.min(60, k.zd));
+    k.zd = Math.max(5, Math.min(this.plan ? this.weit * 1.25 : 60, k.zd));
   }
 
   // 🗺️ Übersicht: einmal drücken = von weit oben auf die ganze Anlage, noch einmal = zurück zur Figur
   uebersicht() {
-    const k = this.kam, weit = k.zd > 30;
-    k.zd = weit ? KAM_START.d : KAM_WEIT.d;
+    const fern = this.plan ? this.weit : KAM_WEIT.d;
+    const k = this.kam, weit = k.zd > fern * 0.6;
+    k.zd = weit ? KAM_START.d : fern;
     k.ze = weit ? KAM_START.e : KAM_WEIT.e;
-    if (weit) k.zw = Math.round(k.zw / (Math.PI * 2)) * Math.PI * 2;
+    const w0 = this.plan && this.plan.g.kamW || 0;
+    if (weit) k.zw = w0 + Math.round((k.zw - w0) / (Math.PI * 2)) * Math.PI * 2;
   }
 
-  // woher = bei welchem Ort die Figur startet (ohne Angabe: beim Fahrdienst)
-  start(woher = 'hotel') {
+  // Ein großes Gelände nach Lageplan aufbauen (Grand Slam, Masters, ATP Finals)
+  starteGelaende(plan) {
+    const g = this.game, r = plan.g.rand;
+    this.plan = plan;
+    this.gitter = gitterBauen(r, plan.sperren);
+    this.mitte = { x: (r.x0 + r.x1) / 2, z: (r.z0 + r.z1) / 2 };
+    this.weit = Math.max((r.x1 - r.x0) / Math.max(1, Math.min(1.7, g.aspect)) * 1.55, (r.z1 - r.z0) * 1.35);       // so weit weg ist die Kamera in der Übersicht
+    const namen = Object.fromEntries(ORTE.concat([ZAUN]).map((o) => [o.id, { name: o.name, text: o.text }]));
+    const bau = baueGelaende(plan, this.gitter, { schatten: g.quality !== 'niedrig', wenig: g.quality === 'niedrig', namen });
+    this.gruppe = bau.gruppe;
+    g.scene.add(bau.gruppe);
+    this.orte = plan.orte;
+    this.klick = bau.klick;
+    this.boden = bau.boden;
+    this.namen = plan.namen || [];
+    this.hindernisse = [];
+    // Eigenes Tageslicht (das Licht vom Stadion ist vielleicht Flutlicht bei Nacht)
+    this.altesLicht = g.stadium.lights.filter((l) => l.visible);
+    for (const l of this.altesLicht) l.visible = false;
+    const himmel = new THREE.HemisphereLight(0xffffff, 0x9a9484, 1.25);
+    const sonne = this.sonne = new THREE.DirectionalLight(0xfff4e0, 2.3);
+    sonne.castShadow = g.quality !== 'niedrig';
+    sonne.shadow.mapSize.set(2048, 2048);
+    Object.assign(sonne.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 10, far: 260 });
+    sonne.shadow.bias = -0.0008; sonne.shadow.normalBias = 0.05;
+    this.gruppe.add(himmel, sonne, sonne.target);
+    // Himmel und Dunst: am Tag, auch wenn das Turnier sonst abends gespielt wird
+    this.alt = { hintergrund: g.scene.background, nebel: g.scene.fog.color.clone(), nah: g.camera.near, fern: g.camera.far };
+    g.scene.background = new THREE.Color(0x8cc0ee);
+    g.scene.fog.color.set(0xa8cdea);
+    g.scene.fog.near = this.weit * 1.2; g.scene.fog.far = this.weit * 1.2 + 520;
+    g.camera.near = 1; g.camera.far = 1500; g.camera.updateProjectionMatrix();
+  }
+
+  // woher = bei welchem Ort die Figur startet (ohne Angabe: beim Fahrdienst) · gelaende = Kürzel des Turniers (z. B. 'wim'), ohne = einfache Anlage
+  start(woher = 'hotel', gelaende = null) {
     this.ende();
     const g = this.game;
     this.an = true;
     this.amOrt = null;
+    this.pfad = null;
+    this.gelaendeId = gelaende;
+    if (g.stadium.group) g.stadium.group.visible = false;      // das Stadion macht Pause
+    const plan = gelaende ? planVon(gelaende) : null;
+    if (plan) this.starteGelaende(plan); else this.starteKreis();
+    // Die Figur startet beim Fahrdienst und schaut zur Mitte
+    const startOrt = this.orte.find((o) => o.id === woher) || this.orte.find((o) => o.id === 'hotel');
+    const mx = this.plan ? this.mitte.x : 0, mz = this.plan ? this.mitte.z : 0;
+    this.p = { x: startOrt.tx, z: startOrt.tz, vx: 0, vz: 0, blick: Math.atan2(mx - startOrt.tx, mz - startOrt.tz) };     // blick: 0 = schaut nach +z, π = nach −z
+    this.ziel = null;
+    g.showAvatars(false);
+    if (g.avatars[0]) g.avatars[0].group.visible = true;
+    g.ball.visible = g.blob.visible = g.trail.visible = false;
+    if (g.maschine) g.maschine.visible = false;
+    if (!this.plan) { g.scene.fog.near = 60; g.scene.fog.far = 160; }
+    Object.assign(this.kam, KAM_START, { zw: KAM_START.w, ze: KAM_START.e, zd: KAM_START.d });
+    // Manche Gelände schaut man sich besser von der anderen Seite an (Monte-Carlo: Blick aufs Meer)
+    if (this.plan && this.plan.g.kamW) this.kam.w = this.kam.zw = this.plan.g.kamW;
+    this.kamera(1);
+  }
+
+  // Die einfache Anlage für kleine Turniere: Häuser im Kreis
+  starteKreis() {
+    const g = this.game;
+    this.plan = null; this.gitter = null; this.namen = [];
     const G = this.gruppe = new THREE.Group();
     g.scene.add(G);
-    if (g.stadium.group) g.stadium.group.visible = false;      // das Stadion macht Pause
     this.orte = [];
     this.klick = [];           // alles, was man antippen kann (für den Strahl von der Kamera)
 
@@ -222,17 +289,18 @@ export class Anlage {
       teil(new THREE.SphereGeometry(1.5, 12, 10), 0x2f7a3a, x, 2.7, z, { schatten: true });
     }
 
-    // Die Figur startet beim Fahrdienst und schaut zur Mitte
-    const startOrt = this.orte.find((o) => o.id === woher) || this.orte.find((o) => o.id === 'hotel');
-    this.p = { x: startOrt.tx, z: startOrt.tz, vx: 0, vz: 0, blick: Math.atan2(-startOrt.tx, -startOrt.tz) };     // blick: 0 = schaut nach +z, π = nach −z
-    this.ziel = null;
-    g.showAvatars(false);
-    if (g.avatars[0]) g.avatars[0].group.visible = true;
-    g.ball.visible = g.blob.visible = g.trail.visible = false;
-    if (g.maschine) g.maschine.visible = false;
-    g.scene.fog.near = 60; g.scene.fog.far = 160;
-    Object.assign(this.kam, KAM_START, { zw: KAM_START.w, ze: KAM_START.e, zd: KAM_START.d });
-    this.kamera(1);
+  }
+
+  // Ein Ziel setzen. Auf einem großen Gelände wird gleich der Weg um alle Häuser herum gesucht.
+  zielSetzen(x, z, ort = null) {
+    this.ziel = { x, z, ort };
+    this.pfad = null;
+    if (this.gitter) {
+      this.pfad = weg(this.gitter, this.p.x, this.p.z, x, z);
+      if (!this.pfad) { this.ziel = null; return; }
+      const letzter = this.pfad[this.pfad.length - 1];
+      this.ziel.x = letzter.x; this.ziel.z = letzter.z;
+    }
   }
 
   // Auf den Bildschirm getippt: Wohin soll die Figur laufen?
@@ -244,18 +312,20 @@ export class Anlage {
     const treffer = strahl.intersectObjects([...this.klick, ...this.orte.map((o) => o.schild)], false)[0];
     if (treffer) {
       const ort = treffer.object.userData.ort || this.orte.find((o) => o.schild === treffer.object);
-      this.ziel = { x: ort.tx, z: ort.tz, ort };
+      this.zielSetzen(ort.tx, ort.tz, ort);
       return;
     }
-    // Sonst: zu der Stelle auf dem Boden laufen
+    // Sonst: zu der Stelle auf dem Boden laufen (auf einem großen Gelände: zur nächsten freien Stelle)
     const b = strahl.intersectObject(this.boden, false)[0];
-    if (b) this.ziel = { x: b.point.x, z: b.point.z };
+    if (!b) return;
+    const stelle = this.gitter ? naechsteFreie(this.gitter, b.point.x, b.point.z) : b.point;
+    if (stelle) this.zielSetzen(stelle.x, stelle.z);
   }
 
   // Zu einem Ort laufen (z. B. vom Knopf im Menü)
   geheZu(id) {
     const ort = this.orte.find((o) => o.id === id);
-    if (ort) this.ziel = { x: ort.tx, z: ort.tz, ort };
+    if (ort) this.zielSetzen(ort.tx, ort.tz, ort);
   }
 
   update(dt) {
@@ -273,8 +343,19 @@ export class Anlage {
     const kc = Math.cos(k.w), ks = Math.sin(k.w);
     let ex = sx * kc + sz * ks, ez = -sx * ks + sz * kc;
     const st = Math.min(1, Math.hypot(ex, ez));
+    const tempoMax = this.plan ? TEMPO_GROSS : TEMPO;
     if (st > 0.05) this.ziel = null;           // wer selbst steuert, bricht das Hinlaufen ab
-    if (this.ziel) {
+    if (this.ziel && this.pfad) {
+      // Großes Gelände: den gefundenen Weg Punkt für Punkt ablaufen
+      let n = this.pfad[0];
+      while (this.pfad.length > 1 && Math.hypot(n.x - p.x, n.z - p.z) < 0.7) { this.pfad.shift(); n = this.pfad[0]; }
+      const dx = n.x - p.x, dz = n.z - p.z, weit = Math.hypot(dx, dz);
+      if (this.pfad.length === 1 && weit < 0.15) { p.vx = p.vz = 0; this.ziel = null; this.pfad = null; }
+      else {
+        const v = this.pfad.length > 1 ? tempoMax : Math.min(tempoMax, weit * 2.5 + 0.4);
+        p.vx = dx / (weit || 1) * v; p.vz = dz / (weit || 1) * v;
+      }
+    } else if (this.ziel) {
       // Von selbst zum angetippten Ziel laufen
       const dx = this.ziel.x - p.x, dz = this.ziel.z - p.z, weit = Math.hypot(dx, dz);
       if (weit < 0.15) { p.vx = p.vz = 0; this.ziel = null; }
@@ -291,7 +372,7 @@ export class Anlage {
         p.vx = rx / rl * v; p.vz = rz / rl * v;
       }
     } else if (st > 0.05) {
-      const v = TEMPO * Math.min(1, st * 1.2);
+      const v = tempoMax * Math.min(1, st * 1.2);
       p.vx = ex / st * v; p.vz = ez / st * v;
     } else { p.vx = p.vz = 0; }
     const tempo = Math.hypot(p.vx, p.vz);
@@ -300,14 +381,22 @@ export class Anlage {
       const soll = Math.atan2(p.vx, p.vz), diff = Math.atan2(Math.sin(soll - p.blick), Math.cos(soll - p.blick));
       p.blick += diff * Math.min(1, dt * 12);
     }
-    p.x += p.vx * dt; p.z += p.vz * dt;
-    // Nicht durch Häuser laufen und nicht vom Gelände herunter
-    for (const h of this.hindernisse) {
-      const dx = p.x - h.x, dz = p.z - h.z, d = Math.hypot(dx, dz) || 0.001;
-      if (d < h.r + 0.4) { p.x = h.x + dx / d * (h.r + 0.4); p.z = h.z + dz / d * (h.r + 0.4); }
+    if (this.gitter) {
+      // Großes Gelände: Ist die neue Stelle zugebaut, rutscht die Figur an der Wand entlang (nur seitlich oder nur vor/zurück)
+      const nx = p.x + p.vx * dt, nz = p.z + p.vz * dt;
+      if (frei(this.gitter, nx, nz)) { p.x = nx; p.z = nz; }
+      else if (frei(this.gitter, nx, p.z)) p.x = nx;
+      else if (frei(this.gitter, p.x, nz)) p.z = nz;
+    } else {
+      p.x += p.vx * dt; p.z += p.vz * dt;
+      // Nicht durch Häuser laufen und nicht vom Gelände herunter
+      for (const h of this.hindernisse) {
+        const dx = p.x - h.x, dz = p.z - h.z, d = Math.hypot(dx, dz) || 0.001;
+        if (d < h.r + 0.4) { p.x = h.x + dx / d * (h.r + 0.4); p.z = h.z + dz / d * (h.r + 0.4); }
+      }
+      const fort = Math.hypot(p.x, p.z);
+      if (fort > RAND) { p.x *= RAND / fort; p.z *= RAND / fort; }
     }
-    const weg = Math.hypot(p.x, p.z);
-    if (weg > RAND) { p.x *= RAND / weg; p.z *= RAND / weg; }
 
     // --- Die Figur ---
     const av = g.avatars[0];
@@ -336,14 +425,31 @@ export class Anlage {
     const weich = Math.min(1, dt * 8);
     k.w += (k.zw - k.w) * weich; k.e += (k.ze - k.e) * weich; k.d += (k.zd - k.d) * weich;
     // Auf einem hohen, schmalen Bildschirm geht die Kamera etwas weiter weg
-    const d = k.d * (g.aspect < 1 ? 1.35 : 1), c = Math.cos(k.e);
+    let d = k.d * (g.aspect < 1 ? 1.35 : 1);
+    const c = Math.cos(k.e);
+    if (this.gitter) {
+      // Steht ein Haus oder Stadion zwischen Kamera und Figur? Dann rückt die Kamera so nah heran, dass sie davor bleibt.
+      const sx = Math.sin(k.w) * c, sz = Math.cos(k.w) * c, sy = Math.sin(k.e);
+      for (let s = 1.5; s < d; s += 0.7) {
+        if (hoeheBei(this.gitter, p.x + sx * s, p.z + sz * s) > 1.4 + sy * s) { d = Math.max(3, s - 1.2); break; }
+      }
+    }
     // In der Übersicht (weit weg) schaut die Kamera auf die Mitte der Anlage statt auf die Figur
-    const fern = Math.max(0, Math.min(1, (k.d - 22) / 16)), mx = p.x * (1 - fern), mz = p.z * (1 - fern);
+    const ab = this.plan ? this.weit * 0.45 : 22, bis = this.plan ? this.weit * 0.4 : 16, zx = this.plan ? this.mitte.x : 0, zz = this.plan ? this.mitte.z : 0;
+    const fern = Math.max(0, Math.min(1, (k.d - ab) / bis)), mx = p.x + (zx - p.x) * fern, mz = p.z + (zz - p.z) * fern + (this.plan ? fern * this.weit * 0.1 : 0);     // etwas nach unten schauen: Unten im Bild liegt das Fenster mit dem Text
     const von = new THREE.Vector3(mx + Math.sin(k.w) * c * d, 0.5 + Math.sin(k.e) * d, mz + Math.cos(k.w) * c * d);
     const nach = new THREE.Vector3(mx, 0.9 + Math.max(0, 0.6 - k.e) * 2.2, mz);      // flache Kamera schaut etwas höher
     // Die Schilder: aus der Ferne groß (sonst kann man sie nicht lesen), aus der Nähe klein
-    const gross = Math.max(0.7, Math.min(2.2, k.d / 16));
+    // (auf den großen Geländen wachsen sie in der Übersicht immer weiter mit)
+    let gross = Math.max(0.7, Math.min(2.2, k.d / 16));
+    if (this.plan && k.d > 35) gross = 2.2 * Math.pow(k.d / 35, 0.6);
     for (const o of this.orte) o.schild.scale.set(4.6 * gross, 0.86 * gross, 1);
+    for (const s of this.namen) { s.scale.set(4.6 * gross * 0.72, 0.86 * gross * 0.72, 1); s.visible = k.d > 26; }
+    if (this.sonne) {
+      // Die Sonne wandert mit der Figur mit, damit die Schatten in ihrer Nähe scharf sind
+      this.sonne.position.set(mx + 50, 110, mz + 40);
+      this.sonne.target.position.set(mx, 0, mz);
+    }
     const kk = dt >= 1 ? 1 : 1 - Math.exp(-6 * dt);
     g.camPos.lerp(von, kk); g.camLook.lerp(nach, kk);
     g.camera.position.copy(g.camPos);
@@ -354,13 +460,22 @@ export class Anlage {
     if (!this.gruppe) { this.an = false; return; }
     const g = this.game;
     this.gruppe.traverse((m) => {
-      if (!m.userData.eigen) return;                    // geladene Modelle (Ballkinder, Ballmaschine) werden noch gebraucht
+      if (!m.userData.eigen || !m.material) return;     // geladene Modelle (Ballkinder, Ballmaschine) werden noch gebraucht
       if (m.isMesh) m.geometry.dispose();
       if (m.material.map) m.material.map.dispose();
       m.material.dispose();
     });
     this.gruppe.removeFromParent();
     this.gruppe = null;
+    if (this.plan) {
+      // Licht, Himmel und Kamera wieder so einstellen wie vorher
+      for (const l of this.altesLicht) l.visible = true;
+      if (this.sonne.shadow.map) this.sonne.shadow.map.dispose();
+      g.scene.background = this.alt.hintergrund;
+      g.scene.fog.color.copy(this.alt.nebel);
+      g.camera.near = this.alt.nah; g.camera.far = this.alt.fern; g.camera.updateProjectionMatrix();
+    }
+    this.plan = null; this.gitter = null; this.sonne = null; this.pfad = null; this.namen = [];
     this.an = false;
     this.finger = {};
     this.knueppel = null;

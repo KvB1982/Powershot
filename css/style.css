@@ -398,3 +398,9 @@ table.planer tr.planwahl td { background: rgba(232, 240, 74, .08); }
 table.planer button.zu { opacity: .6; }
 .planknopf { padding: 6px 12px; font-size: 14px; }
 @media (max-width: 700px) { .jahr i { height: 20px; font-size: 0; } }
+/* Große Turniergelände: Knöpfe „Hinlaufen“ und die Auswahl des Geländes */
+#anlage .panel { width: min(760px, calc(100% - 24px)); max-height: 46vh; overflow-y: auto; }
+#anlage .wohin { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: center; margin-top: 8px; font-size: 13px; }
+#anlage .wohin button { padding: 6px 10px; font-size: 13px; min-height: 0; }
+#anlage .wahl { flex-wrap: wrap; justify-content: center; gap: 6px; }
+#anlage .wahl button { padding: 8px 10px; font-size: 14px; min-height: 0; }
