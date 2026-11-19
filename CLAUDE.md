@@ -39,6 +39,7 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 | `js/physics.js`, `js/rules.js` | Ballflug (Luftwiderstand, Magnus-Kraft, Reibung beim Aufprall), Zählweise – ohne three.js, in node testbar |
 | `js/faehigkeiten.js` | Die acht Fähigkeiten (`STAT_NAMES`: Aufschlag `s`, Vorhand `vh`, Rückhand `rh`, Volley `v`, Beinarbeit `b`, Ausdauer `a`, Mental `m`, Taktik `k`), Erklärtexte, `achtWerte` (rechnet die fünf alten Werte um), `gesamt` (Gesamtstärke) – ohne three.js und ohne andere Dateien |
 | `js/schlaege.js` | Tabelle aller Schlagarten (`SCHLAEGE`) und Aufschlagarten (`AUFSCHLAEGE`): Tempo, Drall in U/min (`top`, `seite`, `drall`), Höhe über dem Netz – ohne three.js |
+| `js/schlagbuch.js` | Schlagbuch (Hauptmenü → „Schlagarten“): die 23 Schlagarten der Uhr-Aufnahme (`BUCH`, gleiche Kürzel wie `schlagarten` in `ios/PowershotWatch/Schlaeger.swift`) mit Erklärung und Strichmännchen. Je Schlag drei Posen (Ausholen, Treffen, Ausschwingen), daraus rechnet die Datei stehende Bilder und einen kleinen Film (SVG). Dazu die Anleitung „Schläge mit der Uhr aufnehmen“ (`uhrHtml`) – ohne three.js |
 | `js/match.js` | Zustände: intro → serveReady → toss → rally → pointOver → (changeover) → over; Computergegner |
 | `js/controls.js` | Steuerung: `klassik` (Maus), `touch` (iPad), `profi` (Tastatur), `controller` (Switch-Controller; Schwung-Zahlen `SWING_…` oben in der Datei) |
 | `js/kamera.js` | Laufen mit der Kamera: Körperpunkte → Position auf dem Platz, Einmessen, Zahlen zum Einstellen oben – ohne three.js und ohne Browser testbar |

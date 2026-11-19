@@ -11,6 +11,7 @@ import { loadFigure } from './figur.js';
 import { ladeRequisiten } from './requisiten.js';
 import { loadMocap, mocapClip } from './mocap.js';
 import { SHOW } from './showschlaege.js';
+import { schlagbuchHtml, uhrHtml } from './schlagbuch.js';
 import * as D from './data.js';
 import * as TN from './tournament.js';
 import * as CA from './career.js';
@@ -155,6 +156,7 @@ actions.home = () => {
       <button class="big" data-a="tourMenu">Turnier <small>Ein Turnier mit einem Profi spielen</small></button>
       <button class="big" data-a="training">Training <small>Ballmaschine · Aufschlag</small></button>
       <button class="big" data-a="anlage">Turnieranlage <small>Herumlaufen auf der Anlage (im Aufbau)</small></button>
+      <button class="big" data-a="schlagbuch">Schlagarten <small>Nachlesen und ansehen · Aufnehmen mit der Uhr</small></button>
       <div class="row"><button class="grow" data-a="settings" data-v="home">Einstellungen</button><button class="grow" data-a="help" data-v="home">Steuerung</button></div>
     </div>`);
 };
@@ -367,6 +369,7 @@ const HELP = `
     <li><b>Auch vor und zurück:</b> Ein Schritt auf die Kamera zu = ans Netz. Das klappt nicht ganz so genau wie links und rechts.</li>
     <li>Bist du nah genug am Ball, macht dein Spieler den letzten Schritt allein (außer bei Laufhilfe „Aus“).</li>
     <li>Geschlagen wird wie sonst: mit Uhr, iPhone-Schläger, Controller, Maus oder Tastatur.</li></ul></div>
+  <div class="row" style="margin-bottom:14px"><button data-a="schlagbuch">📖 Alle Schlagarten mit Bildern</button><button data-a="uhrAufnahme">⌚ Schläge mit der Uhr aufnehmen</button></div>
   <div class="panel help"><h3>Was die Schläge mit dem Ball machen</h3><ul>
     <li><b>Topspin:</b> Der Ball dreht nach vorne. Er fällt von selbst ins Feld und springt hoch und schnell weg.</li>
     <li><b>Hoher Topspin:</b> noch mehr Drall, hoch über das Netz – sehr sicher, springt dem Gegner bis zur Schulter.</li>
@@ -380,6 +383,13 @@ const HELP = `
     <li>Auf <b>Sand</b> springt der Ball höher und wird stärker gebremst, auf <b>Rasen</b> bleibt er flach und schnell.</li></ul></div>
   <p class="dim"><kbd>P</kbd> oder <kbd>Esc</kbd> = Pause. Der gelbe Ring zeigt, wo der Ball des Gegners landet. Der orange Ring ist dein Ziel.</p>`;
 let helpBack = 'home';
+// Das Schlagbuch: alle Schlagarten mit Bildern (die Seiten selbst baut js/schlagbuch.js). v = Kürzel des gewählten Schlags
+let schlagWahl = 'vorhand-topspin';
+actions.schlagbuch = (v) => {
+  if (v) schlagWahl = v;
+  show(`<div class="bar">${back('home')}<h2>Schlagarten</h2><button data-a="uhrAufnahme">⌚ Mit der Uhr aufnehmen – so geht's</button></div>${schlagbuchHtml(schlagWahl)}`);
+};
+actions.uhrAufnahme = () => show(`<div class="bar">${back('schlagbuch')}<h2>⌚ Schläge mit der Uhr aufnehmen</h2></div>${uhrHtml()}`);
 actions.help = (v) => { if (v) helpBack = v; show(`<div class="bar">${back(helpBack)}<h2>Steuerung</h2></div>${HELP}`); };
 
 // ---------------------------------------------------------------
