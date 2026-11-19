@@ -8,7 +8,7 @@
 //   Laufen: Tasten W A S D / Pfeile oder mit einem Finger ziehen (wie ein Steuerknüppel). „Oben“ heißt immer: von der Kamera weg.
 //           Ein kurzer Tipp auf ein Gebäude lässt die Figur von selbst hinlaufen.
 //   Kamera: kreist um die Figur. Knöpfe ⟲ ⟳ ＋ － und 🗺️ (Übersicht), Tasten Q/R drehen, T/G zoomen, M Übersicht,
-//           Maus: rechte Taste ziehen und Mausrad, iPad: mit zwei Fingern drehen, neigen und zoomen.
+//           Maus: rechte Taste ziehen und Mausrad, iPad: zwei Finger kneifen = nah/weit, gemeinsam seitlich wischen = rundherum drehen, hoch/runter wischen = Blickwinkel.
 //
 // Einfache Anlage (kleine Turniere): Alle Gebäude stehen im Kreis um einen Platz in der Mitte, die Türen zeigen zur Mitte.
 // So kommt man von jeder Tür geradeaus zu jeder anderen, ohne durch ein Haus zu laufen.
@@ -24,6 +24,12 @@ const TEMPO_GROSS = 5.4;      // auf den großen Geländen joggt sie schneller, 
 const GEH_BIS = 2.0;          // bis zu diesem Tempo wird gegangen, darüber gejoggt
 // Kamera: w = Drehung um die Figur (0 = von vorn/Süden), e = Neigung (0 flach … 1.5 von oben), d = Abstand in Metern
 const KAM_START = { w: 0, e: 0.7, d: 15 }, KAM_WEIT = { e: 1.05, d: 46 };
+// Kamera von Hand: wie stark Wischen dreht und neigt (Bogenmaß je Pixel) und wie weit man gehen darf
+const DREH_FINGER = 0.009, NEIG_FINGER = 0.007;      // zwei Finger gemeinsam schieben (ein Bildschirm breit ≈ einmal ganz herum)
+const DREH_MAUS = 0.008, NEIG_MAUS = 0.006;          // rechte Maustaste ziehen
+const NEIG_MIN = 0.04, NEIG_MAX = 1.54;              // fast flach über dem Boden … fast senkrecht von oben
+const NAH_MIN = 2.5;                                 // so nah darf die Kamera an die Figur (Meter)
+const FERN_MAL = 2.6;                                // so weit weg: 2,6-mal die Übersicht – das ganze Gelände wird klein wie ein Modell
 const LAEUFER = 26;           // so viele Besucher laufen höchstens über ein großes Gelände (die übrigen stehen)
 const LAEUFER_TEMPO = 1.3;    // Meter pro Sekunde – gemütliches Schlendern
 const BALL_NAH = 1.4;         // so nah muss man an den Glücksball heran, um ihn aufzuheben
@@ -47,12 +53,19 @@ const ZAUN = { id: 'fans', name: 'Autogramm-Zaun', x: -4.5, z: -2.5, text: 'Kind
 
 const grad = (g) => g * Math.PI / 180;
 
+// Der flachste erlaubte Blickwinkel bei diesem Abstand: nah darf die Kamera ganz flach schauen, weit weg muss sie über den Dächern bleiben
+function flachMin(d) {
+  const hoch = 30 * Math.max(0, Math.min(1, (d - 25) / 35));
+  return Math.asin(Math.min(0.99, hoch / d));
+}
+
 export class Anlage {
   constructor(game) {
     this.game = game;
     this.an = false;
     this.gruppe = null;
     this.tasten = {};
+    this.zwei = null;          // die zwei Finger im letzten Bild (für Kneifen und Wischen)
     this.finger = {};          // alle Finger (oder die Maus), die gerade aufliegen: id → { x0, y0, x, y, rechts }
     this.knueppel = null;      // id des Fingers, der gerade läuft
     this.kamTaste = null;      // welcher Kamera-Knopf gerade gedrückt ist ('links', 'rechts', 'nah', 'fern')
@@ -74,16 +87,10 @@ export class Anlage {
     addEventListener('pointermove', (e) => {
       const f = this.finger[e.pointerId];
       if (!f) return;
-      const dx = e.clientX - f.x, dy = e.clientY - f.y, ids = Object.keys(this.finger), k = this.kam;
+      const dx = e.clientX - f.x, dy = e.clientY - f.y, k = this.kam;
       f.weg += Math.hypot(dx, dy);
-      if (f.rechts) { k.zw -= dx * 0.008; k.ze += dy * 0.006; }
-      else if (ids.length >= 2) {
-        // Zwei Finger: auseinander/zusammen = zoomen, gemeinsam schieben = drehen und neigen
-        const o = this.finger[ids[0] == e.pointerId ? ids[1] : ids[0]];
-        const alt = Math.hypot(f.x - o.x, f.y - o.y), neu = Math.hypot(e.clientX - o.x, e.clientY - o.y);
-        if (alt > 8 && neu > 8) k.zd *= alt / neu;
-        k.zw -= dx * 0.004; k.ze += dy * 0.003;
-      }
+      if (f.rechts) { k.zw -= dx * DREH_MAUS; k.ze += dy * NEIG_MAUS; }
+      // (Zwei Finger: Das rechnet zweiFinger() einmal pro Bild aus – dann ist es egal, welcher Finger sich zuerst meldet.)
       f.x = e.clientX; f.y = e.clientY;
       this.kamGrenzen();
     });
@@ -94,14 +101,35 @@ export class Anlage {
       // Nur ein kurzer Tipp (kaum bewegt)? Dann ist das ein Ziel zum Hinlaufen.
       if (this.an && f && !f.rechts && f.weg < 12 && e.type === 'pointerup' && !e.target.closest('button, .panel')) this.tipp(e.clientX, e.clientY);
     };
+    // Safari auf dem iPad will beim Kneifen die ganze Seite vergrößern – das soll hier nur die Kamera tun
+    for (const n of ['gesturestart', 'gesturechange']) addEventListener(n, (e) => { if (this.an) e.preventDefault(); }, { passive: false });
+    addEventListener('touchmove', (e) => { if (this.an && e.touches.length > 1 && meins(e)) e.preventDefault(); }, { passive: false });
     addEventListener('pointerup', los);
     addEventListener('pointercancel', los);
   }
 
+  // Zwei Finger auf dem Bildschirm. Wir schauen auf zwei Dinge: den Abstand der Finger und ihre Mitte.
+  //   Abstand wird größer/kleiner (kneifen)  = näher heran / weiter weg
+  //   Mitte wandert nach links/rechts        = Kamera dreht sich um die Figur (geht immer weiter rundherum)
+  //   Mitte wandert nach oben/unten          = Blickwinkel: flach über den Boden bis fast senkrecht von oben
+  zweiFinger() {
+    const ff = Object.values(this.finger).filter((f) => !f.rechts);
+    if (ff.length < 2) { this.zwei = null; return; }
+    const [a, b] = ff, k = this.kam;
+    const jetzt = { a, b, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, weit: Math.hypot(a.x - b.x, a.y - b.y) };
+    const z = this.zwei;
+    if (z && z.a === a && z.b === b) {      // dieselben zwei Finger wie im Bild davor
+      if (z.weit > 8 && jetzt.weit > 8) k.zd *= z.weit / jetzt.weit;
+      k.zw -= (jetzt.x - z.x) * DREH_FINGER;
+      k.ze += (jetzt.y - z.y) * NEIG_FINGER;
+    }
+    this.zwei = jetzt;
+  }
+
   kamGrenzen() {
     const k = this.kam;
-    k.ze = Math.max(0.12, Math.min(1.45, k.ze));
-    k.zd = Math.max(5, Math.min(this.plan ? this.weit * 1.25 : 60, k.zd));
+    k.zd = Math.max(NAH_MIN, Math.min(this.plan ? this.weit * FERN_MAL : 90, k.zd));
+    k.ze = Math.max(NEIG_MIN, flachMin(k.zd), Math.min(NEIG_MAX, k.ze));
   }
 
   // 🗺️ Übersicht: einmal drücken = von weit oben auf die ganze Anlage, noch einmal = zurück zur Figur
@@ -145,7 +173,7 @@ export class Anlage {
     g.scene.background = new THREE.Color(0x8cc0ee);
     g.scene.fog.color.set(0xa8cdea);
     g.scene.fog.near = this.weit * 1.2; g.scene.fog.far = this.weit * 1.2 + 520;
-    g.camera.near = 1; g.camera.far = 1500; g.camera.updateProjectionMatrix();
+    g.camera.near = 1; g.camera.far = 4000; g.camera.updateProjectionMatrix();
     // Besucher, die herumlaufen: Jeder sucht sich eine Tür als Ziel, schlendert hin und sucht sich dann die nächste aus
     const n = g.quality === 'niedrig' ? 0 : Math.min(LAEUFER, Math.round((plan.g.leute ?? 110) / 4));
     this.laeufer = [];
@@ -487,6 +515,7 @@ export class Anlage {
   kamera(dt) {
     const g = this.game, p = this.p, k = this.kam, t = this.tasten;
     const knopf = this.kamTaste;
+    this.zweiFinger();
     if (knopf === 'links' || t.KeyQ) k.zw += dt * 1.6; else if (knopf === 'rechts' || t.KeyR) k.zw -= dt * 1.6;
     if (knopf === 'nah' || t.KeyT) k.zd *= Math.exp(-dt * 1.4); else if (knopf === 'fern' || t.KeyG) k.zd *= Math.exp(dt * 1.4);
     this.kamGrenzen();
@@ -494,10 +523,13 @@ export class Anlage {
     k.w += (k.zw - k.w) * weich; k.e += (k.ze - k.e) * weich; k.d += (k.zd - k.d) * weich;
     // Auf einem hohen, schmalen Bildschirm geht die Kamera etwas weiter weg
     let d = k.d * (g.aspect < 1 ? 1.35 : 1);
-    const c = Math.cos(k.e);
-    if (this.gitter) {
+    // Weit weg bleibt die Kamera immer ein Stück über den Dächern (sonst hinge sie mitten in einer Tribüne):
+    // Ab 25 m Abstand wächst die Mindesthöhe, ab 60 m sind es 30 m über dem Boden.
+    const e = Math.max(k.e, flachMin(d));
+    const c = Math.cos(e);
+    if (this.gitter && d < 60) {
       // Steht ein Haus oder Stadion zwischen Kamera und Figur? Dann rückt die Kamera so nah heran, dass sie davor bleibt.
-      const sx = Math.sin(k.w) * c, sz = Math.cos(k.w) * c, sy = Math.sin(k.e);
+      const sx = Math.sin(k.w) * c, sz = Math.cos(k.w) * c, sy = Math.sin(e);
       for (let s = 1.5; s < d; s += 0.7) {
         if (hoeheBei(this.gitter, p.x + sx * s, p.z + sz * s) > 1.4 + sy * s) { d = Math.max(3, s - 1.2); break; }
       }
@@ -505,10 +537,15 @@ export class Anlage {
     // In der Übersicht (weit weg) schaut die Kamera auf die Mitte der Anlage statt auf die Figur
     const ab = this.plan ? this.weit * 0.45 : 22, bis = this.plan ? this.weit * 0.4 : 16, zx = this.plan ? this.mitte.x : 0, zz = this.plan ? this.mitte.z : 0;
     const fern = Math.max(0, Math.min(1, (k.d - ab) / bis)), mx = p.x + (zx - p.x) * fern, mz = p.z + (zz - p.z) * fern + (this.plan ? fern * this.weit * 0.1 : 0);     // etwas nach unten schauen: Unten im Bild liegt das Fenster mit dem Text
-    const von = new THREE.Vector3(mx + Math.sin(k.w) * c * d, 0.5 + Math.sin(k.e) * d, mz + Math.cos(k.w) * c * d);
-    const nach = new THREE.Vector3(mx, 0.9 + Math.max(0, 0.6 - k.e) * 2.2, mz);      // flache Kamera schaut etwas höher
+    const von = new THREE.Vector3(mx + Math.sin(k.w) * c * d, 0.5 + Math.sin(e) * d, mz + Math.cos(k.w) * c * d);
+    const nach = new THREE.Vector3(mx, 0.9 + Math.max(0, 0.6 - e) * 2.2 * Math.min(1, d / 15), mz);      // flache Kamera schaut etwas höher (ganz nah an der Figur nicht – sonst sähe man nur Himmel)
     // Die Schilder: aus der Ferne groß (sonst kann man sie nicht lesen), aus der Nähe klein
     // (auf den großen Geländen wachsen sie in der Übersicht immer weiter mit)
+    if (this.plan) {
+      // Der Dunst in der Ferne rückt mit weg, wenn die Kamera weit hinausfährt – sonst wäre von weit oben alles nur hellblau
+      const dunst = Math.max(this.weit * 1.2, k.d * 1.3);
+      g.scene.fog.near = dunst; g.scene.fog.far = dunst + 520 + k.d;
+    }
     let gross = Math.max(0.7, Math.min(2.2, k.d / 16));
     if (this.plan && k.d > 35) gross = 2.2 * Math.pow(k.d / 35, 0.6);
     for (const o of this.orte) o.schild.scale.set(4.6 * gross, 0.86 * gross, 1);
