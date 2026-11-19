@@ -672,7 +672,7 @@ const kraftZeiger = () => 0.5 - 0.5 * Math.cos(2 * Math.PI * (performance.now() 
 function kraftEnde() { if (kraftSpiel) clearInterval(kraftSpiel.uhr); kraftSpiel = null; }
 function anlageZeigen() {
   const A = game.anlage, ort = A.amOrt;
-  const hilfe = 'Laufen: W A S D oder mit einem Finger ziehen. Tippe auf ein Gebäude, dann läuft deine Figur von selbst hin. Kamera: Knöpfe rechts, zwei Finger oder rechte Maustaste.';
+  const hilfe = 'Laufen: W A S D oder mit einem Finger ziehen. Tippe auf ein Gebäude, dann läuft deine Figur von selbst hin. Kamera mit zwei Fingern: kneifen = nah oder ganz weit weg, zur Seite wischen = rundherum drehen, hoch oder runter wischen = Blickwinkel. Am PC: rechte Maustaste ziehen und Mausrad.';
   const kam = [['karte', '🗺️', 'Übersicht'], ['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg']];
   let unten = `<p class="dim">${hilfe}</p>`, zeit = '';
   if (anlageTag) {
