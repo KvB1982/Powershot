@@ -456,3 +456,19 @@ table.planer button.zu { opacity: .6; }
 .sb-watch .band { fill: #2a3350; } .sb-watch .gehaeuse { fill: #05070d; stroke: #55607a; stroke-width: 3; }
 .sb-watch .knopf { fill: #2b3140; } .sb-watch .knopf.an { fill: var(--accent); } .sb-watch .text { fill: none; }
 .sb-watch text { fill: #fff; font-size: 9px; font-weight: 700; text-anchor: middle; } .sb-watch text.an { fill: #111; }
+
+/* ---------- Saison: Profileben (Zeitung, Rivalen, Ziele, Zwischenzeit) ---------- */
+.tlr .tlv { font-size: 11px; margin-top: 2px; }
+.tlr .tlv.gold { color: var(--gold, #ffd166); } .tlr .tlv.plus { color: #7ae89a; } .tlr .tlv.minus { color: #ff8a7a; }
+.zeitung { display: flex; flex-direction: column; gap: 8px; }
+.zm { border-left: 4px solid rgba(255, 255, 255, 0.25); padding: 4px 0 4px 10px; }
+.zm b { display: block; font-size: 15px; }
+.zm span { font-size: 13px; color: var(--dim); }
+.zm.gut { border-color: #7ae89a; } .zm.schlecht { border-color: #ff8a7a; } .zm.rivale { border-color: #ffd166; }
+.panel.duell { border: 1px solid #ffd166; background: rgba(255, 209, 102, 0.08); }
+.panel.zwischen { border: 1px solid var(--accent); }
+table.ziele td { vertical-align: top; padding: 6px 6px; }
+table.form { width: 100%; font-size: 13px; }
+table.form td { padding: 3px 6px; }
+details summary { cursor: pointer; margin-top: 10px; color: var(--dim); font-size: 13px; }
+.kpi div i.frische { margin-top: 6px; }

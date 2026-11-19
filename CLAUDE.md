@@ -22,6 +22,7 @@ node tools/wichtig.mjs          # Hinweise Breakball, Satzball, Matchball, Champ
 node tools/kamera.mjs           # Laufen mit der Kamera: Rechnung prüfen (ohne Kamera, mit künstlichen Körperpunkten)
 node tools/ballflug.mjs hard     # Flugbahn und Absprung jeder Schlag- und Aufschlagart messen und prüfen (auch clay, grass, indoor)
 node tools/gelaende.mjs         # Lagepläne aller Turniergelände prüfen: alle neun Orte da, nichts steht ineinander, jede Tür zu Fuß erreichbar
+node tools/profisaison.mjs       # Profileben im Saison-Modus: 45 Saisons über je 2 Jahre (Punkte verteidigen, Abrechnung, Ziele, Zwischenzeit, Jahreswechsel); `node tools/profisaison.mjs zverev 0.7 2` zeigt eine Saison Turnier für Turnier
 node tools/spielzuege.mjs 30    # Taktische Spielzüge: Erkennen, Durchschauen, Lernen und Wirkung im Match (30 Matches Computer gegen Computer, dauert ein paar Minuten)
 node tools/mocap.mjs            # Aufnahmen aus mocap/*.FBX in mocap/bewegungen.json umrechnen (--info zeigt nur an)
 ```
@@ -69,6 +70,7 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 | `js/kleinetour.js` | Kleine Tour für die Karriere: Stufen (`STUFEN`: ITF M15/M25, Challenger, ATP 250/500, echte Feldgrößen), die kleinen Turniere aus dem Kalender, Flugpreise, Liga-Spiel, 400 erfundene Nachwuchsspieler (`NACHWUCHS`), `KURVE` (Punkte → Platz hinter den Top 200) – ohne three.js |
 | `js/ausruestung.js` | Shop mit echten Marken und Modellreihen (nur Namen als Text), Trainer, Physios, Reise-Arten, Ausrüster-Verträge, Geldgeber – ohne three.js |
 | `js/season.js` | Saison mit einem echten Profi: ATP Race (alle starten bei 0), Finals-Qualifikation (Top 8, Grand-Slam-Regel), localStorage – ohne three.js |
+| `js/profisaison.js` | Profileben im Saison-Modus (ohne three.js): alles liegt in `s.profi`, `s.vorjahr`, `s.rest`. Punkte verteidigen (`vorjahrAusrechnen`, `weltTabelle`, `verteidigen`), Erwartung je Turnier (`erwartung`), Selbstvertrauen `mut` −3…+3, Medien-Druck `druck`, Laune der Sponsoren `gunst`, drei Sponsoren-Ziele (`zieleFuer`, `zielStand`), zwei Rivalen und Bilanz gegen jeden Gegner (`h2h`), Zeitung (`melden`), Team/Reise/Ausrüster, Körper (benutzt `koerperWoche` aus `ausbau.js`), Wochen zwischen den Turnieren (`ZWISCHEN`, `zwischenTun`), Dazulernen (`steigern`), `turnierStart` / `matchGespielt` / `turnierFertig`, Jahresende (`jahresBilanz`, `naechsteSaison`). `s.profi` ist so gebaut, dass `turniertag.js` damit rechnen kann (`saison: true`, gespeichert wird über `s.profi.sichern`) |
 | `js/saisonansicht.js` | Baut HTML für Turnierbaum, Saison-Zeitleiste, Race-Tabelle und Punkte-Erklärung (Aussehen in `css/style.css`) |
 | `python/` | Die ursprünglichen Pygame-Zero-Versionen (mit `pythoncore-3.14-64`, pgzero + pygame-ce) |
 
@@ -141,6 +143,14 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 - Geprüft: `tools/spielzuege.mjs` und der Test-Browser (Buch, Training „Aufschlag + 1“, Zwei-Finger-Wischen mit künstlichen Finger-Ereignissen). Nicht geprüft: von Hand gespielt, echtes iPad, ob jeder Spielzug mit jeder Steuerung gut zu schaffen ist
   (Slice und Stoppball gehen mit der Maus-Steuerung „Klassik“ gar nicht; „Inside-out“ verlangt, mit dem Joystick selbst um den Ball zu laufen).
 
+## Saison: Profileben (einen fertigen Profi übernehmen)
+
+- Leitgedanke: In der Karriere muss man sich alles verdienen. Der Saison-Profi hat schon alles – dafür erwarten alle etwas von ihm.
+- Ablauf in `app.js`: `actions.saisonPlay` → `PS.turnierStart` → Turnier-Ansicht (`saisonVorMatch`: Bilanz, Frische, Erwartung, „Was heute wirkt“) → „Erst auf die Anlage“ (gleicher Code wie Karriere über `lebenC()` / `ichJetzt()`) → Match → `PS.matchGespielt` → Abend-Auswahl → `PS.turnierFertig` (Abrechnung in `seasonTournamentDone`) → auf der Saison-Seite der Kasten „freie Wochen“ (`actions.saisonZw`).
+- Reiter: Saison · Zeitung & Rivalen · Team & Sponsoren (mit Pokalschrank) · Fähigkeiten & Körper · ATP Race · Weltrangliste · Punkte-Regeln.
+- Im Match wirken (`PS.bonusListe`): Dazugelerntes (`plus`, höchstens +4 je Fähigkeit, +1 kostet 4 Punkte), Trainingsblock, Selbstvertrauen, Medien-Druck, Lieblings-/Angstgegner (Bilanz, ±2 Mental), Gegner-Studium, Beschwerden, Turniertag, Abend, Frische. Der Trainer gibt hier keine Pluspunkte (die echten Werte des Profis enthalten das schon), nur mehr Erfahrung.
+- Alte Saison-Spielstände bekommen das Profileben beim Laden (`PS.einrichten`).
+
 ## Karriere: Geld, Reisen, Ausrüstung
 
 - Start ungefähr auf Platz 2000 mit 4.000 $. Das Jahr hat 52 Wochen (`js/kalender.js`, echter ATP-Kalender 2026). Jede Woche wählt man: ein Turnier der Woche, Liga-Spiel, Tennisstunden geben, Pause/Urlaub oder (nur in der Off-Season im Dezember) Saisonvorbereitung.
@@ -180,10 +190,12 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 
 ## Bekannte Grenzen
 
+- Profileben im Saison-Modus (`js/profisaison.js`): Die Ergebnisse des Vorjahres sind nicht die echten – der Computer spielt das Vorjahr einmal durch und verkleinert die Ergebnisse, bis sie zu den echten Punkten passen (Startrangliste = echte Rangliste). Punkte von kleineren Turnieren (`s.rest`) bleiben das ganze Jahr gleich, auch im zweiten Jahr. Die Setzliste richtet sich weiter nach dem festen Platz in `data.js`, nicht nach der laufenden Weltrangliste. Welche Marke ein Profi hat, sucht man selbst aus (das Spiel behauptet nichts über echte Verträge). Verletzt verpasst man Turniere; zu den ATP Finals ist man immer wieder fit. Alle Zahlen (Geld, Druck, Selbstvertrauen, Frische) sind geschätzt. Geprüft mit `tools/profisaison.mjs` und im Test-Browser (Menüs, Anlage, Abend, Abrechnung, Jahreswechsel; Matches dabei über die Zählweise beendet, nicht ausgespielt); nicht von Hand gespielt, nicht auf dem iPad.
+
 - Turniergelände: Lage der Stadien, Zuschauerzahlen und Umgebung der großen Turniere sind recherchiert, aber vereinfacht (alles rechtwinklig, flach – auch Monte-Carlo ohne echte Terrassen; die Lage kleiner Häuser wie Kraftraum oder Besaiter ist geschätzt). Die Gelände der kleinen Turniere sind erfunden. Geprüft mit `tools/gelaende.mjs` und als Standbilder im Test-Browser ohne Grafikkarte; nicht von Hand gespielt, Tempo auf dem iPad unbekannt. Stempelheft liegt in `localStorage` (`powershot.stempel.v1`), der Glücksball gibt +1 Mental für das Match des Tages (`GLUECKSBALL` in `turniertag.js`, Zahl geschätzt).
 
 - Saison-Planer, Phasen-Anzeige und Schuh-Regel: nur mit `tools/logic.mjs` und als Standbilder im Test-Browser geprüft, nicht von Hand gespielt, nicht auf dem iPad (die Planer-Tabelle ist breit).
-- Profi-Service, Verletzungen, Turniertag-Zufälle, Kraftraum-Spiel, Abend-Auswahl, Sammlung, Anprobe und Tasche: nur mit `tools/logic.mjs` und als Standbilder im Test-Browser geprüft, nicht von Hand gespielt, nicht auf dem iPad. Die Gebäude der Anlage sind weiter Klötze (keine neuen 3D-Modelle erzeugt). Turniertage gibt es nur in der Karriere, nicht im Saison-Modus.
+- Profi-Service, Verletzungen, Turniertag-Zufälle, Kraftraum-Spiel, Abend-Auswahl, Sammlung, Anprobe und Tasche: nur mit `tools/logic.mjs` und als Standbilder im Test-Browser geprüft, nicht von Hand gespielt, nicht auf dem iPad. Die Gebäude der Anlage sind weiter Klötze (keine neuen 3D-Modelle erzeugt). Turniertage gibt es in der Karriere und im Saison-Modus (dort ohne Shop, Sammlung und Profi-Service).
 
 - Siegerehrung: nur im Test-Browser als Standbilder geprüft (Australian Open und eine kleine Ehrung), nicht auf dem iPad und nicht in Bewegung angesehen. Wirkung der Reden ist geschätzt.
 

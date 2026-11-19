@@ -23,8 +23,9 @@ import * as KA from './kalender.js';
 import * as AB from './ausbau.js';
 import * as PL from './planer.js';
 import * as SE from './season.js';
+import * as PS from './profisaison.js';
 import * as SZ from './spielzuege.js';
-import { bracketHtml, timelineHtml, raceHtml, pointsHtml } from './saisonansicht.js';
+import { bracketHtml, timelineHtml, raceHtml, pointsHtml, weltHtml, zeitungHtml } from './saisonansicht.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -86,6 +87,7 @@ const screen = $('#screen'), hudEl = $('#hud');
 let match = null, paused = false, session = null;
 let career = CA.loadCareer();
 let season = SE.loadSeason();
+if (season) PS.einrichten(season);     // das Profileben dazu (auch für alte Spielstände)
 let menuVenue = 'ao';
 
 function show(html) { screen.innerHTML = `<div class="wrap">${html}</div>`; screen.classList.add('on'); screen.scrollTop = 0; }
@@ -146,6 +148,12 @@ const pagePlayers = (page) => D.PLAYERS.slice(page * 20, page * 20 + 20);
 const pageTabs = (act, page) => `<div class="row tabs">${Array.from({ length: Math.ceil(D.PLAYERS.length / 20) }, (_, i) =>
   `<button class="${i === page ? 'sel' : ''}" data-a="${act}" data-v="${i}">${i ? '' : 'Platz '}${i * 20 + 1}–${i * 20 + 20}</button>`).join('')}</div>`;
 const getPlayer = (id) => (id === 'me' ? CA.mePlayer(career) : D.playerById(id));
+// Karriere und Saison haben beide ein „Profileben“ (Turniertage, Frische, Abend …). Diese zwei Helfer liefern das Richtige:
+//   lebenC()  = der Spielstand, mit dem turniertag.js rechnet (Karriere: career · Saison: season.profi)
+//   ichJetzt() = deine Figur mit allen Pluspunkten von heute
+const mitLeben = () => !!ctxT && !!(ctxT.career || ctxT.season);
+const lebenC = () => (ctxT && ctxT.season ? season.profi : career);
+const ichJetzt = (gegner) => (ctxT && ctxT.season ? PS.spieler(season, ctxT.def, gegner) : CA.mePlayer(career));
 const back = (to = 'home') => `<button class="ghost" data-a="${to}">‹ Zurück</button>`;
 
 // ---------------------------------------------------------------
@@ -571,18 +579,18 @@ function renderTournament() {
       <p>gewinnt ${def.name}${T.champion === T.humanId ? ' – das bist du! Glückwunsch!' : '.'}</p>
       ${pay && pay.label && def.cat !== 'LIGA' ? `<p class="dim">Dein Ergebnis: ${D.ROUND_NAMES[pay.label]}</p>` : ''}
       <button class="primary" data-a="tourDone">Weiter</button></div>`;
-  } else if (m && ctxT.career && career.abendOffen && def.cat !== 'LIGA') {
+  } else if (m && mitLeben() && lebenC().abendOffen && def.cat !== 'LIGA') {
     // Nach einem Sieg: Was machst du am Abend? (Liste ABEND in turniertag.js)
     top = `<div class="panel"><h3 style="margin-top:0">🌙 Der Abend nach deinem Sieg</h3><p class="dim">Morgen geht das Turnier für dich weiter. Was machst du heute Abend noch?</p>
       <div class="row">${Object.entries(TT.ABEND).map(([id, A]) => `<button data-a="abend" data-v="${id}">${A.name} <small>${A.bringt}</small></button>`).join('')}</div></div>`;
   } else if (m) {
     const oppId = m.a === T.humanId ? m.b : m.a;
-    const opp = getPlayer(oppId), me = getPlayer(T.humanId);
-    top = `<div class="panel"><div class="center dim">${def.cat === 'LIGA' ? 'Liga-Spiel' : D.ROUND_NAMES[label]}${m.group != null ? ' · Gruppe ' + 'AB'[m.group] : ''}</div>
+    const opp = getPlayer(oppId), me = ctxT.season ? ichJetzt(oppId) : getPlayer(T.humanId);
+    top = `${ctxT.season ? saisonVorMatch(oppId) : ''}<div class="panel"><div class="center dim">${def.cat === 'LIGA' ? 'Liga-Spiel' : D.ROUND_NAMES[label]}${m.group != null ? ' · Gruppe ' + 'AB'[m.group] : ''}</div>
       <div class="vs"><div><div class="who">${flag(me.country)} ${esc(me.short)}</div><div class="dim">Stärke ${D.overall(me.stats)}</div></div>
       <div class="x">gegen</div>
       <div><div class="who">${flag(opp.country)} ${esc(opp.short)}</div><div class="dim">${def.cat === 'LIGA' ? 'Spieler des anderen Vereins' : T.players[oppId].seed ? 'Nr. ' + T.players[oppId].seed + ' der Setzliste' : 'nicht gesetzt'} · Stärke ${D.overall(opp.stats)}</div></div></div>
-      <div class="center">${ctxT.career && def.cat !== 'LIGA' ? `<button data-a="tagAnlage">🚶 Erst auf die Anlage <small>${career.tag ? `noch ${TT.freieFenster(career)} Zeitfenster` : `${TT.fensterVon(def)} Zeitfenster vor dem Match`}</small></button> ` : ''}<button class="primary" data-a="tourPlay">Match spielen ›</button></div></div>`;
+      <div class="center">${mitLeben() && def.cat !== 'LIGA' ? `<button data-a="tagAnlage">🚶 Erst auf die Anlage <small>${lebenC().tag ? `noch ${TT.freieFenster(lebenC())} Zeitfenster` : `${TT.fensterVon(def)} Zeitfenster vor dem Match`}</small></button> ` : ''}<button class="primary" data-a="tourPlay">Match spielen ›</button></div></div>`;
   } else {
     top = `<div class="panel center"><p>${T.humanId ? 'Du bist ausgeschieden.' : 'Du spielst dieses Turnier nicht mit.'}</p>
       <button class="primary" data-a="tourSim">Turnier zu Ende spielen lassen</button></div>`;
@@ -607,12 +615,16 @@ actions.tourPlay = () => {
   const oppId = m.a === T.humanId ? m.b : m.a;
   const roundIdx = T.rounds.length;
   startMatch({
-    me: getPlayer(T.humanId), opp: getPlayer(oppId), def, title: def.cat === 'LIGA' ? def.name : `${def.name} · ${D.ROUND_NAMES[TN.currentLabel(T)]}`,
+    me: ctxT.season ? ichJetzt(oppId) : getPlayer(T.humanId), opp: getPlayer(oppId), def, title: def.cat === 'LIGA' ? def.name : `${def.name} · ${D.ROUND_NAMES[TN.currentLabel(T)]}`,
     finale: def.cat !== 'LIGA' && TN.currentLabel(T) === 'F',
     onEnd: (res) => {
       TN.playRound(T, { winner: res.won ? T.humanId : oppId, score: res.score, setDiff: res.setDiff });
-      if (ctxT.season) SE.saveSeason(season);
       let danach = renderTournament;
+      if (ctxT.season) {
+        // Saison: müde werden, Bilanz gegen diesen Gegner, Rivalen-Duell, Erfahrung (profisaison.js)
+        const r = PS.matchGespielt(season, res.won, oppId, roundIdx);
+        if (r.ups) danach = () => showInfo('Level ' + season.profi.level + '!', 'Dein Profi hat dazugelernt. Verteile die neuen Fähigkeitspunkte im Saison-Menü unter „Fähigkeiten & Körper“.', 'tourShow');
+      }
       if (ctxT.career) {
         // Müde werden, Saiten abnutzen, Erfahrung sammeln
         const ups = CA.matchGespielt(career, res.won, roundIdx);
@@ -627,7 +639,7 @@ actions.tourPlay = () => {
 };
 actions.tourShow = () => renderTournament();
 actions.abend = (v) => {
-  const r = TT.abend(career, v);
+  const r = TT.abend(lebenC(), v);
   if (!r) return renderTournament();
   showInfo(TT.ABEND[v].name, `${r.text}<br><b class="gold">${r.bringt.join(' · ')}</b>`, 'tourShow');
 };
@@ -665,8 +677,8 @@ function anlageZeigen() {
   let unten = `<p class="dim">${hilfe}</p>`, zeit = '';
   if (anlageTag) {
     // Der Tag vor dem Match: oben steht, wie viel Zeit noch ist
-    const frei = TT.freieFenster(career);
-    zeit = `<span class="zeit">${esc(anlageTag.def.name)} · ${TT.fensterName(career)} · ${frei ? `noch ${frei} Zeitfenster` : 'dein Match beginnt gleich'} · Frische ${Math.round(career.frische)}</span>`;
+    const frei = TT.freieFenster(lebenC());
+    zeit = `<span class="zeit">${esc(anlageTag.def.name)} · ${TT.fensterName(lebenC())} · ${frei ? `noch ${frei} Zeitfenster` : 'dein Match beginnt gleich'} · Frische ${Math.round(lebenC().frische)}</span>`;
     const court = A.orte.find((o) => o.id === 'court');
     unten = `<p class="dim">${frei ? 'Such dir aus, was du vor dem Match machst. Für alles reicht die Zeit nicht!' : `Die Zeit ist um. Geh zum <b>${esc(court ? court.name : 'Centre Court')}</b> – dort wartet dein Match.`}</p>`;
   }
@@ -687,7 +699,7 @@ function anlageZeigen() {
     wohin = `<div class="wohin"><span class="dim">Hinlaufen:</span> ${A.orte.filter((o) => !o.info && o.id !== 'hotel').map(knopf).join('')}${infos.map(knopf).join('')}</div>
       <p class="dim klein">📒 Stempelheft: ${infos.filter((o) => hab.includes(o.name)).length} von ${infos.length} Orten entdeckt${infos.length && infos.every((o) => hab.includes(o.name)) ? ' – alle gefunden! ⭐' : ''}${A.ball ? ' · 🟡 Irgendwo liegt heute ein goldener Glücksball …' : ''}</p>`;
   }
-  const E = anlageTag ? TT.ereignis(career) : null;
+  const E = anlageTag ? TT.ereignis(lebenC()) : null;
   if (E) {
     // Heute ist etwas Besonderes passiert: erst entscheiden, dann geht der Tag weiter
     unten = `<h3>${E.bild} Heute Morgen …</h3><p>${esc(E.text)}</p><div class="row">${E.wahl.map((w, i) => `<button class="${i ? '' : 'primary'}" data-a="tagEreignis" data-v="${i}">${esc(w[0])}</button>`).join('')}</div>`;
@@ -712,20 +724,20 @@ function anlageZeigen() {
       unten = `<h3>${esc(ort.name)}</h3><p>Erst nach dem Match geht es zurück ins Hotel.</p>`;
     } else if (anlageTag && T && T.spiel) {
       // Trainingsplatz: zwei Übungen zur Auswahl, jede ist ein kleines Spiel
-      const k = TT.kann(career, ort.id, anlageTag.def);
+      const k = TT.kann(lebenC(), ort.id, anlageTag.def);
       unten = `<h3>${esc(ort.name)}</h3>` + (k.ok ? `<p>Je besser du triffst, desto mehr Pluspunkte hast du im Match. Braucht 1 Zeitfenster.</p><div class="row">${Object.entries(TT.UEBUNGEN).map(([id, U]) =>
         `<button class="primary" data-a="anlageUeben" data-v="${id}">${U.name} <small>${U.kurz}</small></button>`).join('')}</div>` : `<p>${k.warum}</p>`);
     } else if (anlageTag && T && T.wahl) {
       // Restaurant und Presse: Du suchst dir selbst eine Antwort aus
-      const k = TT.kann(career, ort.id, anlageTag.def);
-      const wahl = T.wahl === 'essen' ? TT.ESSEN.map((e) => e.name) : TT.FRAGEN[career.tag.frage || 0].antworten.map((a) => '„' + a[1] + '“');
-      unten = `<h3>${esc(ort.name)}</h3>` + (k.ok ? `<p>${T.wahl === 'essen' ? esc(T.text) : `Ein Reporter fragt: <b>„${esc(TT.FRAGEN[career.tag.frage || 0].frage)}“</b>`} <span class="dim">Braucht 1 Zeitfenster.</span></p>
+      const k = TT.kann(lebenC(), ort.id, anlageTag.def);
+      const wahl = T.wahl === 'essen' ? TT.ESSEN.map((e) => e.name) : TT.FRAGEN[lebenC().tag.frage || 0].antworten.map((a) => '„' + a[1] + '“');
+      unten = `<h3>${esc(ort.name)}</h3>` + (k.ok ? `<p>${T.wahl === 'essen' ? esc(T.text) : `Ein Reporter fragt: <b>„${esc(TT.FRAGEN[lebenC().tag.frage || 0].frage)}“</b>`} <span class="dim">Braucht 1 Zeitfenster.</span></p>
         <div class="${T.wahl === 'essen' ? 'row' : 'spalte'}">${wahl.map((w, i) => `<button data-a="anlageWahl" data-v="${ort.id}:${i}">${esc(w)}</button>`).join('')}</div>` : `<p>${k.warum}</p>`);
     } else if (anlageTag && T && T.kraft) {
-      const k = TT.kann(career, ort.id, anlageTag.def);
+      const k = TT.kann(lebenC(), ort.id, anlageTag.def);
       unten = `<h3>${esc(ort.name)}</h3>` + (k.ok ? `<p>${ort.text}</p><button class="primary" data-a="kraftStart">${T.name} <small>${TT.KRAFT_SPIEL.wdh} Wiederholungen · braucht 1 Zeitfenster</small></button>` : `<p>${k.warum}</p>`);
     } else if (anlageTag && T) {
-      const k = TT.kann(career, ort.id, anlageTag.def);
+      const k = TT.kann(lebenC(), ort.id, anlageTag.def);
       unten = `<h3>${esc(ort.name)}</h3>` + (k.ok ? `<p>${ort.text}</p><button class="primary" data-a="anlageTun" data-v="${ort.id}">${T.name} <small>braucht 1 Zeitfenster</small></button>` : `<p>${k.warum}</p>`);
     }
   }
@@ -757,16 +769,16 @@ function anlageStart(ich, woher, ergebnis = null) {
     if (ort && ort.info && G && !stempelVon(G).includes(ort.name)) {
       stempel[G.name] = [...stempelVon(G), ort.name];
       try { localStorage.setItem(STEMPEL_KEY, JSON.stringify(stempel)); } catch (e) { /* voller Speicher: dann eben ohne Stempel */ }
-      anlageErgebnis = { ort: ort.id, text: ort.text, bringt: ['📒 Neuer Stempel im Heft!', ...(anlageTag ? TT.entdeckt(career) : [])] };
+      anlageErgebnis = { ort: ort.id, text: ort.text, bringt: ['📒 Neuer Stempel im Heft!', ...(anlageTag ? TT.entdeckt(lebenC()) : [])] };
     }
     if (!ort || ort.id !== 'kraft') kraftEnde();           // wer aus dem Kraftraum weggeht, bricht das Training ab
     anlageZeigen();
   };
   game.anlage.start(woher, anlageGelaende());
   // Der Glücksball: in der Karriere einer pro Turniertag, beim freien Herumlaufen immer einer
-  if (!anlageTag || !TT.ballGefunden(career)) game.anlage.ballLegen();
+  if (!anlageTag || !TT.ballGefunden(lebenC())) game.anlage.ballLegen();
   game.anlage.wennBall = () => {
-    const bringt = anlageTag ? TT.gluecksball(career) || [] : [];
+    const bringt = anlageTag ? TT.gluecksball(lebenC()) || [] : [];
     anlageMeldung = { text: '🟡 Du hast den goldenen Glücksball gefunden! ' + (anlageTag ? 'Mit so einem Glücksbringer in der Tasche gehst du ganz ruhig ins Match.' : 'In der Karriere bringt er dir Glück für das Match des Tages.'), bringt };
     anlageZeigen();
   };
@@ -782,31 +794,31 @@ function anlageSchluss() { kraftEnde(); anlageMeldung = null; game.anlage.ende()
 actions.anlage = () => { anlageTag = null; anlageListe = false; anlageStart(career ? CA.mePlayer(career) : D.PLAYERS[0]); };
 // In der Karriere: der Tag vor dem Match. Wer schon auf der Anlage war und zurückkommt, macht dort weiter.
 actions.tagAnlage = () => {
-  if (!ctxT || !ctxT.career) return;
-  if (!career.tag) TT.tagStart(career, ctxT.def);
+  if (!mitLeben()) return;
+  if (!lebenC().tag) TT.tagStart(lebenC(), ctxT.def);
   anlageTag = { def: ctxT.def };
-  anlageStart(CA.mePlayer(career));
+  anlageStart(ichJetzt());
 };
 actions.anlageTun = (v) => {
   if (!anlageTag) return;
-  const bringt = TT.tun(career, v, anlageTag.def);
+  const bringt = TT.tun(lebenC(), v, anlageTag.def);
   if (bringt) anlageErgebnis = { ort: v, text: TT.TAETIGKEITEN[v].text, bringt };
   anlageZeigen();
 };
 // Ein Zufall am Morgen: Antwort wählen
-actions.tagEreignis = (v) => { if (anlageTag) anlageMeldung = TT.ereignisWahl(career, +v); anlageZeigen(); };
+actions.tagEreignis = (v) => { if (anlageTag) anlageMeldung = TT.ereignisWahl(lebenC(), +v); anlageZeigen(); };
 // Restaurant und Presse: v = 'ort:nummer'
 actions.anlageWahl = (v) => {
   if (!anlageTag) return;
   const [ort, nr] = String(v).split(':');
-  const bringt = TT.tun(career, ort, anlageTag.def, { wahl: +nr });
+  const bringt = TT.tun(lebenC(), ort, anlageTag.def, { wahl: +nr });
   if (bringt) anlageErgebnis = { ort, text: bringt[0], bringt: bringt.slice(1) };
   anlageZeigen();
 };
 // Kraftraum-Spiel starten, und: der Knopf „Jetzt heben!“
 function kraftRunde() { kraftSpiel.mitte = 0.3 + Math.random() * 0.4; kraftSpiel.start = performance.now(); }
 actions.kraftStart = () => {
-  if (!anlageTag || !TT.kann(career, 'kraft', anlageTag.def).ok) return;
+  if (!anlageTag || !TT.kann(lebenC(), 'kraft', anlageTag.def).ok) return;
   kraftEnde();
   kraftSpiel = { n: 0, treffer: 0, letzter: null, uhr: setInterval(() => { const z = document.getElementById('kraftzeiger'); if (z && kraftSpiel) z.style.left = kraftZeiger() * 100 + '%'; }, 30) };
   kraftRunde();
@@ -821,7 +833,7 @@ actions.kraftDruck = () => {
   if (kraftSpiel.n >= K.wdh) {
     const treffer = kraftSpiel.treffer;
     kraftEnde();
-    const bringt = TT.tun(career, 'kraft', anlageTag.def, { treffer });
+    const bringt = TT.tun(lebenC(), 'kraft', anlageTag.def, { treffer });
     if (bringt) anlageErgebnis = { ort: 'kraft', text: bringt[0], bringt: bringt.slice(1) };
   } else kraftRunde();
   anlageZeigen();
@@ -829,19 +841,19 @@ actions.kraftDruck = () => {
 // Minispiel auf dem Trainingsplatz: Ballmaschine oder Aufschlag. Danach geht es zurück auf die Anlage.
 actions.anlageUeben = (v) => {
   const U = TT.UEBUNGEN[v];
-  if (!anlageTag || !U || !TT.kann(career, 'training', anlageTag.def).ok) return;
+  if (!anlageTag || !U || !TT.kann(lebenC(), 'training', anlageTag.def).ok) return;
   const def = anlageTag.def, trainer = { ...D.PLAYERS[59], name: 'Trainer', short: 'Trainer' };
   anlageSchluss();
   startMatch({
-    me: CA.mePlayer(career), opp: trainer, def, mode: U.modus, balls: U.baelle, title: U.name,
+    me: ichJetzt(), opp: trainer, def, mode: U.modus, balls: U.baelle, title: U.name,
     onEnd: (res) => {
       let ergebnis = null;
       // Wer abbricht, hat das Zeitfenster noch nicht verbraucht
       if (!res.aborted) {
-        const bringt = TT.tun(career, 'training', def, { uebung: v, punkte: res.training.score });
+        const bringt = TT.tun(lebenC(), 'training', def, { uebung: v, punkte: res.training.score });
         if (bringt) ergebnis = { ort: 'training', text: `${res.training.score} von ${U.baelle * TT.PUNKTE_PRO_BALL} Punkten. ${bringt[0]}`, bringt: bringt.slice(1) };
       }
-      anlageStart(CA.mePlayer(career), 'training', ergebnis);
+      anlageStart(ichJetzt(), 'training', ergebnis);
     },
   });
 };
@@ -878,13 +890,13 @@ function ehrungZeigen() {
   else if (schritt === 'scheck') html = `<p>Dazu gibt es den großen Scheck: <b class="gold">${money(e.geld)}</b> Preisgeld.</p>${weiter()}`;
   else if (schritt === 'rede' && !e.rede) {
     html = `<p>Jetzt bekommst du das Mikrofon. Was sagst du?</p><div class="row">${Object.entries(CA.REDEN).map(([k, r]) =>
-      `<button data-a="ehrungRede" data-v="${k}">${r.knopf}${ctxT.career ? `<small>${r.bringt}</small>` : ''}</button>`).join('')}</div>`;
+      `<button data-a="ehrungRede" data-v="${k}">${r.knopf}${mitLeben() ? `<small>${r.bringt}</small>` : ''}</button>`).join('')}</div>`;
   } else if (schritt === 'rede') {
     const r = CA.REDEN[e.rede];
-    html = `<p>„${r.satz}“</p><p class="dim">Die Zuschauer klatschen.${ctxT.career ? ' ' + r.bringt : ''}</p>${weiter('Zum Siegerfoto ›')}`;
+    html = `<p>„${r.satz}“</p><p class="dim">Die Zuschauer klatschen.${mitLeben() ? ' ' + r.bringt : ''}</p>${weiter('Zum Siegerfoto ›')}`;
   } else if (schritt === 'foto' && !e.fertig) html = `<p>Die Fotografen warten. Bitte lächeln!</p><button class="primary" data-a="ehrungFoto">📸 Foto machen</button>`;
   else {
-    html = `${e.foto ? `<img class="siegerfoto" src="${e.foto}" alt="Siegerfoto">` : ''}<p>${ctxT.career ? 'Das Foto steht jetzt in deinem Pokalschrank (Karriere-Menü).' : 'Ein schönes Foto!'}</p>
+    html = `${e.foto ? `<img class="siegerfoto" src="${e.foto}" alt="Siegerfoto">` : ''}<p>${ctxT.career ? 'Das Foto steht jetzt in deinem Pokalschrank (Karriere-Menü).' : ctxT.season ? 'Das Foto steht jetzt in deinem Pokalschrank (Saison-Menü → Team & Sponsoren).' : 'Ein schönes Foto!'}</p>
       <button class="primary" data-a="ehrungEnde">Weiter ›</button>`;
   }
   const ueberspringen = e.fertig ? '' : '<button class="ghost klein" data-a="ehrungEnde">Überspringen</button>';
@@ -895,7 +907,7 @@ actions.ehrungWeiter = () => { game.ehrung.weiter(); ehrungZeigen(); };
 actions.ehrungRede = (v) => {
   if (!CA.REDEN[v]) return;
   ehrung.rede = v;
-  if (ctxT.career) CA.siegerRede(career, v);
+  if (mitLeben()) CA.siegerRede(lebenC(), v);
   game.ehrung.jubeln(0.8);
   ehrungZeigen();
 };
@@ -913,6 +925,7 @@ actions.ehrungEnde = () => {
   if (!e) return;
   // In der Karriere kommt jeder Turniersieg in den Pokalschrank – auch wenn die Ehrung übersprungen wurde (dann ohne Foto)
   if (ctxT.career) CA.pokalMerken(career, e.def, e.art, e.foto);
+  if (ctxT.season) PS.pokalMerken(season, e.def, e.art, e.foto);
   ehrung = null;
   game.ehrung.ende();
   ehrungEl.classList.remove('on');
@@ -1436,14 +1449,19 @@ actions.careerDelete = (v, el) => {
 // ---------------------------------------------------------------
 // Saison: mit einem echten Profi durchs Jahr, Punkte sammeln fürs ATP Race
 // ---------------------------------------------------------------
+// Dazu kommt das „Profileben“ aus profisaison.js: Punkte verteidigen, Erwartungen, Sponsoren-Ziele, Rivalen,
+// Zeitung, Team, Körper und die Wochen zwischen den Turnieren.
 const pickS = { me: 'zverev', page: 0 };
 let saisonTab = 'start';
+let zwTraining = false;      // ist die Auswahl „Woran trainierst du?“ gerade aufgeklappt?
+let zwMeldung = null;        // was die letzte Auswahl zwischen den Turnieren gebracht hat: { name, bringt }
+const SAISON_TABS = ['start', 'zeitung', 'team', 'profi', 'race', 'welt', 'punkte'];
 
 actions.saison = (v) => {
   if (!season) return renderSeasonPick();
   // Läuft gerade ein Turnier? Dann geht es dort weiter. (Über „‹ Zurück“ im Turnier kommt man mit v = 'start' zur Übersicht.)
   if (season.tournament && !v) return showSeasonTournament();
-  if (['start', 'race', 'punkte'].includes(v)) saisonTab = v;
+  if (SAISON_TABS.includes(v)) saisonTab = v;
   enterMenu();
   renderSeason();
 };
@@ -1457,6 +1475,9 @@ function renderSeasonPick() {
     <div class="bar">${back()}<h2>Neue Saison</h2><button class="primary" data-a="saisonNeu">Saison starten ›</button></div>
     <p class="dim">Such dir einen Profi aus. Mit ihm spielst du alle 4 Grand Slams und 9 Masters-Turniere.
     Für jedes Ergebnis gibt es Punkte im ATP Race. Schaffst du es unter die besten 8, darfst du zu den ATP Finals!</p>
+    <p class="dim">Dein Profi hat schon alles: Trainer, Physio, Sponsoren und Fans. Dafür <b>erwarten</b> alle etwas von ihm:
+    Er muss die Punkte vom letzten Jahr verteidigen, die Ziele der Sponsoren schaffen und sich gegen seine Rivalen behaupten.
+    Je weiter vorn dein Profi steht, desto größer ist der Druck – mit einem Spieler von weiter hinten kannst du dafür alle überraschen.</p>
     <div class="panel"><h3 style="margin-top:0">Dein Profi: ${esc(getPlayer(pickS.me).name)}</h3>${pageTabs('saisonSeite', pickS.page)}
       <div class="grid">${pagePlayers(pickS.page).map((p) => playerCard(p, 'saisonWahl', pickS.me === p.id)).join('')}</div></div>
     <button class="primary" data-a="saisonNeu">Saison starten ›</button>`);
@@ -1464,56 +1485,182 @@ function renderSeasonPick() {
 actions.saisonSeite = (v) => { pickS.page = +v; keepScroll(renderSeasonPick); };
 actions.saisonWahl = (v) => { pickS.me = v; keepScroll(renderSeasonPick); };
 actions.saisonNeu = () => {
-  season = SE.newSeason(pickS.me);
+  season = PS.einrichten(SE.newSeason(pickS.me));
   SE.saveSeason(season);
-  saisonTab = 'start';
+  saisonTab = 'start'; zwMeldung = null; zwTraining = false;
   renderSeason();
 };
 
+// Ein Balken von 0 bis 100 % (farbe: grün, gelb oder rot)
+const balken = (anteil, farbe) => `<i class="frische"><b style="width:${Math.round(100 * Math.max(0, Math.min(1, anteil)))}%;background:${farbe}"></b></i>`;
+const MUT_NAMEN = ['am Boden', 'verunsichert', 'etwas wacklig', 'normal', 'gut drauf', 'sehr stark', 'unschlagbar'];
+const mutText = (P) => MUT_NAMEN[P.mut + PS.MUT_MAX];
+const druckText = (P) => (P.druck >= PS.DRUCK_SEHR_HOCH ? 'riesig' : P.druck >= PS.DRUCK_HOCH ? 'hoch' : P.druck >= 35 ? 'normal' : 'gering');
+const ampel = (gut) => (gut > 0.66 ? '#7ae89a' : gut > 0.33 ? '#ffd166' : '#ff8a7a');
+const formListe = (liste) => (liste.length ? `<table class="form">${liste.map((e) => `<tr><td>${esc(e.name)}</td><td class="num ${Object.values(e.bonus).some((n) => n < 0) ? 'minus' : 'plus'}">${bonusText(e.bonus)}</td></tr>`).join('')}</table>`
+  : '<p class="dim klein">Gerade wirkt nichts Besonderes. Dein Profi spielt mit seinen normalen Werten.</p>');
+
+// Der Kasten über dem Match in der Turnier-Ansicht: Rivalen-Duell, Bilanz, Erwartung, Form
+function saisonVorMatch(oppId) {
+  const s = season, P = s.profi, def = ctxT.def, opp = D.playerById(oppId), b = P.h2h[oppId] || [0, 0];
+  const rivale = P.rivalen.includes(oppId), E = P.vorher ? P.vorher.erwartet : null;
+  return `<div class="panel ${rivale ? 'duell' : ''}">
+    ${rivale ? `<h3 style="margin-top:0">⚔️ Rivalen-Duell gegen ${esc(opp.name)}!</h3><p class="dim">Die ganze Tenniswelt schaut zu. Ein Sieg gibt Selbstvertrauen – eine Niederlage steht morgen groß in der Zeitung.</p>` : ''}
+    <div class="kpi">
+      <div><b>${b[0]} : ${b[1]}</b><span>deine Bilanz gegen ${esc(opp.short)}${b[0] - b[1] >= 1 ? ' · Lieblingsgegner' : b[1] - b[0] >= 1 ? ' · Angstgegner' : ''}</span></div>
+      <div><b>${Math.round(P.frische)} %</b><span>Frische</span>${balken(P.frische / 100, ampel(P.frische / 100))}</div>
+      <div><b>${mutText(P)}</b><span>Selbstvertrauen</span></div>
+      <div><b>${E ? D.ROUND_NAMES[E] || E : '–'}</b><span>erwartet wird mindestens</span></div>
+    </div>
+    <details><summary>Was heute im Match wirkt</summary>${formListe(PS.bonusListe(s, def, oppId))}</details></div>`;
+}
+
 function renderSeason() {
-  const s = season, me = SE.seasonPlayer(s), ich = SE.myRace(s), def = SE.nextTournament(s);
+  const s = season, P = s.profi, me = SE.seasonPlayer(s), ich = SE.myRace(s), def = SE.nextTournament(s);
   const table = SE.raceTable(s);
   const achter = table[SE.FINALS_PLAETZE - 1], neunter = table[SE.FINALS_PLAETZE];
   const dabei = SE.qualified(s);
+  const platz = PS.weltPlatz(s);
   // Wie weit ist es bis zur Finals-Linie (Platz 8)?
   const abstand = ich.rank <= SE.FINALS_PLAETZE ? `${(ich.points - neunter.points).toLocaleString('de-DE')} P. vor Platz 9` : `${(achter.points - ich.points).toLocaleString('de-DE')} P. bis Platz 8`;
-  const tabs = [['start', 'Saison'], ['race', 'ATP Race'], ['punkte', 'Punkte-Regeln']];
+  const tabs = [['start', 'Saison'], ['zeitung', 'Zeitung & Rivalen'], ['team', 'Team & Sponsoren'], ['profi', 'Fähigkeiten & Körper' + (P.skillPoints >= PS.PLUS_KOSTET ? ' ●' : P.koerper || P.verletzung ? ' 🩹' : '')], ['race', 'ATP Race'], ['welt', 'Weltrangliste'], ['punkte', 'Punkte-Regeln']];
+  const ziele = (liste) => `<table class="ziele">${liste.map((z) => { const st = z.ok != null ? z : { ...z, ...PS.zielStand(s, z) };
+    return `<tr><td>${st.ok ? '✅' : '⬜'}</td><td><b>${esc(z.text)}</b><br><small class="dim">${esc(st.stand)}</small></td><td class="num gold">${money(z.geld)}</td></tr>`; }).join('')}</table>`;
   let body = '';
   if (saisonTab === 'start') {
-    let next;
+    let next, zwischen = '';
     if (s.over) {
-      const sieger = s.history[s.history.length - 1];
+      const sieger = s.history[s.history.length - 1], J = PS.jahresBilanz(s);
       next = `<div class="panel center"><h2 class="gold">Saison ${s.year} beendet</h2>
-        <p>Du beendest das Jahr auf <b>Platz ${ich.rank}</b> im ATP Race mit <b>${ich.points.toLocaleString('de-DE')} Punkten</b> und ${s.titles} Titel${s.titles === 1 ? '' : 'n'}.</p>
+        <p>Du beendest das Jahr auf <b>Platz ${ich.rank}</b> im ATP Race mit <b>${ich.points.toLocaleString('de-DE')} Punkten</b> und ${s.titles} Titel${s.titles === 1 ? '' : 'n'}.
+        In der Weltrangliste: <b>Platz ${J.platz}</b> <span class="${J.platz < J.startPlatz ? 'plus' : J.platz > J.startPlatz ? 'minus' : 'dim'}">(Start: Platz ${J.startPlatz})</span>.</p>
         <p class="dim">ATP-Finals-Sieger: ${esc(sieger.champion)}</p>
-        <button class="primary" data-a="saisonEnde">Neue Saison starten ›</button></div>`;
+        <h3>Die Ziele deiner Sponsoren: ${'⭐'.repeat(J.geschafft)}${'☆'.repeat(J.ziele.length - J.geschafft)}</h3>${ziele(J.ziele)}
+        <table class="rechnung"><tr><td>Preisgeld</td><td class="num plus">+ ${money(J.bilanz.preis)}</td></tr><tr><td>Sponsoren</td><td class="num plus">+ ${money(J.bilanz.sponsor)}</td></tr>
+          ${J.bilanz.praemie ? `<tr><td>Prämien für geschaffte Ziele</td><td class="num plus">+ ${money(J.bilanz.praemie)}</td></tr>` : ''}
+          <tr><td>Trainer und Physio</td><td class="num minus">− ${money(J.bilanz.team)}</td></tr><tr><td>Reisen</td><td class="num minus">− ${money(J.bilanz.reise)}</td></tr>
+          <tr class="summe"><td>Dieses Jahr verdient</td><td class="num ${J.gewinn >= 0 ? 'plus' : 'minus'}">${J.gewinn >= 0 ? '+' : '−'} ${money(Math.abs(J.gewinn))}</td></tr></table>
+        <div class="row" style="justify-content:center"><button class="primary" data-a="saisonWeiterJahr">Weiter mit ${esc(me.short)} ins Jahr ${s.year + 1} › <small>Jetzt musst du deine eigenen Punkte verteidigen</small></button>
+        <button data-a="saisonEnde">Anderen Profi wählen</button></div></div>`;
     } else {
       const finals = def.cat === 'F';
       const laeuft = !!s.tournament;
+      const V = PS.verteidigen(s, def), E = PS.erwartung(s, def), K = PS.kosten(s), G = PS.sponsorGeld(s);
+      const vorSieger = D.playerById(s.vorjahrSieger[def.id]);
+      const verletzt = PS.istVerletzt(s) && !finals;
+      // Die Wochen bis zum nächsten Turnier: Was machst du? (nur solange das Turnier noch nicht läuft)
+      const offen = laeuft ? 0 : PS.zwischenOffen(s), Z = P.zwischen;
+      if (Z && !laeuft && (offen || zwMeldung)) {
+        const knopf = ([id, A]) => `<button data-a="saisonZw" data-v="${id}" ${Z.getan.includes(id) ? 'disabled' : ''}>${A.name} <small>${A.bringt}</small></button>`;
+        zwischen = `<div class="panel zwischen"><h3 style="margin-top:0">🗓️ ${Z.frei === 1 ? 'Eine freie Woche' : Z.frei + ' freie Wochen'} bis ${esc(def.name)}</h3>
+          ${zwMeldung ? `<p><b>${zwMeldung.name}:</b> <span class="gold">${zwMeldung.bringt.join(' · ')}</span></p>` : ''}
+          ${offen ? `<p class="dim">Ein bisschen erholt sich dein Profi von allein. Du kannst noch <b>${offen === 1 ? 'eine Sache' : offen + ' Dinge'}</b> tun – oder gleich zum Turnier fahren.</p>
+            ${zwTraining ? `<p>Woran arbeitest du im Trainingsblock?</p><div class="row">${Object.entries(D.STAT_NAMES).map(([k, n]) => `<button data-a="saisonZw" data-v="training:${k}">${n} <small>${Math.round(me.stats[k] + P.plus[k])}</small></button>`).join('')}</div>`
+              : `<div class="row">${Object.entries(PS.ZWISCHEN).map(knopf).join('')}</div>`}` : '<p class="dim">Die freie Zeit ist verplant. Auf zum Turnier!</p>'}</div>`;
+      }
+      const alt = V.punkte ? `Letztes Jahr: <b>${V.titel ? '🏆 Turniersieg' : D.ROUND_NAMES[V.label] || ''}</b> – du musst <b>${V.punkte.toLocaleString('de-DE')} Punkte verteidigen</b>.` : 'Letztes Jahr hast du hier keine Punkte geholt. Du kannst nur gewinnen!';
       next = `<div class="panel"><div class="dim">${laeuft ? 'Läuft gerade' : 'Als Nächstes'}</div>
         <h2 style="margin:6px 0">${def.name}</h2>
         <p>${catTag(def)} · ${def.city} · ${def.month} · ${D.SURFACE_NAMES[def.surface]}</p>
         <p class="dim">${finals ? 'Nur die besten 8 im Race. ' + (dabei ? 'Du bist dabei!' : 'Du hast es diesmal nicht geschafft – du kannst zuschauen.')
-          : def.draw + ' Spieler · Sieger: ' + def.points.W.toLocaleString('de-DE') + ' Punkte'}</p>
-        <div class="row"><button class="primary" data-a="${laeuft ? 'saisonWeiter' : 'saisonPlay'}">${laeuft ? 'Weiter im Turnier ›' : !finals || dabei ? 'Turnier spielen ›' : 'Turnier ansehen ›'}</button>
-        ${!laeuft && !finals ? '<button data-a="saisonSkip">Auslassen</button>' : ''}</div></div>`;
+          : def.draw + ' Spieler · Sieger: ' + def.points.W.toLocaleString('de-DE') + ' Punkte'}${vorSieger ? ` · Titelverteidiger: ${V.titel ? '<b class="gold">du!</b>' : esc(vorSieger.short)}` : ''}</p>
+        ${finals && !dabei ? '' : `<p>🛡️ ${alt}</p><p>🎯 ${E.text}</p>
+          <p class="dim klein">Kosten für Team und Reise: ${money(K.summe)} · Sponsoren zahlen: ${money(G.summe)}${P.vertrag.schlaeger && P.vertrag.kleidung ? '' : ' · <b class="minus">Du hast noch nicht beide Ausrüster gewählt (Team & Sponsoren) – so verschenkst du Geld!</b>'}</p>`}
+        ${verletzt ? `<div class="verletzt"><b>🚑 Verletzt: ${esc(P.verletzung.name)}</b><br>Noch etwa ${P.verletzung.wochen} ${P.verletzung.wochen === 1 ? 'Woche' : 'Wochen'} Pause. Dieses Turnier findet ohne dich statt${V.punkte ? ` – die ${V.punkte.toLocaleString('de-DE')} Punkte vom letzten Jahr sind weg` : ''}.</div>` : ''}
+        ${P.koerper && !verletzt ? `<p class="minus">🩹 Beschwerden: ${esc(P.koerper.teil)}. Urlaub, der Physio auf der Anlage oder ein ausgelassenes Turnier heilen das. Wer einfach weiterspielt, riskiert eine Verletzung.</p>` : ''}
+        <div class="row"><button class="primary" data-a="${laeuft ? 'saisonWeiter' : verletzt ? 'saisonSkip' : 'saisonPlay'}">${laeuft ? 'Weiter im Turnier ›' : verletzt ? 'Turnier ohne dich ansehen ›' : !finals || dabei ? 'Turnier spielen ›' : 'Turnier ansehen ›'}</button>
+        ${!laeuft && !finals && !verletzt ? `<button data-a="saisonSkip">Auslassen <small>${V.punkte ? `−${V.punkte.toLocaleString('de-DE')} Punkte · ` : ''}viel Erholung · Sponsoren murren</small></button>` : ''}</div></div>`;
     }
     body = `${timelineHtml(s)}
       <div class="cols">
-        <div>${next}
+        <div>${zwischen}${next}
           <div class="panel"><div class="kpi vier">
-            <div><b>${ich.rank}.</b><span>ATP Race</span></div>
-            <div><b>${ich.points.toLocaleString('de-DE')}</b><span>Punkte</span></div>
+            <div><b>${platz}.</b><span>Weltrangliste <span class="${platz < P.startPlatz ? 'plus' : platz > P.startPlatz ? 'minus' : ''}">(Start: ${P.startPlatz}.)</span></span></div>
+            <div><b>${ich.rank}.</b><span>ATP Race · ${ich.points.toLocaleString('de-DE')} Punkte</span></div>
             <div><b class="${dabei ? 'gold' : ''}">${dabei ? '✓ dabei' : 'noch nicht'}</b><span>ATP Finals · ${abstand}</span></div>
-            <div><b>${s.titles}</b><span>Titel</span></div>
+            <div><b>${s.titles}</b><span>Titel${s.titelGesamt ? ` · ${s.titelGesamt + s.titles} insgesamt` : ''}</span></div>
+          </div>
+          <div class="kpi vier" style="margin-top:10px">
+            <div><b>${mutText(P)}</b><span>Selbstvertrauen</span>${balken((P.mut + PS.MUT_MAX) / (2 * PS.MUT_MAX), ampel((P.mut + PS.MUT_MAX) / (2 * PS.MUT_MAX)))}</div>
+            <div><b>${druckText(P)}</b><span>Medien-Druck</span>${balken(P.druck / 100, ampel(1 - P.druck / 100))}</div>
+            <div><b>${Math.round(P.frische)} %</b><span>Frische</span>${balken(P.frische / 100, ampel(P.frische / 100))}</div>
+            <div><b class="gold">${money(P.money)}</b><span>Konto</span></div>
           </div></div>
+          <div class="panel"><h3 style="margin-top:0">🎯 Ziele deiner Sponsoren für ${s.year}</h3>${ziele(P.ziele)}
+            <p class="dim klein">Die Prämie gibt es am Jahresende für jedes geschaffte Ziel.</p></div>
           <div class="panel">${playerCard(me, 'saison', false)}</div>
         </div>
-        <div class="panel"><h3 style="margin-top:0">ATP Race – Stand</h3>${raceHtml(s, true)}
-          <div class="center" style="margin-top:10px"><button data-a="saison" data-v="race">Ganze Tabelle ›</button></div></div>
+        <div><div class="panel"><h3 style="margin-top:0">📰 Tennis-Zeitung</h3>${zeitungHtml(s, 4)}
+            <div class="center" style="margin-top:10px"><button data-a="saison" data-v="zeitung">Alles lesen ›</button></div></div>
+          <div class="panel"><h3 style="margin-top:0">ATP Race – Stand</h3>${raceHtml(s, true)}
+          <div class="center" style="margin-top:10px"><button data-a="saison" data-v="race">Ganze Tabelle ›</button></div></div></div>
       </div>`;
+  } else if (saisonTab === 'zeitung') {
+    // Rivalen: die zwei, die in der Rangliste neben dir stehen
+    const welt = PS.weltTabelle(s);
+    const rivale = (id) => { const p = D.playerById(id), w = welt.find((x) => x.id === id), b = P.h2h[id] || [0, 0], r = table.find((x) => x.id === id);
+      return `<div class="panel teil duell"><b>⚔️ ${flag(p.country)} ${esc(p.name)}</b><br><small class="dim">Weltrangliste Platz ${w.rank} (${w.points.toLocaleString('de-DE')} P.) · Race Platz ${r.rank}</small>
+        <div class="kpi" style="margin-top:8px"><div><b>${b[0]} : ${b[1]}</b><span>deine Bilanz</span></div><div><b>${w.rank < platz ? '▲ vor dir' : '▼ hinter dir'}</b><span>${Math.abs(w.points - welt.find((x) => x.me).points).toLocaleString('de-DE')} Punkte Abstand</span></div></div></div>`; };
+    const gegner = Object.entries(P.h2h).map(([id, b]) => ({ p: D.playerById(id), b })).filter((x) => x.p).sort((x, y) => (y.b[0] + y.b[1]) - (x.b[0] + x.b[1]) || x.p.rank - y.p.rank).slice(0, 12);
+    body = `<div class="panel"><h3 style="margin-top:0">⚔️ Deine Rivalen</h3>
+        <p class="dim">Diese zwei stehen in der Weltrangliste direkt neben dir. Ein Sieg gegen sie gibt Selbstvertrauen, eine Niederlage macht Druck. Mit „Gegner studieren“ zwischen den Turnieren bereitest du dich auf sie vor.</p>
+        <div class="grid">${P.rivalen.map(rivale).join('')}</div></div>
+      <div class="cols"><div class="panel"><h3 style="margin-top:0">📰 Tennis-Zeitung</h3>${zeitungHtml(s)}
+        <p class="dim klein">Die Meldungen schreibt das Spiel selbst – sie sind ausgedacht.</p></div>
+      <div class="panel"><h3 style="margin-top:0">Deine Bilanz gegen einzelne Spieler</h3>
+        ${gegner.length ? `<table><tr><th>Gegner</th><th class="num">Siege : Niederlagen</th><th></th></tr>${gegner.map(({ p, b }) => `<tr><td>${flag(p.country)} ${esc(p.short)}${P.rivalen.includes(p.id) ? ' ⚔️' : ''}</td><td class="num"><b>${b[0]} : ${b[1]}</b></td>
+          <td class="${b[0] > b[1] ? 'plus' : b[1] > b[0] ? 'minus' : 'dim'}">${b[0] > b[1] ? `Lieblingsgegner (+${Math.min(2, b[0] - b[1])} Mental)` : b[1] > b[0] ? `Angstgegner (−${Math.min(2, b[1] - b[0])} Mental)` : 'ausgeglichen'}</td></tr>`).join('')}</table>` : '<p class="dim">Noch kein Match gespielt.</p>'}
+        <p class="dim klein">Wer gegen jemanden oft verloren hat, geht nervös ins nächste Match. Ein Sieg dreht das wieder um.</p></div></div>`;
+  } else if (saisonTab === 'team') {
+    const S = AU.VERTRAGS_STUFEN[PS.sponsorStufe(platz)], G = PS.sponsorGeld(s), K = PS.kosten(s);
+    const person = (p, aktiv, extra) => `<div class="panel teil"><b>${p.name}</b><br><small class="dim">${p.text}</small><br><small class="gold">${extra}</small><br>
+      <button class="${aktiv ? 'sel' : ''}" data-a="saisonTeam" data-v="${p.id}" style="margin-top:8px">${aktiv ? '✓ In deinem Team' : p.lohn ? 'Einstellen · ' + money(p.lohn) + ' pro Turnier' : 'Auswählen'}</button></div>`;
+    const markenWahl = (art, liste) => `<div class="row">${liste.map((m) => `<button class="${P.vertrag[art] === m ? 'sel' : ''}" data-a="saisonVertrag" data-v="${art}:${m}">${m}</button>`).join('')}</div>`;
+    const reise = Object.entries(AU.REISEN).map(([k, R]) => `<button class="${P.reise === k ? 'sel' : ''}" data-a="saisonReise" data-v="${k}">${R.name} <small>${money(R.fest || PS.REISE_GRUND * R.mal)} · Frische bei der Ankunft ${R.frische > 0 ? '+' : R.frische < 0 ? '−' : '±'}${Math.abs(R.frische)}</small></button>`).join('');
+    const b = P.bilanz;
+    body = `<div class="panel"><h3 style="margin-top:0">Sponsoren</h3>
+        <div class="kpi"><div><b class="gold">${money(G.summe)}</b><span>pro Turnier</span></div><div><b>${PS.fans(s)} ⭐</b><span>Fans (+${PS.fans(s) * AU.FAN_PROZENT} %)</span></div>
+          <div><b>${Math.round(P.gunst)} %</b><span>Laune der Sponsoren (zahlen ${Math.round(100 * PS.gunstMal(s))} %)</span>${balken(P.gunst / 100, ampel(P.gunst / 100))}</div></div>
+        <p class="dim klein">Die Sponsoren sind zufrieden, wenn du weiter kommst als erwartet, Turniere gewinnst und zu ihren Terminen gehst. Früh verlieren und Turniere auslassen mögen sie nicht.</p>
+        <table>${G.posten.map((g) => `<tr><td>✓ <b>${esc(g.name)}</b></td><td class="num">${money(g.geld)}</td></tr>`).join('') || '<tr><td class="dim">Noch kein Sponsor zahlt. Wähle unten deine Ausrüster!</td></tr>'}</table></div>
+      <div class="panel"><h3 style="margin-top:0">Ausrüster</h3>
+        <p>Als Nummer ${platz} der Welt bekommst du einen <b class="gold">${S.name}</b>${S.geld ? `: Jede der zwei Marken zahlt dir etwa <b>${money(S.geld)}</b> pro Turnier.` : '. Geld gibt es dafür aber noch keins.'}
+        <span class="dim">Such dir aus, mit welchen Marken dein Profi im Spiel unterwegs ist. (Das Spiel weiß nicht, was der echte Spieler benutzt.)</span></p>
+        <label>Schläger, Saiten und Tasche von</label>${markenWahl('schlaeger', AU.SCHLAEGER_MARKEN)}
+        <label>Kleidung und Schuhe von</label>${markenWahl('kleidung', AU.KLEIDER_MARKEN)}</div>
+      <div class="panel"><h3 style="margin-top:0">Trainer</h3><p class="dim">Dein Profi hat sein Team schon. Du kannst es umbauen: Ein besserer Trainer bringt mehr Erfahrung, kostet aber bei jedem Turnier – auch wenn du früh verlierst.</p>
+        <div class="grid">${AU.TRAINER.map((t) => person(t, P.trainer === t.id, t.xp > 1 ? `+${Math.round((t.xp - 1) * 100)} % Erfahrung` : 'keine Hilfe')).join('')}</div></div>
+      <div class="panel"><h3 style="margin-top:0">Physio</h3><p class="dim">Der Physio bestimmt, wie viel Frische ein Match kostet und wie schnell du dich zwischen den Turnieren erholst.</p>
+        <div class="grid">${AU.PHYSIOS.map((p) => person(p, P.physio === p.id, `Erholung ${p.erholung} · ein Match kostet etwa ${Math.round(p.last * PS.MATCH_KOSTET)}`)).join('')}</div></div>
+      <div class="panel"><h3 style="margin-top:0">Reisen</h3><p class="dim">Pro Turnier zahlst du zurzeit ${money(K.summe)} für Team und Reise.</p><div class="row">${reise}</div></div>
+      <div class="panel"><h3 style="margin-top:0">Geld in diesem Jahr</h3>
+        <table class="rechnung"><tr><td>Preisgeld</td><td class="num plus">+ ${money(b.preis)}</td></tr><tr><td>Sponsoren</td><td class="num plus">+ ${money(b.sponsor)}</td></tr>
+          <tr><td>Trainer und Physio</td><td class="num minus">− ${money(b.team)}</td></tr><tr><td>Reisen</td><td class="num minus">− ${money(b.reise)}</td></tr>
+          <tr class="summe"><td>Konto</td><td class="num gold">${money(P.money)}</td></tr></table></div>
+      <div class="panel"><h3 style="margin-top:0">🏆 Pokalschrank</h3>${P.pokale.length ? `<div class="grid">${P.pokale.slice().reverse().map((p) => `<div class="panel teil pokalkarte">${p.foto ? `<img src="${p.foto}" alt="Siegerfoto">` : `<div class="ohnefoto">${p.art === 'silber' ? '🏆' : p.art === 'stern' ? '⭐' : '🥇'}</div>`}
+        <b>${esc(p.name)}</b><div class="dim klein">${p.ort ? esc(p.ort) + ' · ' : ''}${p.jahr}</div></div>`).join('')}</div>` : '<p class="dim">Noch leer. Gewinn ein Turnier – dann gibt es eine Siegerehrung und ein Foto für den Schrank.</p>'}</div>`;
+  } else if (saisonTab === 'profi') {
+    const need = CA.xpNeed(P.level);
+    const zeile = ([k, n]) => { const voll = P.plus[k] >= PS.PLUS_MAX || me.stats[k] + P.plus[k] >= 99;
+      return `<tr><td><b>${n}</b><br><small class="dim">${D.STAT_INFO[k] || ''}</small></td><td class="num">${Math.round(me.stats[k])}${P.plus[k] ? ` <b class="plus">+${P.plus[k]}</b>` : ''}</td>
+        <td><button data-a="saisonSkill" data-v="${k}" ${P.skillPoints >= PS.PLUS_KOSTET && !voll ? '' : 'disabled'}>${voll ? 'fertig' : '+1'}</button></td></tr>`; };
+    body = `<div class="cols"><div class="panel"><h3 style="margin-top:0">Fähigkeiten</h3>
+        <p>Level <b>${P.level}</b> · Erfahrung ${P.xp} von ${need} · <b class="gold">${P.skillPoints} Fähigkeitspunkte</b></p>${balken(P.xp / need, '#ffd166')}
+        <p class="dim klein">Dein Profi kann schon fast alles. Mit Matches, Training und dem Tag auf der Anlage lernt er trotzdem noch dazu: +1 kostet ${PS.PLUS_KOSTET} Punkte, höchstens +${PS.PLUS_MAX} je Fähigkeit.</p>
+        <table>${Object.entries(D.STAT_NAMES).map(zeile).join('')}</table></div>
+      <div><div class="panel"><h3 style="margin-top:0">Körper</h3>
+        <p>Frische: <b>${Math.round(P.frische)} %</b></p>${balken(P.frische / 100, ampel(P.frische / 100))}
+        ${P.verletzung ? `<div class="verletzt"><b>🚑 Verletzt: ${esc(P.verletzung.name)}</b><br>Noch etwa ${P.verletzung.wochen} Wochen Pause.<br><b>Warum ist das passiert?</b><ul>${P.verletzung.fehler.map((f) => `<li>${esc(f)}</li>`).join('')}</ul></div>`
+          : P.koerper ? `<p class="minus">🩹 Beschwerden: ${esc(P.koerper.teil)} (−${AB.BESCHWERDEN_ABZUG} auf eine Fähigkeit). Das ist eine Warnung! Urlaub oder der Physio auf der Anlage heilen das.</p>` : '<p class="plus">Alles gesund.</p>'}
+        <p class="dim klein">Jedes Match kostet Frische, am meisten bei Turnieren direkt hintereinander. Unter 70 % wird dein Profi langsamer. Wer müde oder mit Beschwerden weiterspielt, kann sich verletzen und verpasst dann Turniere – und die Punkte vom Vorjahr sind weg.</p></div>
+      <div class="panel"><h3 style="margin-top:0">Was gerade wirkt</h3>${formListe(PS.bonusListe(s, def))}
+        <p class="dim klein">Selbstvertrauen: <b>${mutText(P)}</b> · Medien-Druck: <b>${druckText(P)}</b>. Gegen einzelne Gegner kommt noch deine Bilanz dazu (Zeitung & Rivalen).</p></div></div></div>`;
   } else if (saisonTab === 'race') {
     body = `<div class="panel"><p class="dim" style="margin-top:0">Alle starten im Januar bei 0. Die besten 8 nach dem Paris Masters fahren zu den ATP Finals. 🏆 = hat dieses Jahr einen Grand Slam gewonnen.</p>${raceHtml(s, false)}</div>`;
+  } else if (saisonTab === 'welt') {
+    body = `<div class="panel"><p class="dim" style="margin-top:0">Die Weltrangliste zählt die Punkte der letzten 52 Wochen. Wird ein Turnier wieder gespielt, fällt das Ergebnis vom letzten Jahr weg und das neue kommt dazu.
+      Darum muss man seine Punkte <b>verteidigen</b>: Wer letztes Jahr gewonnen hat und jetzt früh verliert, rutscht ab. ⚔️ = dein Rivale.</p>${weltHtml(s)}
+      <p class="dim klein">Start = die echte Weltrangliste. Die Ergebnisse des Vorjahres bei den einzelnen Turnieren hat der Computer passend dazu ausgerechnet (sie sind nicht die echten). Punkte von kleineren Turnieren bleiben das ganze Jahr gleich.</p></div>`;
   } else {
     body = pointsHtml();
   }
@@ -1523,30 +1670,63 @@ function renderSeason() {
   const now = $('#tlNow'), box = screen.querySelector('.tlscroll');
   if (box) box.scrollLeft = now ? Math.max(0, now.offsetLeft - box.clientWidth / 2 + now.offsetWidth / 2) : box.scrollWidth;
 }
-actions.saisonPlay = () => { SE.startTournament(season); showSeasonTournament(); };
+actions.saisonPlay = () => { zwMeldung = null; zwTraining = false; baumTeil = null; PS.turnierStart(season); showSeasonTournament(); };
 actions.saisonWeiter = () => showSeasonTournament();
 actions.saisonSkip = () => {
-  const T = SE.startTournament(season, true);
+  zwMeldung = null; zwTraining = false; baumTeil = null;
+  const T = PS.turnierStart(season, true);
   TN.simulateRest(T);
   SE.saveSeason(season);
   showSeasonTournament();
 };
+// Zwischen den Turnieren etwas tun. v = 'pause' | 'sponsor' | … | 'training' (klappt die Auswahl auf) | 'training:s'
+actions.saisonZw = (v) => {
+  const [id, wahl] = String(v).split(':');
+  if (id === 'training' && !wahl) { zwTraining = true; return keepScroll(renderSeason); }
+  const bringt = PS.zwischenTun(season, id, wahl);
+  zwTraining = false;
+  if (bringt) { zwMeldung = { name: PS.ZWISCHEN[id].name, bringt }; sound.click(); }
+  keepScroll(renderSeason);
+};
+actions.saisonTeam = (v) => { PS.setTeam(season, v); keepScroll(renderSeason); };
+actions.saisonReise = (v) => { PS.setReise(season, v); keepScroll(renderSeason); };
+actions.saisonVertrag = (v) => { const [art, marke] = v.split(':'); PS.setVertrag(season, art, marke); keepScroll(renderSeason); };
+actions.saisonSkill = (v) => { if (PS.steigern(season, v)) sound.coin(); keepScroll(renderSeason); };
 function seasonTournamentDone() {
-  const s = SE.finishTournament(season);
+  const s = PS.turnierFertig(season), r = s.rechnung, P = season.profi;
   const lines = [
-    s.label ? `Dein Ergebnis: <b>${s.label === 'W' ? 'Turniersieg 🏆' : D.ROUND_NAMES[s.label]}</b>` : 'Du hast nicht mitgespielt.',
-    `Punkte fürs ATP Race: <b class="gold">+${s.points.toLocaleString('de-DE')}</b>`,
-    `Du stehst jetzt auf <b>Platz ${s.rank}</b> im Race (${s.total.toLocaleString('de-DE')} Punkte).`,
+    s.label ? `Dein Ergebnis: <b>${s.label === 'W' ? 'Turniersieg 🏆' : D.ROUND_NAMES[s.label]}</b>` : s.verteidigt.punkte || s.tid !== 'fin' ? 'Du hast nicht mitgespielt.' : 'Du warst nicht qualifiziert.',
+    `Punkte fürs ATP Race: <b class="gold">+${s.points.toLocaleString('de-DE')}</b> · Platz ${s.rank} im Race (${s.total.toLocaleString('de-DE')} Punkte)`,
   ];
+  // Punkte verteidigen: Was fiel weg, was kam dazu?
+  const d = s.points - s.verteidigt.punkte;
+  lines.push(`🛡️ Weltrangliste: ${s.verteidigt.punkte.toLocaleString('de-DE')} Punkte vom letzten Jahr fallen weg, ${s.points.toLocaleString('de-DE')} neue kommen dazu
+    = <b class="${d > 0 ? 'plus' : d < 0 ? 'minus' : ''}">${d >= 0 ? '+' : '−'}${Math.abs(d).toLocaleString('de-DE')}</b>. Du stehst auf <b>Platz ${s.platz}</b>${s.platzVorher !== s.platz ? ` <span class="${s.platz < s.platzVorher ? 'plus' : 'minus'}">(${s.platz < s.platzVorher ? '▲' : '▼'} ${Math.abs(s.platzVorher - s.platz)})</span>` : ''}.`);
+  if (s.abstand != null && s.label !== 'W') lines.push(s.abstand > 0 ? '<b class="plus">🎯 Besser als erwartet!</b> Das gibt Selbstvertrauen, und die Sponsoren freuen sich.'
+    : s.abstand < 0 ? `<b class="minus">🎯 Erwartet war mindestens ${D.ROUND_NAMES[s.erwartet] || s.erwartet}.</b> Die Zeitungen schreiben böse Sätze – der Druck steigt, das Selbstvertrauen sinkt.` : '🎯 Genau so weit, wie alle erwartet haben.');
+  if (s.label === 'W') lines.push('<b class="gold">Ein Titel! Dein Selbstvertrauen ist riesig, und der Druck ist wie weggeblasen.</b>');
+  const riv = s.rivalen.filter((x) => x.label);
+  if (riv.length) lines.push(`<span class="dim">⚔️ Deine Rivalen: ${riv.map((x) => `${esc(x.name)} – ${x.label === 'W' ? '🏆 Sieg' : D.ROUND_NAMES[x.label]}`).join(' · ')}</span>`);
+  if (s.beschwerden) lines.push(`<b class="minus">🩹 Beschwerden: ${esc(s.beschwerden.leicht)}</b> Das ist eine Warnung deines Körpers. Urlaub, der Physio auf der Anlage oder ein ausgelassenes Turnier heilen das.`);
+  if (s.verletzung) lines.push(`<div class="verletzt"><b>🚑 Verletzt: ${esc(s.verletzung.name)}</b><br>Du musst etwa <b>${s.verletzung.wochen} Wochen</b> pausieren.<br><b>Warum ist das passiert?</b><ul>${s.verletzung.fehler.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>
+    Turniere in dieser Zeit finden ohne dich statt – und die Punkte, die du dort letztes Jahr geholt hast, sind dann weg.</div>`);
+  if (s.gesund) lines.push(`<b class="plus">Du bist wieder gesund!</b> Die Verletzung (${esc(s.gesund)}) ist ausgeheilt.`);
+  if (s.geheilt) lines.push('<b class="plus">Die Pause hat gutgetan:</b> Deine Beschwerden sind weg.');
+  const z = (name, betrag) => (betrag ? `<tr><td>${name}</td><td class="num ${betrag > 0 ? 'plus' : 'minus'}">${betrag > 0 ? '+' : '−'} ${money(Math.abs(betrag))}</td></tr>` : '');
+  lines.push(`<table class="rechnung">${z('Preisgeld', r.preis)}${r.sponsoren.map((g) => z('Sponsor: ' + esc(g.name), g.geld)).join('')}${z('Trainer und Physio', -r.team)}${z('Reise', -r.reise)}
+    <tr class="summe"><td>Dieses Turnier</td><td class="num ${s.netto >= 0 ? 'plus' : 'minus'}">${s.netto >= 0 ? '+' : '−'} ${money(Math.abs(s.netto))}</td></tr></table>`);
   if (s.finalsQualified === true) lines.push('<b class="gold">Geschafft! Du bist unter den besten 8 und fährst zu den ATP Finals nach Turin!</b>');
   if (s.finalsQualified === false) lines.push('Für die ATP Finals hat es diesmal leider nicht gereicht.');
-  if (s.seasonOver) lines.push('<b>Die Saison ist zu Ende!</b>');
+  if (s.seasonOver) lines.push(`<b>Die Saison ist zu Ende!</b> Du hast ${s.jahr.geschafft} von ${s.jahr.ziele.length} Zielen deiner Sponsoren geschafft.`);
+  else if (s.naechstes) lines.push(`<span class="dim">Als Nächstes: ${esc(s.naechstes)} – ${s.frei ? (s.frei === 1 ? 'eine freie Woche' : s.frei + ' freie Wochen') + ' bis dahin' : 'gleich nächste Woche, ohne Pause'}. Frische jetzt: ${Math.round(P.frische)} %.</span>`);
   if (s.label === 'W') sound.coin();
-  saisonTab = 'start';
+  saisonTab = 'start'; zwMeldung = null; zwTraining = false;
   showInfo(s.name, lines.join('<br>'), 'saisonStart');
 }
 actions.saisonStart = () => actions.saison('start');
 actions.saisonEnde = () => { season = null; SE.deleteSeason(); renderSeasonPick(); };
+// Mit demselben Profi ins nächste Jahr: Jetzt sind die eigenen Ergebnisse das, was verteidigt werden muss
+actions.saisonWeiterJahr = () => { season = PS.naechsteSaison(season); saisonTab = 'start'; zwMeldung = null; renderSeason(); };
 let delSeasonArmed = false;
 actions.saisonDelete = (v, el) => {
   if (!delSeasonArmed) { delSeasonArmed = true; el.textContent = 'Wirklich löschen? Nochmal tippen'; setTimeout(() => { delSeasonArmed = false; }, 4000); return; }

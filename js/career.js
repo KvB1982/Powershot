@@ -79,6 +79,8 @@ function reparieren(c) {
   return c;
 }
 export function saveCareer(c) {
+  // Ein Profi aus dem Saison-Modus (profisaison.js) benutzt dieselben Funktionen, wird aber in der Saison gespeichert
+  if (c.saison) { if (c.sichern) c.sichern(); return; }
   try { localStorage.setItem(KEY, JSON.stringify(c)); } catch (e) { /* kein Speicher */ }
 }
 export function deleteCareer() {

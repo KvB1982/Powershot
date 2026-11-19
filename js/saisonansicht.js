@@ -4,6 +4,7 @@
 
 import * as D from './data.js';
 import * as SE from './season.js';
+import * as PS from './profisaison.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const flag = (c) => D.FLAGS[c] || '🏳️';
@@ -130,6 +131,10 @@ export function timelineHtml(s) {
     if (h) unten = h.label ? `<b class="${h.label === 'W' ? 'gold' : ''}">${h.label === 'W' ? '🏆 Sieg' : KURZ[h.label]}</b><span>+${zahl(h.points)} P.</span>` : '<b class="dim">nicht dabei</b><span>+0 P.</span>';
     else if (stand === 'now') unten = '<b class="hier">▲ Du bist hier</b>';
     else unten = `<span>bis ${zahl(t.cat === 'F' ? 1500 : t.points.W)} P.</span>`;
+    // Was dein Profi hier letztes Jahr geholt hat: Diese Punkte fallen weg, wenn das Turnier wieder gespielt wird.
+    const alt = s.vorjahr ? PS.verteidigen(s, t) : null;
+    if (alt && !h) unten += `<span class="tlv ${alt.titel ? 'gold' : ''}" title="Diese Punkte aus dem Vorjahr musst du verteidigen">${alt.titel ? '🏆 Titel' : 'Vorjahr'}: ${zahl(alt.punkte)} P.</span>`;
+    if (alt && h) { const d = h.points - alt.punkte; unten += `<span class="tlv ${d > 0 ? 'plus' : d < 0 ? 'minus' : ''}">Welt: ${d >= 0 ? '+' : '−'}${zahl(Math.abs(d))}</span>`; }
     return `<div class="tl ${stand} ${catClass(t)}" ${stand === 'now' ? 'id="tlNow"' : ''}>
       <div class="tlm">${neuerMonat ? t.month : '&nbsp;'}</div>
       <div class="tld"><i></i></div>
@@ -186,4 +191,32 @@ export function pointsHtml() {
     <p>Wer alle fünf Spiele gewinnt, holt also 1.500 Punkte.</p>
     <p class="dim">Sonderregel wie in echt: Hat jemand in diesem Jahr einen Grand Slam gewonnen und steht im Race auf Platz 8 bis 20, bekommt er den 8. Startplatz.
     Die echte Tour hat außerdem kleinere Turniere (ATP 500 und 250) – die gibt es im Spiel noch nicht.</p></div>`;
+}
+
+// ---------------------------------------------------------------
+// Tabelle: Weltrangliste (Punkte der letzten 52 Wochen)
+// ---------------------------------------------------------------
+// kurz = true: nur die Plätze rund um deinen Profi
+export function weltHtml(s, kurz = false) {
+  const list = PS.weltTabelle(s), ich = list.find((p) => p.me), rivalen = s.profi.rivalen;
+  const rows = list.filter((p) => (kurz ? Math.abs(p.rank - ich.rank) <= 3 : p.rank <= 30 || Math.abs(p.rank - ich.rank) <= 5));
+  let html = '';
+  rows.forEach((p, i) => {
+    if (i > 0 && rows[i - 1].rank < p.rank - 1) html += '<tr><td colspan="4" class="dim center">…</td></tr>';
+    const d = p.start - p.rank;       // so viele Plätze besser (+) oder schlechter (−) als am Jahresanfang der echten Liste
+    html += `<tr class="${p.me ? 'me' : ''}"><td class="num">${p.rank}</td>
+      <td>${flag(p.country)} ${esc(kurz ? p.short : p.name)}${rivalen.includes(p.id) ? ' <span title="dein Rivale">⚔️</span>' : ''}</td>
+      <td class="num ${d > 0 ? 'plus' : d < 0 ? 'minus' : 'dim'}">${d > 0 ? '▲ ' + d : d < 0 ? '▼ ' + -d : '–'}</td><td class="num"><b>${zahl(p.points)}</b></td></tr>`;
+  });
+  return `<table class="race"><tr><th class="num">Platz</th><th>Spieler</th><th class="num">seit Start</th><th class="num">Punkte</th></tr>${html}</table>`;
+}
+
+// ---------------------------------------------------------------
+// Die Zeitung: Meldungen über deinen Profi, seine Rivalen und die Sieger
+// ---------------------------------------------------------------
+const ZEITUNG_BILD = { gut: '🟢', schlecht: '🔴', info: '📰', rivale: '⚔️' };
+export function zeitungHtml(s, wieViele = 99) {
+  const liste = s.profi.zeitung.slice(0, wieViele);
+  if (!liste.length) return '<p class="dim">Noch nichts los. Spiel dein erstes Turnier!</p>';
+  return `<div class="zeitung">${liste.map((z) => `<div class="zm ${z.art}"><b>${ZEITUNG_BILD[z.art] || '📰'} ${esc(z.kopf)}</b><span>${esc(z.text)}</span></div>`).join('')}</div>`;
 }

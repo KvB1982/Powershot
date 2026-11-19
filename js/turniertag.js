@@ -239,7 +239,7 @@ export function kann(c, ort, def) {
   if (stufeVon(def) < T.ab) return { ok: false, warum: T.fehlt || 'Das gibt es bei diesem Turnier nicht.' };
   if (t.getan.includes(ort)) return { ok: false, warum: 'Hier warst du heute schon.' };
   if (freieFenster(c) <= 0) return { ok: false, warum: 'Keine Zeit mehr – dein Match fängt gleich an. Geh zum Centre Court!' };
-  if (T.saiten) {
+  if (T.saiten && !c.saison) {       // ein Profi in der Saison hat immer Saiten: Die bezahlt sein Ausrüster
     const saite = traegt(c, 'Saiten');
     if (!saite) return { ok: false, warum: 'Du hast noch keine Saiten. Kauf zuerst welche unter „Ausrüstung“.' };
     if (!gratis(c, saite) && c.money < saite.price) return { ok: false, warum: 'Dafür reicht dein Geld gerade nicht.' };
@@ -283,8 +283,15 @@ export function tun(c, ort, def, spiel) {
     if (art === 'nett') T = { ...T, fans: 1 };
     if (art === 'witzigGut') T = { ...T, fans: 1, xp: 10 };
     if (art === 'patzig' && c.tagFans > 0) { c.tagFans--; bringt.push('−1 Fan-Stern'); }
+    // Nur im Saison-Modus gibt es den Medien-Druck (profisaison.js): Nette und witzige Antworten nehmen Druck weg, patzige machen mehr
+    if (c.druck != null) {
+      const d = { nett: -5, witzigGut: -8, witzigSchlecht: 0, patzig: 12 }[art];
+      c.druck = Math.max(0, Math.min(100, c.druck + d));
+      if (d) bringt.push(d < 0 ? 'Medien-Druck sinkt' : 'Medien-Druck steigt!');
+    }
   }
-  if (T.saiten) {
+  if (T.saiten && c.saison) bringt.push('Gratis – das zahlt dein Ausrüster.');
+  else if (T.saiten) {
     const saite = traegt(c, 'Saiten'), frei = gratis(c, saite);
     bespannen(c, saite.id);
     bringt.push(frei ? 'Gratis – das zahlt dein Ausrüster.' : `Kostet ${saite.price} $.`);
