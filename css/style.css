@@ -165,6 +165,26 @@ label { display: block; font-size: 13px; color: var(--dim); margin: 12px 0 6px; 
   border: 1px solid var(--line); border-radius: 12px; padding: 8px 16px; font-weight: 800; font-size: 18px; display: none; text-align: center; }
 #trainBox.on { display: block; }
 #trainBox small { display: block; font-size: 12px; color: var(--dim); font-weight: 600; }
+/* Spielzug-Training: Kasten mit den Schritten (links oben) */
+#zugBox { position: absolute; left: max(12px, env(safe-area-inset-left)); top: max(64px, calc(env(safe-area-inset-top) + 52px)); width: min(300px, 40vw);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 14px; display: none; }
+#zugBox.on { display: block; }
+#zugBox ol { margin: 6px 0 0; padding-left: 20px; }
+#zugBox li { margin: 3px 0; color: var(--dim); }
+#zugBox li.fertig { color: #35e06a; }
+#zugBox li.jetzt { color: #fff; font-weight: 800; }
+#zugBox li small { display: block; font-weight: 600; color: #35e06a; font-size: 12px; }
+#zugBox p { margin: 6px 0 0; font-weight: 700; }
+#zugBox p.gut { color: #35e06a; }
+#zugBox p.schlecht { color: #ffb14a; }
+/* Spielzug-Buch */
+.grid.zuege { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); align-items: start; }
+.panel.zug { margin: 0; }
+.panel.zug h3 { margin-top: 0; }
+.panel.zug h3 span { font-size: 13px; font-weight: 600; margin-left: 6px; }
+.panel.zug ol { margin: 6px 0; padding-left: 20px; }
+.panel.zug p { margin: 6px 0; font-size: 14px; }
+.panel.zug.zu { opacity: 0.6; }
 #hint { position: absolute; left: 0; right: 0; bottom: max(8px, env(safe-area-inset-bottom)); text-align: center; font-size: 13px;
   color: rgba(255, 255, 255, 0.8); text-shadow: 0 1px 4px #000; padding: 0 70px; }
 #stick { position: fixed; display: none; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%;

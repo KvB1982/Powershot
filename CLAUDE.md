@@ -21,6 +21,7 @@ node tools/seitenwechsel.mjs hard 10   # Seitenwechsel prüfen: nur nach ungerad
 node tools/wichtig.mjs          # Hinweise Breakball, Satzball, Matchball, Championship Point prüfen (`wichtigerPunkt` in `js/rules.js`)
 node tools/kamera.mjs           # Laufen mit der Kamera: Rechnung prüfen (ohne Kamera, mit künstlichen Körperpunkten)
 node tools/ballflug.mjs hard     # Flugbahn und Absprung jeder Schlag- und Aufschlagart messen und prüfen (auch clay, grass, indoor)
+node tools/spielzuege.mjs 30    # Taktische Spielzüge: Erkennen, Durchschauen, Lernen und Wirkung im Match (30 Matches Computer gegen Computer, dauert ein paar Minuten)
 node tools/mocap.mjs            # Aufnahmen aus mocap/*.FBX in mocap/bewegungen.json umrechnen (--info zeigt nur an)
 ```
 
@@ -39,6 +40,7 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 | `js/physics.js`, `js/rules.js` | Ballflug (Luftwiderstand, Magnus-Kraft, Reibung beim Aufprall), Zählweise – ohne three.js, in node testbar |
 | `js/faehigkeiten.js` | Die acht Fähigkeiten (`STAT_NAMES`: Aufschlag `s`, Vorhand `vh`, Rückhand `rh`, Volley `v`, Beinarbeit `b`, Ausdauer `a`, Mental `m`, Taktik `k`), Erklärtexte, `achtWerte` (rechnet die fünf alten Werte um), `gesamt` (Gesamtstärke) – ohne three.js und ohne andere Dateien |
 | `js/schlaege.js` | Tabelle aller Schlagarten (`SCHLAEGE`) und Aufschlagarten (`AUFSCHLAEGE`): Tempo, Drall in U/min (`top`, `seite`, `drall`), Höhe über dem Netz – ohne three.js |
+| `js/spielzuege.js` | Taktische Spielzüge (`ZUEGE`: 13 Stück, Schritte mit Zielfeld `BEREICH`), `ZugZaehler` (schaut bei jedem Schlag zu), `pruefe`, `zielfeld`, Lernstand (`stufe`, `offen`, `eintragen`), `lieblingsZuege` der Computergegner – ohne three.js und ohne andere Dateien |
 | `js/match.js` | Zustände: intro → serveReady → toss → rally → pointOver → (changeover) → over; Computergegner |
 | `js/controls.js` | Steuerung: `klassik` (Maus), `touch` (iPad), `profi` (Tastatur), `controller` (Switch-Controller; Schwung-Zahlen `SWING_…` oben in der Datei) |
 | `js/kamera.js` | Laufen mit der Kamera: Körperpunkte → Position auf dem Platz, Einmessen, Zahlen zum Einstellen oben – ohne three.js und ohne Browser testbar |
@@ -115,6 +117,23 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
   (`gerade`, `slice`, `kick`, `unten`; ohne Angabe: erster gerade, zweiter Kick). Zusätzlich darf sie in `schlag` eigene Zahlen mitgeben,
   die über die Tabelle gelegt werden, z. B. `{ type: 'drive', schlag: { top: 3400, tempo: [28, 28] } }` – gedacht für die Apple Watch.
 - Stoppball und Aufschlag von unten haben kein festes Tempo, sondern `bogen` (Höhe über dem Netz); `solveBogen` sucht das Tempo dazu.
+
+## Taktische Spielzüge (optional)
+
+- Einstellungen → „Taktische Spielzüge“ (`settings.spielzuege`: `aus`/`an`, Standard `aus`). Training → „Spielzüge lernen“ öffnet das Spielzug-Buch (`actions.spielzuege` in `app.js`).
+- Ein Spielzug ist eine Folge von 2–3 eigenen Schlägen (`ZUEGE` in `js/spielzuege.js`). Alles wird aus Sicht des Schlägers beschrieben: `u` seitlich (+ = rechts), `d` Tiefe hinter dem Netz.
+  `match.js` baut bei jedem Schlag die Merkmale (`zugSchlag` in `launch`: wo der Ball landen wird, wo der Gegner steht, Schlagart) und fragt den `ZugZaehler` der Seite.
+- Wirkung im Match (nur gelernte Spielzüge, `cfg.spielzuege = { an, stufen }`): Der Gegner bekommt `druck` – er reagiert später (`ZUG_REAKTION`), sein nächster Schlag streut mehr (`ZUG_STREUT`)
+  und ist langsamer (`ZUG_SCHWACH`), einen Lob kann er nicht schmettern; man selbst trifft den Rest des Punkts genauer (`ZUG_SICHER`). Ein angefangener Spielzug wirkt schon ein wenig (`TEIL`). Der Punkt wird nie ausgewürfelt.
+- Durchschauen: Der Zähler merkt sich die letzten 6 fertigen Spielzüge. Wiederholungen wirken schwächer (schneller bei einem Gegner mit viel Taktik); ab `wirkung` ≤ 0,25 reagiert der Gegner sogar früher. Nur ein Spielzug pro Punkt zählt.
+- Lernen: Spielzug-Training = `cfg.lernen = id` (läuft als `mode: 'match'` mit festem Aufschläger, Trainer spielt sicher in die Mitte, 8 Versuche). `match.zugStand()` liefert Schritt und Zielfeld;
+  `game3d.js` zeichnet das grüne Feld (`zugFeld`), `app.js` den Kasten `#zugBox` mit Tipp zur Steuerung (`ZUG_TIPP`). 3-mal geschafft = gelernt; Sterne nach Erfolgen im Match (`STUFEN`). Schwere Spielzüge sind gesperrt, bis genug gelernt sind (`ab`).
+  Spielstand: localStorage `powershot.spielzuege.v1` (gilt für alle Spielmodi gemeinsam, nicht pro Karriere).
+- Computergegner: bis zu drei Lieblings-Spielzüge aus den Fähigkeiten berechnet (`lieblingsZuege`, nicht bei echten Spielern nachgeschaut). Er nimmt sich pro Punkt manchmal einen vor (`zugPlan`, `zugWunsch`), spielt aber nur passende Schritte mit Absicht.
+- Ans Netz: `Controls.takeNetz()` liefert `'vor'`, `'zurueck'` oder `'wechsel'`; `match.netzWunsch()` setzt `netRush`. Touch: zwei Finger gleichzeitig nach oben/unten wischen (`ZWEI_…` in `controls.js`), geht auch schon vor dem Aufschlag.
+- Quellen der Spielzüge: Craig O'Shannessy / Brain Game Tennis („First 4 Shots“: etwa 70 % der Punkte enden nach höchstens 4 Schlägen), topspinpro.com (Patterns), Rive/Williams „Tennis Skills & Drills“ (Human Kinetics). Alle Zahlen im Spiel (Zielfelder, Stärke, Wirkung) sind geschätzt.
+- Geprüft: `tools/spielzuege.mjs` und der Test-Browser (Buch, Training „Aufschlag + 1“, Zwei-Finger-Wischen mit künstlichen Finger-Ereignissen). Nicht geprüft: von Hand gespielt, echtes iPad, ob jeder Spielzug mit jeder Steuerung gut zu schaffen ist
+  (Slice und Stoppball gehen mit der Maus-Steuerung „Klassik“ gar nicht; „Inside-out“ verlangt, mit dem Joystick selbst um den Ball zu laufen).
 
 ## Karriere: Geld, Reisen, Ausrüstung
 

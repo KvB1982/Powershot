@@ -104,6 +104,15 @@ export class Game3D {
 
     this.zoneGroup = new THREE.Group();
     S.add(this.zoneGroup);
+
+    // Spielzug-Training: grünes Zielfeld für den nächsten Schlag (zwei Stück, falls beide Ecken richtig sind)
+    // und eine gestrichelte Linie vom Ball dorthin
+    this.zugFeld = [flatMesh(new THREE.PlaneGeometry(1, 1), 0x35e06a, 0.4), flatMesh(new THREE.PlaneGeometry(1, 1), 0x35e06a, 0.4)];
+    this.zugLinie = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]),
+      new THREE.LineDashedMaterial({ color: 0x35e06a, dashSize: 0.5, gapSize: 0.3, transparent: true, opacity: 0.9 }));
+    this.zugLinie.visible = false;
+    S.add(this.zugLinie);
+    this.zugZeit = 0;
   }
 
   // Die Ballmaschine fürs Training. Sie steht dort, von wo die Bälle kommen (siehe feed() in match.js).
@@ -231,6 +240,7 @@ export class Game3D {
     this.match = null;
     this.clearZones();
     this.landing.visible = this.landingDot.visible = this.aimRing.visible = this.aimLine.visible = this.boxGlow.visible = false;
+    this.zugFeld[0].visible = this.zugFeld[1].visible = this.zugLinie.visible = false;
   }
 
   clearZones() {
@@ -295,6 +305,15 @@ export class Game3D {
         snd.ooh();
       },
       point(info) {
+        if (self.match.cfg.lernen) {
+          // Spielzug-Training: Hier zählt nicht der Punkt, sondern ob der Spielzug geklappt hat
+          const gut = self.match.punktGeschafft, tr = self.match.training;
+          snd.applause(gut ? 0.7 : 0.25, gut);
+          if (gut) snd.coin();
+          const zm = self.match.zugMeldung;
+          call('point', gut ? 'Spielzug geschafft!' : 'Noch nicht ganz', !gut && zm && zm.text ? zm.text : `Versuch ${tr.done} von ${tr.balls}`, info);
+          return;
+        }
         const sc = self.match.score;
         const w = names[info.winner];
         let head = REASON_TEXT[info.reason] || '';
@@ -321,6 +340,8 @@ export class Game3D {
         self.stadium.setBoard([names[0] + '  ' + sc.sets.map((s) => s[0]).join(' ') + ' ' + sc.games[0], names[1] + '  ' + sc.sets.map((s) => s[1]).join(' ') + ' ' + sc.games[1]], sc.pointLabels().join(' : '));
       },
       message(text, kind) { call('message', text, kind); },
+      // Ein Spielzug ist fertig geworden (im Match): Das Publikum merkt es, app.js zeigt den Namen an
+      spielzug(info) { if (!info.durchschaut) snd.applause(0.3); call('spielzug', info); },
       matchOver(score) { call('matchOver', score); },
       zones(zs) {
         self.clearZones();
@@ -443,8 +464,26 @@ export class Game3D {
       this.aimRing.visible = this.aimLine.visible = false;
     }
 
+    // Spielzug-Training: Zielfeld für den nächsten Schritt zeigen (es blinkt sanft)
+    const zs = m.zugStand ? m.zugStand() : null, zo = zs && zs.zone;
+    this.zugZeit += dt;
+    this.zugFeld.forEach((f, i) => {
+      f.visible = !!zo && (i === 0 || zo.beide);
+      if (!f.visible) return;
+      const sp = i === 1 ? -1 : 1;            // das zweite Feld liegt gespiegelt in der anderen Ecke
+      f.scale.set(zo.x1 - zo.x0, zo.z1 - zo.z0, 1);
+      f.position.set(sp * (zo.x0 + zo.x1) / 2, 0.016, (zo.z0 + zo.z1) / 2);
+      f.material.opacity = 0.32 + 0.14 * Math.sin(this.zugZeit * 5);
+    });
+    this.zugLinie.visible = !!zo;
+    if (zo) {
+      const von = m.state === 'rally' && me.plan ? new THREE.Vector3(me.plan.x, 0.06, me.plan.z) : new THREE.Vector3(me.x, 0.06, me.z - 0.5);
+      this.zugLinie.geometry.setFromPoints([von, new THREE.Vector3((zo.x0 + zo.x1) / 2, 0.06, (zo.z0 + zo.z1) / 2)]);
+      this.zugLinie.computeLineDistances();
+    }
+
     // Aufschlagfeld aufhellen
-    if ((m.state === 'serveReady' || m.state === 'toss') && m.serveBox && m.mode !== 'ballmaschine') {
+    if ((m.state === 'serveReady' || m.state === 'toss') && m.serveBox && m.mode !== 'ballmaschine' && !zo) {
       const sb = m.serveBox;
       this.boxGlow.visible = true;
       this.boxGlow.scale.set(C.W, C.SL, 1);

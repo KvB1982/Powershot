@@ -21,6 +21,7 @@ import * as KA from './kalender.js';
 import * as AB from './ausbau.js';
 import * as PL from './planer.js';
 import * as SE from './season.js';
+import * as SZ from './spielzuege.js';
 import { bracketHtml, timelineHtml, raceHtml, pointsHtml } from './saisonansicht.js';
 
 const $ = (s) => document.querySelector(s);
@@ -38,7 +39,12 @@ const settings = Object.assign({
   control: touchDevice ? 'touch' : 'klassik', assist: 'voll', difficulty: 'mittel', length: 'kurz',
   sound: true, volume: 0.8, voice: true, quality: 'hoch', figures: 'echt',
   kamera: 'aus', kameraRaum: 'mittel', kameraTauschen: false,
+  spielzuege: 'aus',       // taktische Spielzüge im Match: 'aus' oder 'an'
 }, (() => { try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch (e) { return {}; } })());
+// Welche Spielzüge hast du schon gelernt? { id: { t: im Training geschafft, m: im Match geschafft } }
+const ZUG_KEY = 'powershot.spielzuege.v1';
+const zugSpeicher = (() => { try { return JSON.parse(localStorage.getItem(ZUG_KEY)) || {}; } catch (e) { return {}; } })();
+const zugSichern = () => { try { localStorage.setItem(ZUG_KEY, JSON.stringify(zugSpeicher)); } catch (e) { /* egal */ } };
 const saveSettings = () => { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) { /* egal */ } };
 
 const CONTROL_NAMES = { klassik: 'Klassik (Maus)', touch: 'Touch (iPad)', profi: 'Profi (Tastatur)', controller: 'Controller / iPhone-Schläger' };
@@ -189,6 +195,9 @@ actions.settings = (v) => {
       ${optionRow('Laufhilfe', 'assist', ASSIST_NAMES)}
       ${optionRow('Schwierigkeit', 'difficulty', Object.fromEntries(Object.entries(D.DIFFICULTY).map(([k, d]) => [k, d.name])))}
       ${optionRow('Matchlänge', 'length', Object.fromEntries(Object.entries(D.LENGTHS).map(([k, d]) => [k, d.name])))}
+      ${optionRow('Taktische Spielzüge', 'spielzuege', { aus: 'Aus', an: 'An' })}
+      <p class="dim" style="margin:6px 0 0;font-size:13px">Mit „An“ zählen im Match die Spielzüge, die du im Training gelernt hast (${SZ.gelerntAnzahl(zugSpeicher)} von ${SZ.ZUG_IDS.length}).
+        Ein richtig gespielter Spielzug setzt den Gegner unter Druck. Auch der Computer spielt dann seine Lieblings-Spielzüge.</p>
     </div>
     <div class="panel">
       ${optionRow('Ton', 'sound', { true: 'An', false: 'Aus' })}
@@ -331,6 +340,7 @@ const HELP = `
     <li><b>Rechte Hälfte, nach oben wischen:</b> Schlag. Nach links/rechts wischen = Richtung. Je länger der Wisch, desto härter und tiefer. Zu lang = Aus!</li>
     <li><b>Nach unten wischen:</b> Stoppball. <b>Zur Seite wischen:</b> Slice. <b>Doppelt tippen:</b> Lob. <b>Einmal tippen:</b> sicherer Ball.</li>
     <li><b>Aufschlag:</b> nach oben wischen (Richtung und Länge wie beim Schlag). Vorher unten die Art antippen: Gerade, Slice, Kick oder Von unten.</li>
+    <li><b>Mit zwei Fingern nach oben wischen:</b> ans Netz laufen. <b>Mit zwei Fingern nach unten:</b> zurück an die Grundlinie. (Geht überall auf dem Bildschirm, auch schon vor dem Aufschlag.)</li>
     <li>Du kannst wischen, sobald der Gegner geschlagen hat. Der Schlag kommt, wenn der Ball bei dir ist.</li></ul></div>
   <div class="panel help"><h3>Klassik (Maus)</h3><ul>
     <li><kbd>Mausrad</kbd> oder <kbd>←</kbd> <kbd>→</kbd>: zielen (Rad hoch = links).</li>
@@ -426,7 +436,62 @@ actions.training = (v) => {
     <div class="menu">
       <button class="big" data-a="train" data-v="ballmaschine${fromCareer ? ':c' : ''}">Ballmaschine <small>20 Bälle – triff die Zielfelder</small></button>
       <button class="big" data-a="train" data-v="aufschlag${fromCareer ? ':c' : ''}">Aufschlag <small>12 Aufschläge auf die Zielfelder</small></button>
+      ${fromCareer ? '' : `<button class="big" data-a="spielzuege">Spielzüge lernen <small>${SZ.gelerntAnzahl(zugSpeicher)} von ${SZ.ZUG_IDS.length} gelernt · Schritt für Schritt mit Zielfeld</small></button>`}
     </div>`);
+};
+
+// ---------------------------------------------------------------
+// Spielzug-Buch: alle taktischen Spielzüge ansehen, üben und lernen (siehe js/spielzuege.js)
+// ---------------------------------------------------------------
+// So macht man die Schläge mit der gewählten Steuerung (steht im Training unter dem Schritt, der dran ist)
+const ZUG_TIPP = {
+  touch: { aufschlag: 'nach oben wischen – schräg wischen = Richtung', drive: 'nach oben wischen – schräg = Richtung, länger = tiefer',
+    slice: 'zur Seite wischen', drop: 'nach unten wischen', lob: 'doppelt tippen', netz: 'mit zwei Fingern nach oben wischen' },
+  klassik: { aufschlag: 'Mausrad zielt, linke Maustaste halten und loslassen', drive: 'Mausrad zielt, linke Maustaste halten = Kraft (mehr Kraft = tiefer)',
+    slice: 'geht mit der Maus nicht – nimm die Steuerung „Profi“ oder „Touch“', drop: 'geht mit der Maus nicht – nimm die Steuerung „Profi“ oder „Touch“',
+    lob: 'Doppelklick', netz: 'Pfeil nach oben halten' },
+  profi: { aufschlag: 'Leertaste halten und loslassen, mit ← → zielen', drive: 'Leertaste – die Pfeiltasten beim Treffen bestimmen das Ziel',
+    slice: 'Taste K', drop: 'Taste I', lob: 'Taste L', netz: 'W oder ↑ halten' },
+  controller: { aufschlag: 'schwingen oder A – der Stick zielt', drive: 'schwingen oder A – Stick oder Timing zielt',
+    slice: 'Taste B', drop: 'Taste Y', lob: 'Taste X', netz: 'Doppelklopfen oder Netz-Taste' },
+};
+function zugTipp(step) {
+  const T = ZUG_TIPP[settings.control] || ZUG_TIPP.touch;
+  const art = step.wer === 'aufschlag' ? 'aufschlag' : step.art && T[step.art[0]] ? step.art[0] : 'drive';
+  return T[art] + (step.dannNetz ? ' · danach ans Netz: ' + T.netz : '');
+}
+actions.spielzuege = () => {
+  const st = zugSpeicher, n = SZ.gelerntAnzahl(st);
+  const karte = (id) => {
+    const z = SZ.ZUEGE[id], stufe = SZ.stufe(st, id), frei = SZ.offen(st, id), e = st[id] || {};
+    const status = stufe ? `<span class="gold">${SZ.STUFEN[stufe].stern} ${SZ.STUFEN[stufe].name}</span>`
+      : frei ? `<span class="dim">noch nicht gelernt (${Math.min(e.t || 0, SZ.lernenOft)} von ${SZ.lernenOft})</span>` : '<span class="dim">🔒</span>';
+    return `<div class="panel zug ${frei ? '' : 'zu'}"><h3>${esc(z.name)} ${status}</h3>
+      <p>${esc(z.kurz)}</p>
+      <ol>${z.schritte.map((s) => `<li>${esc(s.text)}</li>`).join('')}</ol>
+      <p class="dim"><b>Warum klappt das?</b> ${esc(z.warum)}</p>
+      ${frei ? `<div class="row"><button class="${stufe ? '' : 'primary'}" data-a="zugUeben" data-v="${id}">${stufe ? 'Noch einmal üben' : 'Üben ›'}</button>
+          ${stufe ? `<span class="dim" style="align-self:center">im Match geschafft: ${e.m || 0}${stufe < 3 ? ` · nächster Stern bei ${SZ.STUFEN[stufe + 1].abMatch}` : ''}</span>` : ''}</div>`
+        : `<p class="dim">🔒 Lerne erst ${z.ab === 1 ? 'einen Spielzug' : z.ab + ' Spielzüge'} (du hast ${n}).</p>`}</div>`;
+  };
+  show(`
+    <div class="bar">${back('training')}<h2>Spielzüge</h2></div>
+    <div class="panel">
+      <p style="margin-top:0">Ein Spielzug ist ein Plan aus zwei oder drei Schlägen. Im Training zeigt dir ein <b style="color:#35e06a">grünes Feld</b>, wohin der nächste Schlag gehen soll.
+        Schaffst du einen Spielzug <b>${SZ.lernenOft}-mal</b>, hast du ihn gelernt. Dann wirkt er auch im Match: Der Gegner reagiert später und schlägt ungenauer.</p>
+      <p class="dim">Aber Vorsicht: Spielst du immer denselben Spielzug, durchschaut dich der Gegner. Wechsle ab!</p>
+      <label>Spielzüge im Match</label><div class="row">
+        <button class="${settings.spielzuege === 'aus' ? 'sel' : ''}" data-a="zugModus" data-v="aus">Aus</button>
+        <button class="${settings.spielzuege === 'an' ? 'sel' : ''}" data-a="zugModus" data-v="an">An</button>
+        <span class="dim" style="align-self:center">${n} von ${SZ.ZUG_IDS.length} gelernt</span></div>
+    </div>
+    ${Object.keys(SZ.GRUPPEN).map((g) => `<h3>${SZ.GRUPPEN[g]}</h3><div class="grid zuege">${SZ.ZUG_IDS.filter((id) => SZ.ZUEGE[id].gruppe === g).map(karte).join('')}</div>`).join('')}`);
+};
+actions.zugModus = (v) => { settings.spielzuege = v; saveSettings(); keepScroll(actions.spielzuege); };
+actions.zugUeben = (id) => {
+  const me = getPlayer(free.me === 'me' && !career ? 'zverev' : free.me);
+  const trainer = { ...D.PLAYERS[59], name: 'Trainer', short: 'Trainer' };
+  startMatch({ me, opp: trainer, def: D.tournamentById(free.venue), lernen: id, title: 'Spielzug: ' + SZ.ZUEGE[id].name, onEnd: () => actions.spielzuege() });
 };
 actions.train = (v) => {
   const [mode, c] = v.split(':');
@@ -1449,19 +1514,26 @@ function startMatch(o) {
   controls.setMode(settings.control);
   controls.enabled = true;
   const names = [o.me.short, o.opp.short];
-  session = { o, names, over: false, mode };
+  // Spielzug-Training (o.lernen): läuft wie ein Match, aber gezählt werden nur die Versuche – deshalb "unendlich" lange Sätze
+  const lernen = o.lernen || null;
+  const mitZuegen = !lernen && mode === 'match' && settings.spielzuege === 'an';
+  session = { o, names, over: false, mode: lernen ? 'spielzug' : mode, zugScore: 0, zuege: [0, 0], mitZuegen };
   match = new Match({
     players: [o.me, o.opp], human: 0, surface: o.def.surface, difficulty: settings.difficulty,
-    sets: len.sets, games: len.games, mode, balls: o.balls, assist: settings.assist, controlMode: settings.control,
+    sets: lernen ? 3 : len.sets, games: lernen ? 99 : len.games, mode, balls: o.balls, assist: settings.assist, controlMode: settings.control,
     finale: !!o.finale,      // im Endspiel heißt der Matchball "Championship Point"
+    lernen, changeover: lernen ? false : undefined,
+    spielzuege: mitZuegen ? { an: true, stufen: SZ.gelernte(zugSpeicher) } : null,
   }, game.makeFx(names), controls);
   game.attach(match, hud);
   paused = false;
   hudEl.hidden = false;
-  $('#trainBox').classList.toggle('on', mode !== 'match');
-  $('#scoreboard').style.display = mode === 'match' ? '' : 'none';
+  $('#trainBox').classList.toggle('on', mode !== 'match' || !!lernen);
+  $('#scoreboard').style.display = mode === 'match' && !lernen ? '' : 'none';
+  zugKey = '';
+  if (lernen) hud.training(match.training);
   $('#hint').textContent = {
-    touch: 'Links: laufen · Rechts: nach oben wischen = Schlag · unten = Stopp · Doppeltipp = Lob',
+    touch: 'Links: laufen · Rechts: nach oben wischen = Schlag · unten = Stopp · Doppeltipp = Lob · zwei Finger hoch = ans Netz, runter = zurück',
     klassik: 'Mausrad/←→ zielen · Linke Taste halten = Kraft · Doppelklick = Lob · ↑↓ laufen',
     controller: 'Schwingen oder A = Schlag · B Slice · X Lob · Y Stopp · früh = links, spät = rechts',
     profi: 'WASD laufen · Leertaste Topspin · U gerade · O hoher Topspin · K Slice · L Lob · I Stopp · Richtung beim Treffen halten',
@@ -1502,8 +1574,30 @@ const hud = {
     speedTimer = 2.5;
   },
   training(tr, pts, ok) {
+    if (tr.lernen) {
+      // Spielzug-Training: Jeder geschaffte Spielzug wird sofort gemerkt
+      $('#trainBox').innerHTML = `${tr.score}-mal geschafft<small>Versuch ${Math.min(tr.done + 1, tr.balls)} von ${tr.balls} · ${SZ.lernenOft}-mal geschafft = gelernt</small>`;
+      while (session.zugScore < tr.score) {
+        session.zugScore++;
+        if (SZ.eintragen(zugSpeicher, tr.lernen, 't')) hud.message(`★ Gelernt: ${SZ.ZUEGE[tr.lernen].name}!`, 'wichtig');
+        zugSichern();
+      }
+      return;
+    }
     $('#trainBox').innerHTML = `${tr.score} Punkte<small>Ball ${Math.min(tr.done + 1, tr.balls)} von ${tr.balls} · Gelb = 5, Blau = 3</small>`;
     if (pts !== undefined) hud.message(ok ? (pts >= 3 ? `Zielfeld! +${pts}` : `Im Feld +${pts}`) : 'Daneben', pts >= 3 ? 'info' : ok ? '' : 'warn');
+  },
+  // Im Match ist ein Spielzug fertig geworden (deiner oder der des Gegners)
+  spielzug(info) {
+    session.zuege[info.side]++;
+    if (info.mensch) {
+      const neu = SZ.eintragen(zugSpeicher, info.id, 'm');
+      zugSichern();
+      if (info.durchschaut) hud.message(`„${info.name}“ – der Gegner kennt den Trick schon. Wechsle ab!`, 'warn');
+      else hud.message(neu ? `${SZ.STUFEN[SZ.stufe(zugSpeicher, info.id)].stern} ${info.name} – neue Stufe!` : `Spielzug: ${info.name}! Der Gegner ist unter Druck`, neu ? 'wichtig' : 'info');
+    } else if (!info.durchschaut) {
+      hud.message(`${session.names[info.side]} spielt „${info.name}“ – du bist unter Druck!`, 'warn');
+    }
   },
   trainingOver(tr) {
     session.over = true;
@@ -1529,9 +1623,32 @@ function diagFrame(dt) {
   el.textContent = `🎮 ${controls.pad.connected ? controls.pad.name : 'nichts verbunden'} · ${proSek} Meldungen/s · ⌚ ${d.uhr} Uhr-Schwünge (letzter: ${d.letzter})`;
 }
 
+// Spielzug-Training: der Kasten links mit den Schritten. Der Schritt, der dran ist, leuchtet.
+let zugKey = '';
+function zugFrame() {
+  const zs = match && match.zugStand && !session.over ? match.zugStand() : null;
+  const box = $('#zugBox');
+  box.classList.toggle('on', !!zs);
+  if (!zs) return;
+  const key = [zs.i, zs.fertig, zs.dran, zs.netz, zs.meldung && zs.meldung.text, settings.control, match.state === 'pointOver'].join('|');
+  if (key === zugKey) return;         // nur neu schreiben, wenn sich etwas geändert hat
+  zugKey = key;
+  const T = ZUG_TIPP[settings.control] || ZUG_TIPP.touch;
+  const zeilen = zs.zug.schritte.map((s, n) => {
+    const fertig = zs.fertig || (zs.i > n);
+    const jetzt = !zs.fertig && zs.i === n;
+    return `<li class="${fertig ? 'fertig' : jetzt ? 'jetzt' : ''}">${fertig ? '✓ ' : ''}${esc(s.text)}${jetzt ? `<small>${esc(zs.netz ? 'Erst ans Netz: ' + T.netz : zugTipp(s))}</small>` : ''}</li>`;
+  }).join('');
+  const unten = zs.fertig ? '<p class="gut">✓ Geschafft!</p>'
+    : zs.i < 0 ? `<p class="schlecht">${esc(zs.meldung ? zs.meldung.text : '')}<br>Gleich noch einmal!</p>`
+    : zs.meldung && (!zs.meldung.ok || match.state === 'pointOver') ? `<p class="schlecht">${esc(zs.meldung.text)}</p>` : '';
+  box.innerHTML = `<b>${esc(zs.zug.name)}</b><ol>${zeilen}</ol>${unten}`;
+}
+
 function hudFrame(dt) {
   if (hudEl.hidden) return;
   diagFrame(dt);
+  zugFrame();
   kameraMini(dt);
   const off = (t, el) => { if (t > 0 && t - dt <= 0) el.classList.remove('on'); return t - dt; };
   msgTimer = off(msgTimer, $('#msg'));
@@ -1593,6 +1710,17 @@ function showResult(r) {
   endMatch();
   if (r.training) {
     const tr = r.training;
+    if (tr.lernen) {
+      // Spielzug-Training: Wie oft hat es geklappt, und ist der Spielzug jetzt gelernt?
+      const z = SZ.ZUEGE[tr.lernen], stufe = SZ.stufe(zugSpeicher, tr.lernen), bisher = (zugSpeicher[tr.lernen] || {}).t || 0;
+      sound.applause(0.6, tr.score > 0);
+      pendingEnd = () => o.onEnd({ won: true, training: tr });
+      return show(`<div class="panel modal"><h2>${esc(z.name)}</h2><div class="score gold">${tr.score} von ${tr.balls}</div>
+        <p class="center dim">Versuchen geschafft</p>
+        <p class="center">${stufe ? `<span class="gold">${SZ.STUFEN[stufe].stern} Gelernt!</span> Schalte „Spielzüge im Match“ ein, dann wirkt er auch im Match.`
+          : `Noch ${SZ.lernenOft - bisher}-mal schaffen, dann hast du ihn gelernt.`}</p>
+        <div class="center"><button class="primary" data-a="resultNext">Weiter</button></div></div>`);
+    }
     const max = tr.balls * 5;
     sound.applause(0.6, tr.score > max * 0.4);
     pendingEnd = () => o.onEnd({ won: true, training: tr });
@@ -1608,7 +1736,8 @@ function showResult(r) {
     <table><tr><th class="num">${esc(n[0])}</th><th></th><th>${esc(n[1])}</th></tr>
       ${line('Punkte', (s) => s.points)}${line('Asse', (s) => s.aces)}${line('Doppelfehler', (s) => s.doubleFaults)}
       ${line('Winner', (s) => s.winners)}${line('Fehler', (s) => s.errors)}
-      ${line('1. Aufschlag im Feld', (s) => (s.firstTotal ? Math.round(100 * s.firstIn / s.firstTotal) + ' %' : '–'))}</table>
+      ${line('1. Aufschlag im Feld', (s) => (s.firstTotal ? Math.round(100 * s.firstIn / s.firstTotal) + ' %' : '–'))}
+      ${session.mitZuegen ? `<tr><td class="num">${session.zuege[0]}</td><td class="center dim">Spielzüge</td><td>${session.zuege[1]}</td></tr>` : ''}</table>
     <div class="center" style="margin-top:14px"><button class="primary" data-a="resultNext">Weiter</button></div></div>`);
 }
 let pendingEnd = null;
