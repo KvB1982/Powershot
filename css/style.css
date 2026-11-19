@@ -165,6 +165,26 @@ label { display: block; font-size: 13px; color: var(--dim); margin: 12px 0 6px; 
   border: 1px solid var(--line); border-radius: 12px; padding: 8px 16px; font-weight: 800; font-size: 18px; display: none; text-align: center; }
 #trainBox.on { display: block; }
 #trainBox small { display: block; font-size: 12px; color: var(--dim); font-weight: 600; }
+/* Spielzug-Training: Kasten mit den Schritten (links oben) */
+#zugBox { position: absolute; left: max(12px, env(safe-area-inset-left)); top: max(64px, calc(env(safe-area-inset-top) + 52px)); width: min(300px, 40vw);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 14px; display: none; }
+#zugBox.on { display: block; }
+#zugBox ol { margin: 6px 0 0; padding-left: 20px; }
+#zugBox li { margin: 3px 0; color: var(--dim); }
+#zugBox li.fertig { color: #35e06a; }
+#zugBox li.jetzt { color: #fff; font-weight: 800; }
+#zugBox li small { display: block; font-weight: 600; color: #35e06a; font-size: 12px; }
+#zugBox p { margin: 6px 0 0; font-weight: 700; }
+#zugBox p.gut { color: #35e06a; }
+#zugBox p.schlecht { color: #ffb14a; }
+/* Spielzug-Buch */
+.grid.zuege { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); align-items: start; }
+.panel.zug { margin: 0; }
+.panel.zug h3 { margin-top: 0; }
+.panel.zug h3 span { font-size: 13px; font-weight: 600; margin-left: 6px; }
+.panel.zug ol { margin: 6px 0; padding-left: 20px; }
+.panel.zug p { margin: 6px 0; font-size: 14px; }
+.panel.zug.zu { opacity: 0.6; }
 #hint { position: absolute; left: 0; right: 0; bottom: max(8px, env(safe-area-inset-bottom)); text-align: center; font-size: 13px;
   color: rgba(255, 255, 255, 0.8); text-shadow: 0 1px 4px #000; padding: 0 70px; }
 #stick { position: fixed; display: none; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%;
@@ -404,3 +424,35 @@ table.planer button.zu { opacity: .6; }
 #anlage .wohin button { padding: 6px 10px; font-size: 13px; min-height: 0; }
 #anlage .wahl { flex-wrap: wrap; justify-content: center; gap: 6px; }
 #anlage .wahl button { padding: 8px 10px; font-size: 14px; min-height: 0; }
+
+/* ---------- Schlagbuch (js/schlagbuch.js): Strichmännchen und Uhr-Anleitung ---------- */
+.sb-bilder { display: grid; grid-template-columns: minmax(200px, 300px) 1fr; gap: 14px; align-items: start; }
+@media (max-width: 760px) { .sb-bilder { grid-template-columns: 1fr; } .sb-gross { max-width: 300px; margin: 0 auto; } }
+.sb svg, .sb-schritte svg { display: block; width: 100%; height: auto; }
+.sb-gross svg, .sb-drei svg { background: rgba(255, 255, 255, 0.05); border-radius: 12px; }
+.sb-gross small { display: block; text-align: center; margin-top: 4px; font-size: 12px; }
+.sb-drei { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.sb-drei b { display: block; margin: 6px 0 2px; color: var(--accent); font-size: 14px; }
+.sb-drei small { font-size: 13px; line-height: 1.35; }
+.sb-fig polyline { fill: none; stroke: #fff; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+.sb-fig .sb-hinten { stroke: #9fb0cc; }
+.sb-kopf { fill: #fff; }
+.sb-schl { fill: none; stroke: var(--accent2); stroke-width: 4; stroke-linecap: round; }
+.sb-schlkopf { fill: rgba(55, 195, 255, 0.18); stroke: var(--accent2); stroke-width: 3; }
+.sb-uhr { fill: #ff8a3a; stroke: #0b1020; stroke-width: 1; }
+.sb-ball { fill: var(--accent); }
+.sb-boden { stroke: rgba(255, 255, 255, 0.25); stroke-width: 2; }
+.sb-weg { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 5; opacity: 0.8; }
+#sb-pfeil path { fill: var(--accent); }
+.sb-legende { font-size: 13px; color: var(--dim); }
+.sb-punkt { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 4px 0 12px; }
+.sb-punkt.uhr { background: #ff8a3a; margin-left: 0; } .sb-punkt.ball { background: var(--accent); }
+.sb-strich { display: inline-block; width: 22px; border-top: 2px dashed var(--accent); margin: 0 4px 3px 12px; }
+.sb-schritte { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+.sb-schritte > div > svg, .sb-handy { max-width: 120px; height: 150px; margin: 0 auto 8px; }
+.sb-handy { display: grid; place-items: center; font-size: 34px; line-height: 1.3; text-align: center; background: rgba(255, 255, 255, 0.06); border-radius: 18px; width: 100px; }
+.sb-schritte > div > b { display: block; color: var(--accent); margin-bottom: 3px; }
+.sb-schritte small { font-size: 13px; line-height: 1.4; }
+.sb-watch .band { fill: #2a3350; } .sb-watch .gehaeuse { fill: #05070d; stroke: #55607a; stroke-width: 3; }
+.sb-watch .knopf { fill: #2b3140; } .sb-watch .knopf.an { fill: var(--accent); } .sb-watch .text { fill: none; }
+.sb-watch text { fill: #fff; font-size: 9px; font-weight: 700; text-anchor: middle; } .sb-watch text.an { fill: #111; }

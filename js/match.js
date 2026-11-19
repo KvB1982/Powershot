@@ -6,6 +6,7 @@ import { MatchScore } from './rules.js';
 import { DIFFICULTY } from './data.js';
 import { achtWerte } from './faehigkeiten.js';
 import { GRUNDSCHLAEGE, AUFSCHLAEGE, schlagWerte, aufschlagWerte, standardAufschlag } from './schlaege.js';
+import { ZUEGE, ZugZaehler, zielfeld, zielPunkt, lieblingsZuege, ZUG_REAKTION, ZUG_STREUT, ZUG_SCHWACH, ZUG_SICHER } from './spielzuege.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -27,6 +28,8 @@ const MUEDE_BREMST = 0.12;         // ganz müde läuft man so viel langsamer
 const MUEDE_STREUT = 0.2;          // … und trifft so viel ungenauer
 const PAUSE_ERHOLT = 0.06;         // beim Seitenwechsel erholt man sich um diesen Anteil
 const PRELL_TIME = 0.42;           // Ball prellen vor dem Aufschlag: so lange dauert einmal Boden und zurück (s)
+const NETZ_Z = 3.2;                // so weit vor dem Netz steht man beim Netzangriff (Meter)
+const GRUND_Z = C.L + 0.7;         // … und so weit hinten an der Grundlinie
 export const UNTEN_TIME = 0.75;    // Aufschlag von unten: so lange dauert es vom Loslassen des Balls bis zum Treffen
 
 // Profi-Schläge aus der Karriere (siehe TECHNIKEN in ausbau.js): Die Zahlen der Schlagart werden malgenommen.
@@ -61,6 +64,38 @@ export class Match {
     this.training = { balls: cfg.balls || (this.mode === 'aufschlag' ? 12 : 20), done: 0, score: 0, zones: [] };
     this.lastPoint = null;
     this.wechselPruefen = false;    // wird wahr, sobald ein Punkt zu Ende ist (siehe next)
+    this.zugEinrichten();
+  }
+
+  // Taktische Spielzüge (siehe js/spielzuege.js). Zwei Möglichkeiten:
+  //   cfg.lernen = 'aufschlag_plus1'              Training: Du übst genau diesen einen Spielzug, der Trainer spielt brav mit.
+  //   cfg.spielzuege = { an: true, stufen: {…} }   Match: Deine gelernten Spielzüge zählen, der Computer hat seine Lieblings-Spielzüge.
+  //     (seiten: [true, false] schaltet es nur für eine Seite ein – zum Testen.)
+  zugEinrichten() {
+    const cfg = this.cfg, sz = cfg.spielzuege;
+    this.zug = null;                // je Seite ein Zähler, der bei jedem Schlag zuschaut
+    this.lernZug = cfg.lernen && ZUEGE[cfg.lernen] ? ZUEGE[cfg.lernen] : null;
+    this.zugMeldung = null;         // Training: Was ist beim letzten eigenen Schlag passiert?
+    this.punktGeschafft = false;
+    if (this.lernZug) {
+      this.zug = [new ZugZaehler({ erlaubt: { [cfg.lernen]: 1 }, lernen: true }), null];
+      this.training = { balls: cfg.balls || 8, done: 0, score: 0, zones: [], lernen: cfg.lernen };
+      // Der Trainer ist flink und spielt sicher zurück – er soll dir ja beim Üben helfen
+      const tr = this.P[1];
+      tr.topSpeed *= 1.2; tr.maxSpeed = tr.topSpeed;
+    } else if (sz && sz.an && this.mode === 'match') {
+      this.zug = this.P.map((p, i) => {
+        if (sz.seiten && !sz.seiten[i]) return null;
+        let erlaubt = sz.stufen || {};
+        if (!p.isHuman) {
+          erlaubt = {};
+          p.lieblinge = sz.lieblinge || lieblingsZuege(achtWerte(p.data.stats));     // (sz.lieblinge: nur zum Testen)
+          for (const id of p.lieblinge) erlaubt[id] = 1;
+        }
+        // (Der Computer bekommt keinen Nachteil, wenn sich seine Spielzüge wiederholen – er hat ja nur drei.)
+        return new ZugZaehler({ erlaubt, klug: this.P[1 - i].tak, ohneStrafe: !p.isHuman });
+      });
+    }
   }
 
   mkPlayer(side, data) {
@@ -104,6 +139,7 @@ export class Match {
     dt = Math.min(dt, 1 / 30);
     this.timer -= dt;
     const st = this.state;
+    this.netzWunsch();
 
     if (st === 'intro') {
       if (this.timer <= 0) this.next();
@@ -161,6 +197,11 @@ export class Match {
 
   // Nach einer Pause: Wie geht es weiter?
   next() {
+    if (this.lernZug && this.training.done >= this.training.balls) {
+      this.state = 'over';
+      this.fx.trainingOver(this.training);
+      return;
+    }
     if (this.mode !== 'match') {
       if (this.training.done >= this.training.balls) {
         this.state = 'over';
@@ -205,7 +246,9 @@ export class Match {
   // Aufschlag
   // ---------------------------------------------------------------
   setupServe() {
-    const s = this.mode === 'match' ? this.score.server : 0;
+    let s = this.mode === 'match' ? this.score.server : 0;
+    // Spielzug-Training: Für einen Return-Spielzug schlägt der Trainer auf, sonst immer du.
+    if (this.lernZug) { s = this.lernZug.start === 'return' ? 1 : 0; this.P[1].noHit = false; }
     this.server = s;
     const srv = this.P[s], rec = this.P[1 - s];
     const right = this.court === 'deuce' ? 1 : -1;
@@ -215,8 +258,10 @@ export class Match {
     this.serveBox = { x0: Math.min(0, bs * C.W), x1: Math.max(0, bs * C.W), sign: bs, zs: -srv.dz };
     for (const p of this.P) {
       p.vx = p.vz = 0; p.plan = null; p.missed = false; p.prep = 0; p.mood = null;
-      p.netRush = false; p.homeX = 0; p.homeZ = C.L + 0.7;
+      p.netRush = false; p.homeX = 0; p.homeZ = GRUND_Z;
+      p.druck = 0; p.sicher = 0; p.zugPlan = null;
     }
+    this.zugPunktStart(srv, rec);
     this.ball.live = false;
     this.ball.pos = this.tossPos(srv, 0);
     this.pred = null;
@@ -293,6 +338,8 @@ export class Match {
   // Der Computer wählt Aufschlagart und Ziel – so ähnlich wie die Profis:
   // erster Aufschlag meist gerade oder Slice, zweiter fast immer Kick. Ganz selten kommt einer von unten.
   aiServe(p) {
+    // Spielzug-Training: Der Trainer schlägt locker in die Mitte des Felds auf, damit du den Return üben kannst
+    if (this.lernZug) return { type: 'serve', art: 'gerade', x: this.serveBox.sign * C.W / 2, d: C.SL - 1.6, power: 0.3 };
     const first = this.score.serveNo === 1;
     const r = Math.random(), r2 = Math.random();
     const bs = this.serveBox.sign;
@@ -308,6 +355,14 @@ export class Match {
     if (art === 'slice' && r < 0.6) x = bs * (kurve > 0 ? C.W - edge : edge);
     if (art === 'kick' && r < 0.6) x = bs * (kurve > 0 ? edge : C.W - edge);
     const d = C.SL - (first ? 0.45 : 1.0) - Math.random() * 0.8;
+    // Lieblings-Spielzug, der mit dem Aufschlag anfängt? Dann dorthin aufschlagen, wo der Plan es will.
+    const plan = p.zugPlan && ZUEGE[p.zugPlan].start === 'aufschlag' ? ZUEGE[p.zugPlan].schritte[0] : null;
+    if (plan) {
+      if (plan.seite === 'aussen') x = bs * (C.W - edge);
+      if (plan.seite === 't') x = bs * edge;
+      if (plan.dannNetz) p.netRush = true;
+      if (art === 'unten') art = 'gerade';
+    }
     return { type: 'serve', art, x, d, power: first ? 0.82 + 0.18 * Math.random() : 0.45 };
   }
 
@@ -401,8 +456,13 @@ export class Match {
     // (dz dreht die Zahlen für den Spieler auf der anderen Platzseite nicht um: "rechts" heißt immer rechts in Flugrichtung.)
     spin = { top: S.top || 0, seite: (S.seite || 0) * p.hand, drall: (S.drall || 0) * p.hand };
     sigma *= sigK; pNet *= netK;
+    if (this.lernZug && !p.isHuman) { sigma *= 0.4; pNet = 0; }      // der Trainer macht fast keine Fehler
+    // Spielzüge: Wer vom Spielzug des Gegners unter Druck gesetzt wurde, schlägt ungenauer und schwächer.
+    // Wer selbst gerade einen Spielzug geschafft hat, trifft für den Rest des Punkts genauer.
+    if (p.druck > 0) { sigma *= 1 + ZUG_STREUT * p.druck; vh *= 1 - ZUG_SCHWACH * p.druck; }
+    if (p.sicher > 0) sigma *= 1 - p.sicher;
     // Mental: Bei Breakball, Satzball und Matchball zittert die Hand – bei nervenstarken Spielern weniger.
-    if (this.mode === 'match' && this.score.wichtigerPunkt()) sigma *= 1 + NERVEN * (NERVEN_MITTE - p.men);
+    if (this.mode === 'match' && !this.lernZug && this.score.wichtigerPunkt()) sigma *= 1 + NERVEN * (NERVEN_MITTE - p.men);
     // Ausdauer: Wer müde ist, trifft ungenauer.
     sigma *= 1 + MUEDE_STREUT * p.muede;
     tx += gauss() * sigma;
@@ -442,11 +502,141 @@ export class Match {
     opp.spaetSeit = null;        // Controller: ab wann der beste Moment zum Schlagen vorbei ist
     // Taktik des Schlägers: Ein kluger Spieler verrät spät, wohin er spielt – der Gegner reagiert später.
     opp.react = opp.isHuman ? 0.04 : this.diff.aiReact * (1.15 - 0.3 * opp.t) * (isServe ? 0.65 : 1 + TAKTIK_TARNT * (p.tak - 0.5));
+    this.zugSchlag(p, opp, from, shot, isServe);
     p.plan = null; p.prep = 0;
     p.homeX = f ? clamp(f.x * 0.2, -1.2, 1.2) : 0;
-    p.homeZ = p.netRush ? 3.2 : C.L + 0.7;
+    p.homeZ = p.netRush ? NETZ_Z : GRUND_Z;
     if (opp.isHuman && this.controls) this.controls.begin('rally');
     this.fx.landing(opp.isHuman && this.diff.marker && f && !this.pred.net ? { x: f.x, z: f.z, in: this.predIn } : null);
+  }
+
+  // ---------------------------------------------------------------
+  // Taktische Spielzüge
+  // ---------------------------------------------------------------
+
+  // Neuer Punkt: Die Zähler fangen von vorne an, und der Computer nimmt sich vielleicht einen Spielzug vor.
+  zugPunktStart(srv, rec) {
+    if (!this.zug) return;
+    for (const z of this.zug) if (z) z.neuerPunkt();
+    this.zugMeldung = null;
+    if (this.score.serveNo === 1) this.punktGeschafft = false;
+    if (this.lernZug) return;
+    for (const p of [srv, rec]) {
+      if (p.isHuman || !this.zug[p.side] || !p.lieblinge) continue;
+      // Kluge Spieler (Taktik) spielen öfter nach Plan
+      p.zugPlan = null;
+      if (Math.random() > 0.3 + 0.5 * p.tak) continue;
+      const rolle = p === srv ? 'aufschlag' : 'return';
+      // … aber keinen Spielzug, den der Gegner inzwischen kennt (Abwechslung!)
+      const passend = p.lieblinge.filter((id) => (ZUEGE[id].start === rolle || ZUEGE[id].start === 'ballwechsel') && this.zug[p.side].wirkung(id) > 0.5);
+      p.zugPlan = passend.length ? passend[Math.floor(Math.random() * passend.length)] : null;
+    }
+
+  }
+
+  // Die Lage aus Sicht des Spielers p (u = seitlich, + = rechts von ihm), für Zielfelder und Prüfung
+  zugLage(p, vonX) {
+    const opp = this.P[1 - p.side];
+    return { vonU: vonX * p.dz, gegnerU: opp.x * p.dz, gegnerD: Math.abs(opp.z), feld: this.serveBox ? this.serveBox.sign * p.dz : 1 };
+  }
+
+  // Ein Schlag ist unterwegs: Der Zähler des Schlägers schaut, ob er zu einem Spielzug passt.
+  zugSchlag(p, opp, from, shot, isServe) {
+    p.druck = 0;                           // der eigene Druck ist mit diesem Schlag "verbraucht"
+    if (this.lernZug && !opp.isHuman) opp.react *= 0.5;      // der Trainer passt gut auf
+    const z = this.zug && this.zug[p.side];
+    if (!z) return;
+    const f = this.pred.first;
+    const m = {
+      ...this.zugLage(p, from.x),
+      aufschlag: isServe, ret: !isServe && this.rally === 2, typ: shot.type, hand: shot.hand || 'fh', haendig: p.hand,
+      landU: f ? f.x * p.dz : 0, landD: f ? -f.z * p.dz : 0, drin: this.predIn,
+    };
+    const r = z.schlag(m);
+    if (this.lernZug) {
+      // Training: nur anzeigen, was geklappt hat – der Trainer bekommt keinen Druck
+      const n = this.lernZug.schritte.length;
+      if (r.fertig) {
+        this.punktGeschafft = true;
+        this.zugMeldung = { ok: true, text: 'Spielzug geschafft!' };
+        this.fx.message('✓ Spielzug geschafft!', 'info');
+      } else if (r.weiter.length) {
+        this.zugMeldung = { ok: true, text: `Schritt ${z.stand(this.cfg.lernen)} von ${n} ✓` };
+      } else if (r.fehler && !this.punktGeschafft) {
+        this.zugMeldung = { ok: false, text: r.fehler.grund };
+        this.fx.message(r.fehler.grund, 'warn');
+      }
+      // Geschafft – oder dieser Versuch kann nicht mehr klappen? Dann lässt der Trainer den Ball durch,
+      // damit es gleich mit dem nächsten Versuch weitergeht.
+      if (this.punktGeschafft || z.vorbei) opp.noHit = true;
+      return;
+    }
+    opp.druck = r.druck;
+    if (!opp.isHuman) opp.react *= 1 + ZUG_REAKTION * r.druck;
+    if (r.fertig) {
+      p.sicher = r.fertig.durchschaut ? 0 : ZUG_SICHER * r.fertig.wirkung;
+      p.zugPlan = null;
+      this.fx.spielzug({ side: p.side, id: r.fertig.id, name: r.fertig.zug.name, wirkung: r.fertig.wirkung, durchschaut: r.fertig.durchschaut, mensch: p.isHuman });
+    }
+  }
+
+  // Der Computer spielt nach Plan: Gibt das Schlagziel für den nächsten Schritt seines Spielzugs zurück (oder null).
+  zugWunsch(p, o) {
+    const z = this.zug && this.zug[p.side];
+    if (!z || !p.zugPlan || o.stretch > 0.55) return null;
+    const zug = ZUEGE[p.zugPlan], i = z.stand(p.zugPlan);
+    // Der Anfang hat nicht geklappt (z. B. der Aufschlag ging woanders hin)? Dann ohne Plan weiter.
+    if (i === 0 && (zug.start === 'aufschlag' || (zug.start === 'return' && this.rally !== 1))) { p.zugPlan = null; return null; }
+    const step = zug.schritte[i], opp = this.P[1 - p.side];
+    if (step.dannNetz) p.netRush = true;
+    if (step.extra === 'volley' && !o.volley) { p.zugPlan = null; return null; }
+    // Nur Schritte, die zur Lage passen, spielt der Computer mit Absicht (ins offene Feld, in die Ecke, Stoppball, Lob).
+    // Bei "cross" oder "die Linie entlang" spielt er lieber wie sonst auch – manchmal passt das dann von allein.
+    if (!step.art && !['offen', 'ecke'].includes(step.seite)) return null;
+    if (step.extra === 'gegnerVorn' && Math.abs(opp.z) > 7.5) return null;
+    // Ein Stoppball lohnt sich nur, wenn man selbst im Feld steht und der Gegner weit hinten
+    if (step.art && step.art[0] === 'drop' && !(Math.abs(opp.z) > C.L + 0.5 && Math.abs(p.z) < C.L - 1)) return null;
+    const ziel = zielPunkt(step, this.zugLage(p, o.from.x), z.davor, 0.5 + (1 - p.c) * 0.9);
+    return { type: ziel.art || 'drive', x: ziel.u * p.dz, d: ziel.d, power: step.art ? 0.5 : 0.7 + 0.25 * Math.random() };
+  }
+
+  // Für die Anzeige im Spielzug-Training: Welcher Schritt ist dran, und wo ist das Zielfeld auf dem Platz?
+  zugStand() {
+    if (!this.lernZug) return null;
+    const me = this.P[0], z = this.zug[0], zug = this.lernZug, b = this.ball;
+    let i = z.stand(this.cfg.lernen);
+    const fertig = this.punktGeschafft;
+    if (!fertig && i === 0 && z.vorbei) i = -1;                  // dieser Versuch ist vorbei – beim nächsten Punkt wieder
+    const step = !fertig && i >= 0 ? zug.schritte[i] : null;
+    const aufschlag = step && step.wer === 'aufschlag';
+    const dran = !!step && (aufschlag ? this.state === 'serveReady' && this.server === 0
+      : this.state === 'rally' && b.lastHitter === 1 && !me.missed);
+    let zone = null;
+    if (dran) {
+      const vonX = aufschlag ? me.x : me.plan ? me.plan.x : b.pos.x;
+      const f = zielfeld(step, this.zugLage(me, vonX), z.davor);
+      // aus der Sicht des Spielers (u, d) zurück auf den Platz (x, z); du spielst unten (dz = 1)
+      zone = { x0: f.u0 * me.dz, x1: f.u1 * me.dz, z0: -me.dz * f.d1, z1: -me.dz * f.d0, beide: f.beide };
+      if (aufschlag) { zone.z0 = -me.dz * C.SL; zone.z1 = 0; }
+    }
+    return { id: this.cfg.lernen, zug, i, fertig, dran, zone, step, meldung: this.zugMeldung,
+      netz: !!step && step.extra === 'volley' && !me.netRush };
+  }
+
+  // Ans Netz oder zurück an die Grundlinie – auf Wunsch der Steuerung:
+  //   Touch: zwei Finger nach oben = ans Netz ('vor'), zwei Finger nach unten = Grundlinie ('zurueck')
+  //   Controller/Uhr: Doppelklopfen oder die Taste "Netz" wechselt hin und her ('wechsel')
+  netzWunsch() {
+    const p = this.P[0];
+    if (!p.isHuman || !this.controls || !this.controls.takeNetz) return;
+    const w = this.controls.takeNetz();
+    if (!w || !['serveReady', 'toss', 'rally'].includes(this.state)) return;
+    const vor = w === 'vor' ? true : w === 'zurueck' ? false : !p.netRush;
+    if (vor === p.netRush) return;
+    p.netRush = vor;
+    p.homeZ = vor ? NETZ_Z : GRUND_Z;
+    p.plan = null; p.planAge = 9;
+    this.fx.message(vor ? 'Ans Netz!' : 'Zurück an die Grundlinie', 'info');
   }
 
   inArea(x, z, hitter, isServe) {
@@ -522,6 +712,16 @@ export class Match {
     else if (reason === 'doppelfehler') sc.stats[loser].doubleFaults++;
     else sc.stats[loser].errors++;
     const events = sc.pointTo(winner);
+    // Spielzug-Training: Jeder Punkt ist ein Versuch. Nur wenn der Trainer gar nicht an den Ball kam (oder einen
+    // Fehler machte), bevor du fertig warst, zählt der Versuch nicht – dafür kannst du ja nichts.
+    const ohneSchuld = this.lernZug && winner === 0 && !this.punktGeschafft && !this.zug[0].vorbei;
+    if (ohneSchuld) this.zugMeldung = { ok: true, text: 'Der Trainer kam nicht dran – dieser Versuch zählt nicht.' };
+    if (this.lernZug && !ohneSchuld) {
+      const tr = this.training;
+      tr.done++;
+      if (this.punktGeschafft) tr.score++;
+      this.fx.trainingUpdate(tr);
+    }
     this.state = 'pointOver';
     const big = events.includes('game');
     this.timer = events.includes('match') ? 3.5 : big ? 3.2 : 2.3;
@@ -554,14 +754,6 @@ export class Match {
     } else {
       p.plan = null;
       p.prep = Math.max(0, p.prep - dt * 4);
-    }
-
-    // Controller/Uhr: Doppelklopfen (oder die Taste "Netz") wechselt zwischen Netzangriff und Grundlinie.
-    if (p.isHuman && this.controls && this.controls.takeNetz && this.controls.takeNetz() && this.state === 'rally') {
-      p.netRush = !p.netRush;
-      p.homeZ = p.netRush ? 3.2 : C.L + 0.7;
-      p.plan = null; p.planAge = 9;
-      this.fx.message(p.netRush ? 'Ans Netz!' : 'Zurück an die Grundlinie', 'info');
     }
 
     let tx = p.homeX, tz = p.dz * p.homeZ;
@@ -632,7 +824,8 @@ export class Match {
       if (s.z * p.dz < 0.4 || s.y > 2.5) continue;
       const volley = s.b === 0;
       // Kommt ein Lob, darf man ihn überall über dem Kopf nehmen (Schmetterball) – nicht nur am Netz.
-      const ueberKopf = lob && s.y >= 2.05 && s.y <= 2.5;
+      // (Wer gerade von einem Spielzug überrascht wurde, kommt nicht mehr zum Schmettern – der Lob fliegt über ihn weg.)
+      const ueberKopf = lob && s.y >= 2.05 && s.y <= 2.5 && !(p.druck > 0.5);
       if (volley && (b.isServe || !this.predIn || !(nearNet || ueberKopf))) continue;
       const fh = (s.x - p.x) * p.dz * p.hand >= -0.35;
       const side = (fh ? 1 : -1) * p.hand * p.dz;
@@ -649,6 +842,7 @@ export class Match {
       let score = lack * 50 + Math.abs(s.y - 0.95) * 1.5 + time * 0.4 + (volley ? 0.2 : 0);
       if (s.y < 0.3) score += 1.5;
       score += Math.max(0, s.z * p.dz - (C.L + 3.5)) * 2;
+      if (volley && p.netRush && p.isHuman) score -= 0.8;      // du wolltest ans Netz: dann lieber aus der Luft nehmen als nach dem Aufprall
       if (ueberKopf) score = lack * 50 + time * 0.4 - 1;       // erreichbarer Schmetterball ist die beste Wahl
       if (fixedZ) score = lack * 50 + Math.abs((s.z - p.z)) * 3;
       if (score < bs) {
@@ -712,6 +906,9 @@ export class Match {
     }
     const shot = this.buildShot(p, intent, o);
     const kind = shot.type === 'smash' ? 'sv' : fh ? 'fh' : 'bh';
+    shot.hand = fh ? 'fh' : 'bh';
+    // Mit Spielzügen: Wer einen Stoppball vorne erläuft, bleibt am Netz (zurückrennen schafft man sowieso nicht)
+    if (this.zug && !p.isHuman && Math.abs(p.z) < 5) p.netRush = true;
     this.launch(p, from, shot, false);
     this.fx.swing(p.side, kind, from.y, shot.type);
     this.fx.hit({ side: p.side, speed: shot.speed, power: intent.power, type: shot.type });
@@ -720,6 +917,10 @@ export class Match {
   // Der Computer entscheidet, wohin er spielt
   aiShot(p, o) {
     if (this.mode === 'ballmaschine') return this.feedIntent();
+    // Spielzug-Training: Der Trainer spielt ruhig und sicher in die Mitte zurück
+    if (this.lernZug) return { type: 'drive', x: (Math.random() - 0.5) * 4, d: C.L * 0.7, power: 0.45 };
+    const wunsch = this.zugWunsch(p, o);
+    if (wunsch) return wunsch;
     const opp = this.P[1 - p.side];
     const r = Math.random();
     const oppAtNet = Math.abs(opp.z) < 5;

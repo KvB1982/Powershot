@@ -1,6 +1,6 @@
 // Powershot – Steuerung. Drei Arten:
 //   klassik : wie in der Python-Version (Mausrad/Pfeile zielen, linke Maustaste halten = Kraft)
-//   touch   : für iPad/Handy (links Joystick, rechts wischen)
+//   touch   : für iPad/Handy (links Joystick, rechts wischen; zwei Finger nach oben = ans Netz, nach unten = Grundlinie)
 //   profi   : Tastatur, selbst laufen, verschiedene Schläge, Richtung beim Treffen
 //   controller : Switch-Controller (Joy-Con, Pro Controller): Stick, Tasten und – in der iOS-App – Schwingen
 // Dazu kommt, wenn man will, das Laufen mit der Kamera (kamera.js) – das geht mit jeder der vier Arten zusammen.
@@ -22,6 +22,10 @@ export const POWER_MAX = 1.4;
 export const POWER_LIMIT = 1.08;       // darüber fliegt der Ball zu lang
 const CHARGE_TIME = 0.75;              // Sekunden bis volle Kraft (klassik)
 const DOUBLE = 0.32;                   // Zeitfenster für Doppelklick / Doppeltipp
+// --- Touch: mit zwei Fingern nach oben wischen = ans Netz, nach unten = zurück an die Grundlinie ---
+const ZWEI_ZEIT = 0.35;                // so schnell nacheinander (Sekunden) müssen beide Finger aufsetzen
+const ZWEI_NAH = 220;                  // so nah beieinander (Pixel) müssen die beiden Finger sein
+const ZWEI_WEG = 40;                   // so weit (Pixel) müssen beide Finger nach oben oder unten wischen
 
 // --- Controller: Schwung-Erkennung. Mit diesen Zahlen kannst du das Schwingen einstellen. ---
 const SWING_START = 1.6;               // ab dieser Beschleunigung (in g, 1 g = Erdanziehung) zählt es als Schwung
@@ -71,7 +75,9 @@ export class Controls {
     this.onHint = null;           // wird von app.js gesetzt: kurzer Hinweis-Text auf dem Bildschirm
     // Zum Fehlersuchen: Wie viele Meldungen kommen vom Controller/Schläger an, wie viele Schwünge von der Uhr?
     this.diag = { pakete: 0, uhr: 0, letzter: '–' };
-    this.netzWechsel = false;     // true, sobald "ans Netz / zurück" gewünscht wurde (Doppelklopfen oder Taste)
+    this.netzWechsel = null;      // Wunsch: 'vor' = ans Netz, 'zurueck' = Grundlinie, 'wechsel' = hin und her (Doppelklopfen oder Taste)
+    this.finger = new Map();      // Touch: alle Finger, die gerade auf dem Bildschirm sind (für das Wischen mit zwei Fingern)
+    this.zwei = null;             // Touch: läuft gerade ein Wischen mit zwei Fingern? { a, b, fertig }
     this.nativePad = false;       // true, sobald die iOS-App den Controller meldet
     this.onPause = null;          // wird von app.js gesetzt: Pause-Taste am Controller
     this.onMenu = null;           // wird von app.js gesetzt: Controller im Menü ('links', 'rechts', 'hoch', 'runter', 'ok', 'zurueck')
@@ -91,7 +97,7 @@ export class Controls {
     this.live = null;           // Eingabe, die gerade entsteht (Finger noch auf dem Bildschirm)
   }
 
-  setMode(mode) { this.mode = mode; this.reset(); this.showStick(false); }
+  setMode(mode) { this.mode = mode; this.reset(); this.showStick(false); this.finger.clear(); this.zwei = null; this.netzWechsel = null; }
 
   // ctx: 'serve' | 'rally'
   begin(ctx) {
@@ -168,7 +174,7 @@ export class Controls {
     const klopfen = s.geste && s.geste.id !== this.gesteId;
     if (s.geste) this.gesteId = s.geste.id;
     if (this.enabled && this.mode === 'controller' && (klopfen || (neu.netz && !alt.netz))) {
-      this.netzWechsel = true;
+      this.netzWechsel = 'wechsel';
       this.diag.letzter = 'Doppelklopfen / Netz-Taste';
     }
     P.btn = neu;
@@ -300,6 +306,7 @@ export class Controls {
     e.preventDefault();
     const r = this.el.getBoundingClientRect();
     const x = e.clientX - r.left, y = e.clientY - r.top;
+    if (this.zweiStart(e.pointerId, x, y)) return;
     if (x < r.width * 0.42 && this.stick.id === null) {
       this.stick = { id: e.pointerId, x0: x, y0: y, x: 0, f: 0 };
       this.showStick(true, x, y, 0, 0);
@@ -312,6 +319,9 @@ export class Controls {
     if (!this.enabled || this.mode !== 'touch') return;
     const r = this.el.getBoundingClientRect();
     const x = e.clientX - r.left, y = e.clientY - r.top;
+    const fi = this.finger.get(e.pointerId);
+    if (fi) { fi.x = x; fi.y = y; }
+    if (this.zwei) return this.zweiBewegt();
     if (e.pointerId === this.stick.id) {
       const R = 55;
       let dx = (x - this.stick.x0) / R, dy = (y - this.stick.y0) / R;
@@ -332,6 +342,12 @@ export class Controls {
       return;
     }
     if (this.mode !== 'touch') return;
+    this.finger.delete(e.pointerId);
+    if (this.zwei) {
+      // Das Wischen mit zwei Fingern ist erst vorbei, wenn beide Finger wieder oben sind
+      if (!this.finger.has(this.zwei.a) && !this.finger.has(this.zwei.b)) this.zwei = null;
+      return;
+    }
     if (e.pointerId === this.stick.id) {
       this.stick = { id: null, x0: 0, y0: 0, x: 0, f: 0 };
       this.showStick(false);
@@ -343,6 +359,34 @@ export class Controls {
       this.committed = raw;
       if (this.ctx === 'serve') this.serveOut = raw;
     }
+  }
+
+  // Touch: Ein Finger setzt auf. Liegt schon ein zweiter Finger ganz frisch und nah daneben,
+  // ist das der Anfang von "mit zwei Fingern wischen". Dann zählt keiner der beiden mehr als Joystick oder Schlag.
+  zweiStart(id, x, y) {
+    let partner = null;
+    if (!this.zwei) {
+      for (const [pid, f] of this.finger) {
+        if (this.time - f.t0 <= ZWEI_ZEIT && Math.hypot(f.x0 - x, f.y0 - y) <= ZWEI_NAH && Math.hypot(f.x - f.x0, f.y - f.y0) < 30) partner = pid;
+      }
+    }
+    this.finger.set(id, { x0: x, y0: y, x, y, t0: this.time });
+    if (this.zwei) return true;            // ein dritter Finger während des Wischens: ignorieren
+    if (partner === null) return false;
+    this.zwei = { a: partner, b: id, fertig: false };
+    if (this.stick.id === partner) { this.stick = { id: null, x0: 0, y0: 0, x: 0, f: 0 }; this.showStick(false); }
+    if (this.swipe && this.swipe.id === partner) { this.swipe = null; this.live = null; }
+    return true;
+  }
+
+  // Touch: Beide Finger sind weit genug in dieselbe Richtung gewischt? Nach oben = ans Netz, nach unten = Grundlinie.
+  zweiBewegt() {
+    const Z = this.zwei, a = this.finger.get(Z.a), b = this.finger.get(Z.b);
+    if (Z.fertig || !a || !b) return;
+    const da = a.y - a.y0, db = b.y - b.y0;
+    if (Math.abs(da) < ZWEI_WEG || Math.abs(db) < ZWEI_WEG || Math.sign(da) !== Math.sign(db)) return;
+    Z.fertig = true;
+    this.netzWechsel = da < 0 ? 'vor' : 'zurueck';
   }
 
   commitClassic(type) {
@@ -468,10 +512,11 @@ export class Controls {
     return this.kamera ? this.kamera.ziel(performance.now() / 1000) : null;
   }
 
-  // Fragt das Match: Soll zwischen Netz und Grundlinie gewechselt werden? (Die Frage löscht den Wunsch wieder.)
+  // Fragt das Match: Soll der Spieler ans Netz ('vor'), zurück ('zurueck') oder wechseln ('wechsel')?
+  // (Die Frage löscht den Wunsch wieder. Ohne Wunsch kommt null.)
   takeNetz() {
     const r = this.netzWechsel;
-    this.netzWechsel = false;
+    this.netzWechsel = null;
     return r;
   }
 

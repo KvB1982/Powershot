@@ -55,6 +55,8 @@ struct SchlaegerView: View {
                 // Aufgenommene Schlag-Serien von der Uhr weitergeben (AirDrop, „In Dateien sichern“ …)
                 if !uhr.aufnahmen.isEmpty {
                     ShareLink(items: uhr.aufnahmen) { Text("📁 \(uhr.aufnahmen.count) Aufnahmen teilen").font(.footnote) }
+                } else {
+                    Text("Aufnehmen: auf der Uhr „⏺ Schläge aufnehmen“ antippen").font(.footnote).foregroundStyle(.secondary)
                 }
             }
             Text("\(uhrZustand) · App-Version \(version)").font(.caption2).foregroundStyle(.secondary)

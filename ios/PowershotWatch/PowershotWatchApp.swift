@@ -42,8 +42,11 @@ struct PowershotWatchApp: App {
                     Text("Uhr als Schläger").font(.footnote).foregroundStyle(.secondary)
                     Button("Start") { schlaeger.starten() }
                         .tint(.yellow)
-                    Button("Schläge aufnehmen") { zeigeSchlagarten = true }
-                        .font(.footnote)
+                    // Aufnehmen: eigener, gut sichtbarer Knopf (früher war er klein und wurde übersehen)
+                    Button("⏺ Schläge aufnehmen") { zeigeSchlagarten = true }
+                        .tint(.orange)
+                    Text("Aufnehmen: 10 Schläge einer Sorte für die Sammlung").font(.system(size: 11)).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                     Button("Verbindung testen") { schlaeger.testen() }
                         .font(.footnote)
                     Text(schlaeger.funkStatus).font(.system(size: 11)).foregroundStyle(.secondary)
