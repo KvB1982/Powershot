@@ -203,9 +203,12 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
   (`RUN_Z`, `RUN_X` in `stadium.js`). Figur 1,83 m mal `gross`, Schläger 69 cm. Nur der Ball ist absichtlich größer gezeichnet (Radius 5,5 cm statt 3,3 cm),
   damit man ihn sieht; gerechnet wird mit 3,3 cm.
 - Wie groß die Spieler im Vergleich zum Platz aussehen, bestimmt die Kamera (`BLICK` oben in `js/game3d.js`, Einstellungen → „Blick auf den Platz“, `settings.blick`):
-  `tv` (Standard) steht 35 m hinter dem Netz und 12,5 m hoch mit 43° Blickwinkel in der Breite – der Spieler vorn ist etwa 1,9-mal so groß wie der hinten, wie in einer Übertragung.
-  `nah` ist der alte Blick (23,5 m, 6,4 m hoch, 62°): vorn 2,9-mal so groß wie hinten. Die TV-Werte sind aus typischen Kamera-Standorten geschätzt, nicht an einem echten Fernsehbild ausgemessen;
-  nur als Standbilder im Test-Browser geprüft, nicht von Hand gespielt.
+  `tv` (Standard) steht 46 m hinter dem Netz und 11 m hoch mit 31,5° Blickwinkel in der Breite (16:9: 18° in der Höhe) – eine Tele-Kamera wie bei einer Übertragung.
+  Sie schiebt den Platz in der Länge zusammen: Der Spieler vorn ist im Bild 43 % so hoch wie der ganze Platz, der hintere 25 % (vorn 1,7-mal so groß wie hinten).
+  Die Kamera steht dabei mitten in der hinteren Tribüne; alles hinter `ab` 19,2 m wird deshalb nicht gezeichnet (`camera.near`).
+  `nah` ist der alte Blick (23,5 m, 6,4 m hoch, 62°): vorn 43 %, hinten nur 15 % (2,9-mal). Die Figur selbst ist nachgemessen 1,76 m hoch in der Grundstellung (leicht gebeugt, 1,83 m aufrecht), der Schläger 68,9 × 26,7 cm.
+  Die TV-Werte sind aus der Erinnerung an typische Übertragungs-Bilder geschätzt (Grundlinie vorn etwa 1,65-mal so breit wie hinten), nicht an einem echten Fernsehbild ausgemessen;
+  nur als Standbilder im Test-Browser geprüft (16:9, 4:3, hochkant), nicht von Hand gespielt. Der Ball ist im TV-Blick vorn nur etwa halb so groß im Bild wie früher.
 
 ## Bekannte Grenzen
 

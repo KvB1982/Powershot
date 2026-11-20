@@ -14,16 +14,19 @@ const REASON_TEXT = { aus: 'Aus!', netz: 'Netz!', doppelfehler: 'Doppelfehler!',
 import { Siegerehrung } from './siegerehrung.js';
 import { Anlage } from './anlage.js';
 
-// Blick auf den Platz im Match. Der Platz selbst hat immer die echten Maße (siehe COURT in physics.js) –
+// Blick auf den Platz im Match. Platz, Figur, Schläger und Netz haben die echten Maße in Metern (nachgemessen) –
 // wie groß die Spieler im Vergleich zum Platz AUSSEHEN, bestimmt allein die Kamera.
-//   tv:  wie im Fernsehen. Die Kamera steht weit hinten und hoch oben (über der letzten Reihe) und "zoomt" heran.
-//        Dadurch wirken beide Spieler ähnlich groß, und der Platz sieht kurz und gestaucht aus – so kennt man es aus Übertragungen.
-//   nah: wie bisher. Die Kamera schwebt dicht hinter dir und schaut mit einem weiten Winkel. Du bist groß, der Gegner winzig,
-//        und der Platz wirkt sehr lang.
+//   tv:  wie im Fernsehen. Die Kamera steht sehr weit hinten (mitten in der Tribüne) und schaut mit einem engen Winkel,
+//        wie durch ein Fernrohr. Dadurch wird der Platz in der Länge "zusammengeschoben": Er sieht kurz aus,
+//        und die Spieler wirken im Vergleich dazu groß. Der Spieler hinten ist nur wenig kleiner als der vorn.
+//   nah: wie früher. Die Kamera schwebt dicht hinter dir und schaut mit einem weiten Winkel. Du bist groß,
+//        der Gegner winzig, und der Platz wirkt sehr lang.
 // winkel = Blickwinkel in der Breite (Grad), hoch/hinten = wo die Kamera steht (Meter über dem Boden / hinter dem Netz),
-// zielZ = auf welche Stelle des Platzes sie schaut (Meter vor dem Netz), mitX = wie stark sie seitlich mit dir mitgeht.
+// zielZ = auf welche Stelle des Platzes sie schaut (Meter vor dem Netz, minus = hinter dem Netz), mitX = wie stark sie seitlich mit dir mitgeht,
+// hochMax = so viel Grad darf das Bild höchstens in der Höhe zeigen, ab = alles, was weiter hinten als so viele Meter
+// hinter dem Netz steht (die Tribüne, in der die Kamera sitzt), wird nicht gezeichnet – sonst wäre sie im Weg.
 const BLICK = {
-  tv:  { winkel: 43, hoch: 12.5, hinten: 35, zielZ: 2.5, mitX: 0.15 },
+  tv:  { winkel: 31.5, hoch: 11, hinten: 46, zielZ: -1.6, mitX: 0.12, hochMax: 20, ab: 19.2 },
   nah: { winkel: 62, hoch: 6.4, hinten: 23.5, zielZ: 1.5, mitX: 0.35 },
 };
 
@@ -68,7 +71,7 @@ export class Game3D {
     const hochAus = (breitGrad) => 2 * Math.atan(Math.tan(breitGrad * rad / 2) / this.aspect) / rad;   // Breite → Höhe des Blickwinkels
     let fov = Math.min(hochAus(this.winkel), this.winkelHoch);      // nicht höher als erlaubt (sonst sieht man beim TV-Blick die Tribüne unter der Kamera) …
     fov = Math.max(fov, hochAus(this.winkelBreitMin));               // … aber der Platz muss in der Breite immer ganz zu sehen sein
-    this.camera.fov = clamp(fov, 18, 78);
+    this.camera.fov = clamp(fov, 12, 78);
     this.camera.updateProjectionMatrix();
   }
 
@@ -394,7 +397,10 @@ export class Game3D {
   frame(dt) {
     this.time += dt;
     const m = this.match;
-    if (!m) this.setWinkel(62);       // außerhalb des Matches gilt immer der weite Blickwinkel
+    if (!m) {
+      this.setWinkel(62);             // außerhalb des Matches gilt immer der weite Blickwinkel
+      if (this.nahVorher != null) { this.camera.near = this.nahVorher; this.nahVorher = null; this.camera.updateProjectionMatrix(); }
+    }
     if (m) this.syncMatch(dt, m); else if (this.ehrung.an) this.ehrung.update(dt); else if (this.anlage.an) this.anlage.update(dt); else this.menuCamera(dt);
     for (const mk of this.marks) {
       if (!mk.visible) continue;
@@ -527,16 +533,18 @@ export class Game3D {
     // breit = 0 bei normalen Bildschirmen (16:9 und schmaler), 1 bei sehr breiten.
     const breit = clamp((this.aspect - 1.78) / 0.4, 0, 1);
     const B = BLICK[this.blick] || BLICK.tv;
-    let tp, tl;
+    let tp, tl, nah = 0.3;
     if (B === BLICK.tv) {
       // Wie im Fernsehen: weit hinten, hoch oben, enger Blickwinkel. Die Kamera geht nur wenig mit dir mit.
-      this.setWinkel(B.winkel + 7 * breit, 27, 31);
+      this.setWinkel(B.winkel + 5 * breit, B.hochMax, 22);
       tp = new THREE.Vector3(me.x * B.mitX, B.hoch, B.hinten + Math.max(0, me.z - 15) * 0.6);
       // Hochkant-Bildschirm: Das Bild ist höher als nötig. Die Kamera schaut dann etwas weiter nach oben,
       // damit der untere Bildrand bleibt, wo er ist, und der Platz nicht nach oben rutscht.
-      const zuviel = Math.max(0, this.camera.fov - 27) / 2 * Math.PI / 180;
+      const zuviel = Math.max(0, this.camera.fov - B.hochMax) / 2 * Math.PI / 180;
       const runter = Math.atan2(B.hoch - 0.8, B.hinten - B.zielZ) - zuviel;          // so steil schaut die Kamera nach unten
-      tl = new THREE.Vector3(me.x * B.mitX * 0.8 + b.x * 0.04, 0.8, B.hinten - (B.hoch - 0.8) / Math.tan(Math.max(0.05, runter)));
+      tl = new THREE.Vector3(me.x * B.mitX * 0.8 + b.x * 0.03, 0.8, B.hinten - (B.hoch - 0.8) / Math.tan(Math.max(0.03, runter)));
+      // Die Tribüne zwischen Kamera und Platz ausblenden: Die Kamera zeichnet erst ab einer bestimmten Entfernung.
+      nah = (tp.z - B.ab) * Math.cos(runter) + B.hoch * Math.sin(runter);
     } else {
       this.setWinkel(B.winkel);
       tp = new THREE.Vector3(me.x * B.mitX, narrow ? 9.5 : B.hoch + 0.6 * breit,
@@ -547,6 +555,10 @@ export class Game3D {
     this.camPos.lerp(tp, k); this.camLook.lerp(tl, k);
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.camLook);
+    // Ab welcher Entfernung gezeichnet wird (nur beim TV-Blick weit weg, und erst wenn die Kamera dort angekommen ist)
+    if (this.camPos.distanceTo(tp) > 1.5) nah = 0.3;
+    if (this.nahVorher == null) this.nahVorher = this.camera.near;      // merken, wie es vor dem Match war
+    if (this.camera.near !== nah) { this.camera.near = nah; this.camera.updateProjectionMatrix(); }
   }
 
   menuCamera(dt) {
