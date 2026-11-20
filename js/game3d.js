@@ -14,6 +14,19 @@ const REASON_TEXT = { aus: 'Aus!', netz: 'Netz!', doppelfehler: 'Doppelfehler!',
 import { Siegerehrung } from './siegerehrung.js';
 import { Anlage } from './anlage.js';
 
+// Blick auf den Platz im Match. Der Platz selbst hat immer die echten Maße (siehe COURT in physics.js) –
+// wie groß die Spieler im Vergleich zum Platz AUSSEHEN, bestimmt allein die Kamera.
+//   tv:  wie im Fernsehen. Die Kamera steht weit hinten und hoch oben (über der letzten Reihe) und "zoomt" heran.
+//        Dadurch wirken beide Spieler ähnlich groß, und der Platz sieht kurz und gestaucht aus – so kennt man es aus Übertragungen.
+//   nah: wie bisher. Die Kamera schwebt dicht hinter dir und schaut mit einem weiten Winkel. Du bist groß, der Gegner winzig,
+//        und der Platz wirkt sehr lang.
+// winkel = Blickwinkel in der Breite (Grad), hoch/hinten = wo die Kamera steht (Meter über dem Boden / hinter dem Netz),
+// zielZ = auf welche Stelle des Platzes sie schaut (Meter vor dem Netz), mitX = wie stark sie seitlich mit dir mitgeht.
+const BLICK = {
+  tv:  { winkel: 43, hoch: 12.5, hinten: 35, zielZ: 2.5, mitX: 0.15 },
+  nah: { winkel: 62, hoch: 6.4, hinten: 23.5, zielZ: 1.5, mitX: 0.35 },
+};
+
 export class Game3D {
   constructor(canvas, sound) {
     this.canvas = canvas;
@@ -32,6 +45,9 @@ export class Game3D {
     this.camPos = new THREE.Vector3(0, 9, 30);
     this.camLook = new THREE.Vector3(0, 1, 0);
     this.quality = 'hoch';
+    this.blick = 'tv';              // Blick im Match: 'tv' (wie im Fernsehen) oder 'nah' (dicht hinter dir), siehe BLICK oben
+    this.winkel = 62;               // Blickwinkel in der Breite, den die Kamera gerade hat
+    this.winkelHoch = 78; this.winkelBreitMin = 0;      // Grenzen dazu, siehe setWinkel
     this.realFigures = true;        // realistisches Spielermodell statt der einfachen Figur
     this.venueKey = '';
     this.buildProps();
@@ -48,9 +64,20 @@ export class Game3D {
     this.aspect = w / h;
     this.camera.aspect = this.aspect;
     // Blickwinkel so wählen, dass der Platz in der Breite immer ganz zu sehen ist
-    const hf = 62 * Math.PI / 180;
-    this.camera.fov = clamp(2 * Math.atan(Math.tan(hf / 2) / this.aspect) * 180 / Math.PI, 30, 78);
+    const hf = this.winkel * Math.PI / 180, rad = Math.PI / 180;
+    const hochAus = (breitGrad) => 2 * Math.atan(Math.tan(breitGrad * rad / 2) / this.aspect) / rad;   // Breite → Höhe des Blickwinkels
+    let fov = Math.min(hochAus(this.winkel), this.winkelHoch);      // nicht höher als erlaubt (sonst sieht man beim TV-Blick die Tribüne unter der Kamera) …
+    fov = Math.max(fov, hochAus(this.winkelBreitMin));               // … aber der Platz muss in der Breite immer ganz zu sehen sein
+    this.camera.fov = clamp(fov, 18, 78);
     this.camera.updateProjectionMatrix();
+  }
+
+  // Blickwinkel in der Breite ändern (im Match je nach Blick, im Menü immer 62 Grad)
+  // hochMax = höchstens so viel Grad in der Höhe, breitMin = mindestens so viel Grad in der Breite.
+  setWinkel(grad, hochMax = 78, breitMin = 0) {
+    if (grad === this.winkel && hochMax === this.winkelHoch && breitMin === this.winkelBreitMin) return;
+    this.winkel = grad; this.winkelHoch = hochMax; this.winkelBreitMin = breitMin;
+    this.resize();
   }
 
   setQuality(q) {
@@ -367,6 +394,7 @@ export class Game3D {
   frame(dt) {
     this.time += dt;
     const m = this.match;
+    if (!m) this.setWinkel(62);       // außerhalb des Matches gilt immer der weite Blickwinkel
     if (m) this.syncMatch(dt, m); else if (this.ehrung.an) this.ehrung.update(dt); else if (this.anlage.an) this.anlage.update(dt); else this.menuCamera(dt);
     for (const mk of this.marks) {
       if (!mk.visible) continue;
@@ -498,9 +526,23 @@ export class Game3D {
     // am unteren Rand abgeschnitten wird, geht die Kamera dort etwas höher und weiter zurück.
     // breit = 0 bei normalen Bildschirmen (16:9 und schmaler), 1 bei sehr breiten.
     const breit = clamp((this.aspect - 1.78) / 0.4, 0, 1);
-    const tp = new THREE.Vector3(me.x * 0.35, narrow ? 9.5 : 6.4 + 0.6 * breit,
-      narrow ? 29 : 23.5 + 3 * breit + Math.max(0, me.z - 13) * 0.6);
-    const tl = new THREE.Vector3(me.x * 0.2 + b.x * 0.08, 0.8, narrow ? -1 : 1.5);
+    const B = BLICK[this.blick] || BLICK.tv;
+    let tp, tl;
+    if (B === BLICK.tv) {
+      // Wie im Fernsehen: weit hinten, hoch oben, enger Blickwinkel. Die Kamera geht nur wenig mit dir mit.
+      this.setWinkel(B.winkel + 7 * breit, 27, 31);
+      tp = new THREE.Vector3(me.x * B.mitX, B.hoch, B.hinten + Math.max(0, me.z - 15) * 0.6);
+      // Hochkant-Bildschirm: Das Bild ist höher als nötig. Die Kamera schaut dann etwas weiter nach oben,
+      // damit der untere Bildrand bleibt, wo er ist, und der Platz nicht nach oben rutscht.
+      const zuviel = Math.max(0, this.camera.fov - 27) / 2 * Math.PI / 180;
+      const runter = Math.atan2(B.hoch - 0.8, B.hinten - B.zielZ) - zuviel;          // so steil schaut die Kamera nach unten
+      tl = new THREE.Vector3(me.x * B.mitX * 0.8 + b.x * 0.04, 0.8, B.hinten - (B.hoch - 0.8) / Math.tan(Math.max(0.05, runter)));
+    } else {
+      this.setWinkel(B.winkel);
+      tp = new THREE.Vector3(me.x * B.mitX, narrow ? 9.5 : B.hoch + 0.6 * breit,
+        narrow ? 29 : B.hinten + 3 * breit + Math.max(0, me.z - 13) * 0.6);
+      tl = new THREE.Vector3(me.x * 0.2 + b.x * 0.08, 0.8, narrow ? -1 : B.zielZ);
+    }
     const k = Math.min(1, dt * 3);
     this.camPos.lerp(tp, k); this.camLook.lerp(tl, k);
     this.camera.position.copy(this.camPos);

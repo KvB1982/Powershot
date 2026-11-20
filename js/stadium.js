@@ -1,7 +1,7 @@
 // Powershot – das Stadion: Platz, Linien, Netz, Banden, Tribünen, Zuschauer, Licht
 
 import * as THREE from 'three';
-import { COURT as C } from './physics.js';
+import { COURT as C, netHeightAt } from './physics.js';
 import { ladeRequisiten, requisit } from './requisiten.js';
 
 const RUN_X = 10.5;     // Auslauf seitlich (halbe Breite der Arena-Fläche)
@@ -276,15 +276,24 @@ export class Stadium {
 
     // --- Netz ---
     const netMat = new THREE.MeshBasicMaterial({ map: netTexture(), transparent: true, side: THREE.DoubleSide, depthWrite: false });
-    const net = new THREE.Mesh(new THREE.PlaneGeometry(C.NET_W * 2, 0.95), netMat);
-    net.position.set(0, 0.475, 0);
+    // Das Netz hängt durch: an den Pfosten 1,07 m hoch, in der Mitte zieht es ein Gurt auf 0,914 m herunter (echte Maße).
+    // Genau so rechnet auch der Ball (netHeightAt in physics.js) – was du siehst, ist jetzt das, was gilt.
+    const netGeo = new THREE.PlaneGeometry(C.NET_W * 2, 1, 2, 1);
+    const ecken = netGeo.attributes.position;
+    for (let i = 0; i < ecken.count; i++) ecken.setY(i, ecken.getY(i) > 0 ? netHeightAt(ecken.getX(i)) : 0);
+    const net = new THREE.Mesh(netGeo, netMat);
     G.add(net);
-    const tape = box(C.NET_W * 2, 0.07, 0.03, 0xffffff, 0, 0.96, 0, { cast: true, rough: 0.6 });
-    tape.material.side = THREE.DoubleSide;
-    box(0.05, 0.92, 0.02, 0xffffff, 0, 0.46, 0);
+    // Weißes Band oben: zwei gerade Stücke, vom Pfosten schräg hinunter zur Mitte
+    const schraeg = Math.atan2(C.NET_POST - C.NET_H, C.NET_W);
     for (const s of [-1, 1]) {
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.1, 10), new THREE.MeshStandardMaterial({ color: 0x1f3a2a, roughness: 0.5 }));
-      post.position.set(s * C.NET_W, 0.55, 0);
+      const tape = box(Math.hypot(C.NET_W, C.NET_POST - C.NET_H), 0.07, 0.03, 0xffffff, s * C.NET_W / 2, (C.NET_H + C.NET_POST) / 2 - 0.035, 0, { cast: true, rough: 0.6 });
+      tape.rotation.z = s * schraeg;
+      tape.material.side = THREE.DoubleSide;
+    }
+    box(0.05, C.NET_H - 0.03, 0.02, 0xffffff, 0, (C.NET_H - 0.03) / 2, 0);        // der Gurt in der Mitte
+    for (const s of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, C.NET_POST, 10), new THREE.MeshStandardMaterial({ color: 0x1f3a2a, roughness: 0.5 }));
+      post.position.set(s * C.NET_W, C.NET_POST / 2, 0);
       post.castShadow = true;
       G.add(post);
     }

@@ -43,6 +43,7 @@ const settings = Object.assign({
   sound: true, volume: 0.8, voice: true, quality: 'hoch', figures: 'echt',
   kamera: 'aus', kameraRaum: 'mittel', kameraTauschen: false,
   spielzuege: 'aus',       // taktische Spielzüge im Match: 'aus' oder 'an'
+  blick: 'tv',             // Blick auf den Platz im Match: 'tv' (wie im Fernsehen) oder 'nah' (dicht hinter dir)
 }, (() => { try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch (e) { return {}; } })());
 // Welche Spielzüge hast du schon gelernt? { id: { t: im Training geschafft, m: im Match geschafft } }
 const ZUG_KEY = 'powershot.spielzuege.v1';
@@ -70,6 +71,7 @@ game.wennShow = (side, id) => {
   if (career && ctxT && ctxT.career) { career.showSchlaege = career.showSchlaege || {}; career.showSchlaege[S.clip] = (career.showSchlaege[S.clip] || 0) + 1; }
 };
 game.setQuality(settings.quality);
+game.blick = settings.blick;
 game.realFigures = settings.figures === 'echt';
 const controls = new Controls($('#touch'), $('#stick'));
 // Laufen mit der Kamera: kameraLauf rechnet (kamera.js), kameraBild holt das Bild und erkennt den Körper (kamerabild.js)
@@ -216,6 +218,9 @@ actions.settings = (v) => {
       ${optionRow('Schiedsrichter spricht', 'voice', { true: 'Ja', false: 'Nein' })}
       ${optionRow('Grafik', 'quality', { hoch: 'Schön', niedrig: 'Schnell (ältere Geräte)' })}
       ${optionRow('Spielerfiguren', 'figures', { echt: 'Realistisch', einfach: 'Einfach' })}
+      ${optionRow('Blick auf den Platz', 'blick', { tv: 'Wie im Fernsehen', nah: 'Nah am Spieler' })}
+      <p class="dim" style="margin:6px 0 0;font-size:13px">Der Platz hat immer die echten Maße (23,77 m lang). „Wie im Fernsehen“ schaut von weit hinten und oben –
+        beide Spieler sehen ähnlich groß aus. „Nah am Spieler“ ist der alte Blick: du bist groß, der Gegner klein.</p>
     </div>
     ${window.__powershotVersion ? `<p class="dim" style="font-size:12px">App-Version ${esc(window.__powershotVersion)} – iPad, iPhone und Uhr sollten dieselbe Nummer haben.</p>` : ''}
     <p class="dim">Auf „Leicht“ bleiben deine Bälle immer im Feld, und du schlägst auch ohne Eingabe zurück.
@@ -232,6 +237,7 @@ actions.set = (v) => {
   sound.setVolume(settings.volume);
   sound.setEnabled(settings.sound);
   game.setQuality(settings.quality);
+  game.blick = settings.blick;
   game.realFigures = settings.figures === 'echt';
   if (key === 'quality') game.loadVenue(D.tournamentById(menuVenue));
   if (key === 'control' && match) { controls.setMode(settings.control); match.cfg.controlMode = settings.control; }

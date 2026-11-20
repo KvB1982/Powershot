@@ -196,6 +196,17 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 - Neue Modelle vor dem Einbau verkleinern (Richtwert 2.000–7.000 Dreiecke, nur Farbbild, 512 oder 1024 Pixel). Wunschliste: Projektdatei `docs/3d_wunschliste.md`.
 - Bisher nur im Test-Browser ohne Grafikkarte als Standbild geprüft, nicht auf einem echten iPad (Tempo dort noch unbekannt).
 
+## Maße und Blick auf den Platz
+
+- Der Platz hat die echten Maße (`COURT` in `js/physics.js`): 23,77 m lang, Einzel 8,23 m, Doppel 10,97 m breit, Aufschlaglinie 6,40 m vom Netz,
+  Netz 0,914 m in der Mitte und 1,07 m an den Pfosten (das gezeichnete Netz hängt genauso durch, `netHeightAt`). Auslauf: 7,6 m hinten, 5,0 m seitlich
+  (`RUN_Z`, `RUN_X` in `stadium.js`). Figur 1,83 m mal `gross`, Schläger 69 cm. Nur der Ball ist absichtlich größer gezeichnet (Radius 5,5 cm statt 3,3 cm),
+  damit man ihn sieht; gerechnet wird mit 3,3 cm.
+- Wie groß die Spieler im Vergleich zum Platz aussehen, bestimmt die Kamera (`BLICK` oben in `js/game3d.js`, Einstellungen → „Blick auf den Platz“, `settings.blick`):
+  `tv` (Standard) steht 35 m hinter dem Netz und 12,5 m hoch mit 43° Blickwinkel in der Breite – der Spieler vorn ist etwa 1,9-mal so groß wie der hinten, wie in einer Übertragung.
+  `nah` ist der alte Blick (23,5 m, 6,4 m hoch, 62°): vorn 2,9-mal so groß wie hinten. Die TV-Werte sind aus typischen Kamera-Standorten geschätzt, nicht an einem echten Fernsehbild ausgemessen;
+  nur als Standbilder im Test-Browser geprüft, nicht von Hand gespielt.
+
 ## Bekannte Grenzen
 
 - Profileben im Saison-Modus (`js/profisaison.js`): Die Ergebnisse des Vorjahres sind nicht die echten – der Computer spielt das Vorjahr einmal durch und verkleinert die Ergebnisse, bis sie zu den echten Punkten passen (Startrangliste = echte Rangliste). Punkte von kleinen Turnieren aus dem Vorjahr (`s.rest`) sind ein Topf, der über die freien Wochen gleichmäßig wegschmilzt (`restWeg`); die anderen Profis spielen kleine Turniere so oft, dass ihr Topf ungefähr wieder voll wird (`SPIELT`, `SATT`, dazu unsichtbare Challenger-Punkte hinter Platz 30). Die besten 10 holen bei den großen Turnieren im Schnitt mehr Punkte als im (verkleinerten) Vorjahr – ihren Platz zu halten ist deshalb schwer. Die Setzliste richtet sich weiter nach dem festen Platz in `data.js`, nicht nach der laufenden Weltrangliste. Welche Marke ein Profi hat, sucht man selbst aus (das Spiel behauptet nichts über echte Verträge). Verletzt verpasst man Turniere; zu den ATP Finals ist man immer wieder fit. Bei kleinen Turnieren gibt es keine ITF-Turniere und keine Qualifikation; ATP 500 nur bis Platz 60, ATP 250 bis Platz 110. Alle Zahlen (Geld, Druck, Selbstvertrauen, Frische, Erholung, Strafen) sind geschätzt. Geprüft mit `tools/profisaison.mjs` und im Test-Browser (Menüs, Saison-Planer, kleines Turnier, freie Woche, Auslassen mit Verwarnung und Strafe, Anlage, Abend, Abrechnung, Neuladen, Jahreswechsel; Matches dabei über die Zählweise beendet, nicht ausgespielt); nicht von Hand gespielt, nicht auf dem iPad.
