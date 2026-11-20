@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { requisit } from './requisiten.js';
 import { planVon, planAus } from './gelaende.js';
-import { baueGelaende, gluecksballBauen, fahrerSetzen } from './gelaendebau.js';
+import { baueGelaende, gluecksballBauen, fahrerSetzen, schildBauen, pfeileBauen } from './gelaendebau.js';
 import { Besucher } from './besucher.js';
 import { gitterBauen, frei, weg, naechsteFreie, hoeheBei } from './wege.js';
 import { ladeModelle, fehltNoch } from './gelaendemodelle.js';
@@ -57,6 +57,14 @@ const ZAUN = { id: 'fans', name: 'Autogramm-Zaun', x: -4.5, z: -2.5, text: 'Kind
 const grad = (g) => g * Math.PI / 180;
 
 // Der flachste erlaubte Blickwinkel bei diesem Abstand: nah darf die Kamera ganz flach schauen, weit weg muss sie über den Dächern bleiben
+// Beschriftungen: Höhe eines Schilds in Bildpunkten (nah / fern), wie viele Etagen übereinander, ab welchem Kamera-Abstand auch bloße Namen
+const SCHILD_GROSS = 30, SCHILD_KLEIN = 19, SCHILD_ETAGEN = 8, NAMEN_AB = 26;
+const SCHILD_OBEN = 68, SCHILD_RECHTS = 74;      // oben liegt die Leiste mit „Zurück“, rechts die Kamera-Knöpfe – dort kein Schild
+// Freie Kamera: so nah darf sie heran, so hoch schwebt sie mindestens, so weit darf sie über den Zaun hinaus (alles Meter)
+const FREI_NAH = 30, FREI_HOCH = 24, FREI_RAND = 160;
+const DOPPEL_ZEIT = 380, DOPPEL_WEIT = 44;         // Doppel-Tipp: höchstens so viele Millisekunden und Bildpunkte auseinander
+const SCHILDER_MERKEN = 'powershot.schilder.v1';
+
 function flachMin(d) {
   const hoch = 30 * Math.max(0, Math.min(1, (d - 25) / 35));
   return Math.asin(Math.min(0.99, hoch / d));
@@ -72,20 +80,30 @@ export class Anlage {
     this.finger = {};          // alle Finger (oder die Maus), die gerade aufliegen: id → { x0, y0, x, y, rechts }
     this.knueppel = null;      // id des Fingers, der gerade läuft
     this.kamTaste = null;      // welcher Kamera-Knopf gerade gedrückt ist ('links', 'rechts', 'nah', 'fern')
+    this.frei = null;          // freie Kamera: { x, z } = die Stelle am Boden, auf die sie schaut. null = sie folgt der Figur
+    this.blick = { x: 0, z: 0 };   // dorthin schaut die Kamera gerade (merken wir uns, damit die freie Kamera ohne Ruck losfährt)
+    this.letzterTipp = null;   // der letzte kurze Tipp (für den Doppel-Tipp)
+    this.wennFrei = null;      // wird aufgerufen, wenn die Kamera frei wird oder zur Figur zurückkehrt (app.js färbt den Knopf 🎯)
+    this.schilderAn = true;    // Beschriftungen zeigen? (Knopf 🏷️ oder Taste B)
+    try { this.schilderAn = localStorage.getItem(SCHILDER_MERKEN) !== 'aus'; } catch (e) { /* kein Speicher: einfach an */ }
+    this.pfeile = null;        // die Verbindungs-Pfeile von den Schildern zu ihren Orten
     this.kam = { ...KAM_START, zw: KAM_START.w, ze: KAM_START.e, zd: KAM_START.d };    // z… = wohin die Kamera will
     this.amOrt = null;         // der Ort, an dessen Tür die Figur gerade steht
     this.wennDa = null;        // wird aufgerufen, wenn sich amOrt ändert (app.js zeigt dann das Fenster)
     // Tasten, Maus und Finger – hören nur zu, solange die Anlage an ist
     const meins = (e) => this.an && !e.target.closest('button, .panel');
-    addEventListener('keydown', (e) => { if (!this.an) return; this.tasten[e.code] = true; if (e.code === 'KeyM') this.uebersicht(); });
+    addEventListener('keydown', (e) => { if (!this.an) return; this.tasten[e.code] = true; if (e.code === 'KeyM') this.uebersicht(); if (e.code === 'KeyF') this.zurFigur(); if (e.code === 'KeyB' && !e.repeat) { this.schilderSchalten(); if (this.wennSchilder) this.wennSchilder(this.schilderAn); } });
     addEventListener('keyup', (e) => { this.tasten[e.code] = false; });
     addEventListener('contextmenu', (e) => { if (meins(e)) e.preventDefault(); });
     addEventListener('wheel', (e) => { if (meins(e)) { this.kam.zd *= Math.exp(e.deltaY * 0.001); this.kamGrenzen(); } }, { passive: true });
     addEventListener('pointerdown', (e) => {
       if (!meins(e)) return;
-      this.finger[e.pointerId] = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, rechts: e.button === 2, weg: 0 };
-      const n = Object.keys(this.finger).length;
-      if (n === 1 && e.button !== 2) this.knueppel = e.pointerId; else this.knueppel = null;     // ein Finger läuft, zwei drehen die Kamera
+      // Maus: mittlere Taste oder Umschalt + linke Taste = die Ansicht verschieben
+      this.finger[e.pointerId] = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, rechts: e.button === 2, schieb: e.button === 1 || (e.button === 0 && e.shiftKey && e.pointerType === 'mouse'), weg: 0 };
+      if (e.button === 1) e.preventDefault();
+      const n = Object.keys(this.finger).length, f = this.finger[e.pointerId];
+      // ein Finger läuft (Steuerknüppel), zwei drehen die Kamera, drei verschieben sie. Ist die Kamera schon frei, verschiebt auch ein Finger.
+      if (n === 1 && e.button === 0 && !f.schieb && !this.frei) this.knueppel = e.pointerId; else this.knueppel = null;
     });
     addEventListener('pointermove', (e) => {
       const f = this.finger[e.pointerId];
@@ -93,6 +111,7 @@ export class Anlage {
       const dx = e.clientX - f.x, dy = e.clientY - f.y, k = this.kam;
       f.weg += Math.hypot(dx, dy);
       if (f.rechts) { k.zw -= dx * DREH_MAUS; k.ze += dy * NEIG_MAUS; }
+      else if (Object.keys(this.finger).length === 1 && (f.schieb || (this.frei && this.knueppel === null)) && f.weg > 6) this.schieben(dx, dy);
       // (Zwei Finger: Das rechnet zweiFinger() einmal pro Bild aus – dann ist es egal, welcher Finger sich zuerst meldet.)
       f.x = e.clientX; f.y = e.clientY;
       this.kamGrenzen();
@@ -102,7 +121,18 @@ export class Anlage {
       delete this.finger[e.pointerId];
       if (this.knueppel === e.pointerId) this.knueppel = null;
       // Nur ein kurzer Tipp (kaum bewegt)? Dann ist das ein Ziel zum Hinlaufen.
-      if (this.an && f && !f.rechts && f.weg < 12 && e.type === 'pointerup' && !e.target.closest('button, .panel')) this.tipp(e.clientX, e.clientY);
+      if (this.an && f && !f.rechts && !f.schieb && f.weg < 12 && e.type === 'pointerup' && !e.target.closest('button, .panel')) {
+        const jetzt = performance.now(), l = this.letzterTipp;
+        if (l && jetzt - l.zeit < DOPPEL_ZEIT && Math.hypot(e.clientX - l.x, e.clientY - l.y) < DOPPEL_WEIT) {
+          // Doppel-Tipp: Die Kamera kehrt zur Figur zurück. Der erste der beiden Tipps soll die Figur dabei nicht losschicken.
+          this.letzterTipp = null;
+          if (this.frei) { this.ziel = l.ziel; this.pfad = l.pfad; }
+          this.zurFigur();
+        } else {
+          this.letzterTipp = { zeit: jetzt, x: e.clientX, y: e.clientY, ziel: this.ziel, pfad: this.pfad };
+          this.tipp(e.clientX, e.clientY);
+        }
+      }
     };
     // Safari auf dem iPad will beim Kneifen die ganze Seite vergrößern – das soll hier nur die Kamera tun
     for (const n of ['gesturestart', 'gesturechange']) addEventListener(n, (e) => { if (this.an) e.preventDefault(); }, { passive: false });
@@ -117,6 +147,15 @@ export class Anlage {
   //   Mitte wandert nach oben/unten          = Blickwinkel: flach über den Boden bis fast senkrecht von oben
   zweiFinger() {
     const ff = Object.values(this.finger).filter((f) => !f.rechts);
+    // Drei Finger: die Ansicht über das Gelände schieben (links/rechts, vor/zurück) – die Kamera löst sich dabei von der Figur
+    if (ff.length >= 3) {
+      const x = (ff[0].x + ff[1].x + ff[2].x) / 3, y = (ff[0].y + ff[1].y + ff[2].y) / 3, d = this.drei;
+      if (d && d.a === ff[0] && d.b === ff[1] && d.c === ff[2]) this.schieben(x - d.x, y - d.y);
+      this.drei = { a: ff[0], b: ff[1], c: ff[2], x, y };
+      this.zwei = null;
+      return;
+    }
+    this.drei = null;
     if (ff.length < 2) { this.zwei = null; return; }
     const [a, b] = ff, k = this.kam;
     const jetzt = { a, b, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, weit: Math.hypot(a.x - b.x, a.y - b.y) };
@@ -129,16 +168,47 @@ export class Anlage {
     this.zwei = jetzt;
   }
 
+  // Die Ansicht um (dx, dy) Bildpunkte verschieben – wie eine Landkarte, die man mit dem Finger zieht.
+  // Beim ersten Mal löst sich die Kamera von der Figur („freie Kamera“).
+  schieben(dx, dy) {
+    if (!this.plan) return;                              // nur auf den großen Geländen mit Lageplan
+    const k = this.kam, g = this.game, r = this.plan.g.rand;
+    if (!this.frei) {
+      this.frei = { x: this.blick.x, z: this.blick.z };
+      this.knueppel = null;
+      k.zd = Math.max(k.zd, FREI_NAH);
+      if (this.wennFrei) this.wennFrei(true);
+    }
+    // Wie viele Meter ist ein Bildpunkt? Je weiter die Kamera weg ist, desto mehr.
+    const H = g.renderer.domElement.clientHeight || 800;
+    const m = 2 * k.d * Math.tan(g.camera.fov * Math.PI / 360) / H;
+    const tief = m / Math.max(0.35, Math.sin(k.e));      // schräg von der Seite ist der Boden „gestaucht“ – dann geht es nach hinten schneller
+    const c = Math.cos(k.w), s = Math.sin(k.w), f = this.frei;
+    f.x += -dx * m * c - dy * tief * s;
+    f.z += dx * m * s - dy * tief * c;
+    f.x = Math.max(r.x0 - FREI_RAND, Math.min(r.x1 + FREI_RAND, f.x));
+    f.z = Math.max(r.z0 - FREI_RAND, Math.min(r.z1 + FREI_RAND, f.z));
+  }
+  // Zurück zur Figur (Doppel-Tipp, Knopf 🎯 oder Taste F)
+  zurFigur() {
+    if (!this.frei) return;
+    this.frei = null;
+    if (this.kam.zd > 45) { this.kam.zd = KAM_START.d; this.kam.ze = KAM_START.e; }      // von weit oben wieder nah heran
+    if (this.wennFrei) this.wennFrei(false);
+  }
+
   kamGrenzen() {
     const k = this.kam;
+    if (this.frei) k.zd = Math.max(FREI_NAH, k.zd);
     k.zd = Math.max(NAH_MIN, Math.min(this.plan ? this.weit * FERN_MAL : 90, k.zd));
     k.ze = Math.max(NEIG_MIN, flachMin(k.zd), Math.min(NEIG_MAX, k.ze));
-    if (this.drinnen) { k.zd = Math.min(k.zd, 16); k.ze = Math.max(k.ze, 0.75); }      // im Haus nicht zu weit weg und nicht zu flach, sonst sieht man nur Wand
+    if (this.drinnen && !this.frei) { k.zd = Math.min(k.zd, 16); k.ze = Math.max(k.ze, 0.75); }      // im Haus nicht zu weit weg und nicht zu flach, sonst sieht man nur Wand
   }
 
   // 🗺️ Übersicht: einmal drücken = von weit oben auf die ganze Anlage, noch einmal = zurück zur Figur
   uebersicht() {
     const fern = this.plan ? this.weit : KAM_WEIT.d;
+    if (this.frei) { this.zurFigur(); this.kam.zd = KAM_START.d; }
     const k = this.kam, weit = k.zd > fern * 0.6;
     k.zd = weit ? KAM_START.d : fern;
     k.ze = weit ? KAM_START.e : KAM_WEIT.e;
@@ -215,7 +285,7 @@ export class Anlage {
     let jetzt = null;
     for (const h of this.bau ? this.bau.raeume : []) if (Math.abs(p.x - h.r.x) < h.r.b / 2 - 0.1 && Math.abs(p.z - h.r.z) < h.r.t / 2 - 0.1) jetzt = h;
     if (jetzt === this.drinnen) return;
-    const zeig = (h, innen) => { for (const m of h.aussen) m.visible = !innen; h.innen.visible = innen; for (const o of h.r.tueren) if (o.schild) o.schild.visible = !innen; };
+    const zeig = (h, innen) => { for (const m of h.aussen) m.visible = !innen; h.innen.visible = innen; for (const o of h.r.tueren) if (o.schild) o.schild.userData.weg = innen; };
     if (this.drinnen) zeig(this.drinnen, false);
     if (jetzt) zeig(jetzt, true);
     const k = this.kam;
@@ -285,20 +355,9 @@ export class Anlage {
       G.add(m);
       return m;
     };
-    // Ein Schild mit Text (wird auf ein kleines Bild gemalt)
+    // Ein Schild mit Text – es schwebt über der Stelle (x, y, z) und zeigt mit einem Pfeil darauf
     const schild = (text, x, y, z) => {
-      const bild = document.createElement('canvas');
-      bild.width = 512; bild.height = 96;
-      const s = bild.getContext('2d');
-      s.fillStyle = '#fdfdf6'; s.fillRect(0, 0, 512, 96);
-      s.fillStyle = '#16203a'; s.font = 'bold 50px sans-serif'; s.textAlign = 'center'; s.textBaseline = 'middle';
-      s.fillText(text, 256, 50, 490);
-      const tex = new THREE.CanvasTexture(bild);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
-      m.userData.eigen = true;
-      m.scale.set(4.6, 0.86, 1);
-      m.position.set(x, y, z);
+      const m = schildBauen(text, 'ort', new THREE.Vector3(x, y - 1.2, z));
       G.add(m);
       return m;
     };
@@ -404,7 +463,8 @@ export class Anlage {
     const strahl = new THREE.Raycaster();
     strahl.setFromCamera(new THREE.Vector2((px - r.left) / r.width * 2 - 1, -((py - r.top) / r.height) * 2 + 1), g.camera);
     // Zuerst: Wurde ein Gebäude oder sein Schild getroffen? Dann zur Tür laufen.
-    const treffer = strahl.intersectObjects([...this.klick, ...this.orte.map((o) => o.schild)], false)[0];
+    // (Schilder liegen im Bild immer obenauf, deshalb werden sie auch zuerst gefragt.)
+    const treffer = strahl.intersectObjects(this.orte.map((o) => o.schild).filter((m) => m.visible), false)[0] || strahl.intersectObjects(this.klick, false)[0];
     if (treffer) {
       const ort = treffer.object.userData.ort || this.orte.find((o) => o.schild === treffer.object);
       this.zielSetzen(ort.tx, ort.tz, ort);
@@ -439,6 +499,7 @@ export class Anlage {
     let ex = sx * kc + sz * ks, ez = -sx * ks + sz * kc;
     const st = Math.min(1, Math.hypot(ex, ez));
     const tempoMax = this.plan ? TEMPO_GROSS : TEMPO;
+    if (st > 0.05 && this.frei) this.zurFigur();      // wer mit den Tasten losläuft, will seine Figur auch sehen
     if (st > 0.05) this.ziel = null;           // wer selbst steuert, bricht das Hinlaufen ab
     if (this.ziel && this.pfad) {
       // Großes Gelände: den gefundenen Weg Punkt für Punkt ablaufen
@@ -538,9 +599,10 @@ export class Anlage {
     let d = k.d * (g.aspect < 1 ? 1.35 : 1);
     // Weit weg bleibt die Kamera immer ein Stück über den Dächern (sonst hinge sie mitten in einer Tribüne):
     // Ab 25 m Abstand wächst die Mindesthöhe, ab 60 m sind es 30 m über dem Boden.
-    const e = Math.max(k.e, flachMin(d));
+    // Die freie Kamera schwebt immer mindestens FREI_HOCH Meter über dem Boden – so steckt sie nie in einem Stadion
+    const e = Math.max(k.e, flachMin(d), this.frei ? Math.asin(Math.min(0.99, FREI_HOCH / d)) : 0);
     const c = Math.cos(e);
-    if (this.gitter && d < 60 && !this.drinnen) {
+    if (this.gitter && d < 60 && !this.drinnen && !this.frei) {
       // Steht ein Haus oder Stadion zwischen Kamera und Figur? Dann rückt die Kamera so nah heran, dass sie davor bleibt.
       const sx = Math.sin(k.w) * c, sz = Math.cos(k.w) * c, sy = Math.sin(e);
       for (let s = 1.5; s < d; s += 0.7) {
@@ -549,7 +611,10 @@ export class Anlage {
     }
     // In der Übersicht (weit weg) schaut die Kamera auf die Mitte der Anlage statt auf die Figur
     const ab = this.plan ? this.weit * 0.45 : 22, bis = this.plan ? this.weit * 0.4 : 16, zx = this.plan ? this.mitte.x : 0, zz = this.plan ? this.mitte.z : 0;
-    const fern = Math.max(0, Math.min(1, (k.d - ab) / bis)), mx = p.x + (zx - p.x) * fern, mz = p.z + (zz - p.z) * fern + (this.plan ? fern * this.weit * 0.1 : 0);     // etwas nach unten schauen: Unten im Bild liegt das Fenster mit dem Text
+    const fern = Math.max(0, Math.min(1, (k.d - ab) / bis));
+    let mx = p.x + (zx - p.x) * fern, mz = p.z + (zz - p.z) * fern + (this.plan ? fern * this.weit * 0.1 : 0);     // etwas nach unten schauen: Unten im Bild liegt das Fenster mit dem Text
+    if (this.frei) { mx = this.frei.x; mz = this.frei.z; }                  // freie Kamera: schaut auf ihre eigene Stelle
+    this.blick.x = mx; this.blick.z = mz;
     const von = new THREE.Vector3(mx + Math.sin(k.w) * c * d, 0.5 + Math.sin(e) * d, mz + Math.cos(k.w) * c * d);
     const nach = new THREE.Vector3(mx, 0.9 + Math.max(0, 0.6 - e) * 2.2 * Math.min(1, d / 15), mz);      // flache Kamera schaut etwas höher (ganz nah an der Figur nicht – sonst sähe man nur Himmel)
     // Die Schilder: aus der Ferne groß (sonst kann man sie nicht lesen), aus der Nähe klein
@@ -559,10 +624,6 @@ export class Anlage {
       const dunst = Math.max(this.weit * 1.2, k.d * 1.3);
       g.scene.fog.near = dunst; g.scene.fog.far = dunst + 520 + k.d;
     }
-    let gross = Math.max(0.7, Math.min(2.2, k.d / 16));
-    if (this.plan && k.d > 35) gross = 2.2 * Math.pow(k.d / 35, 0.6);
-    for (const o of this.orte) o.schild.scale.set(4.6 * gross, 0.86 * gross, 1);
-    for (const s of this.namen) { s.scale.set(4.6 * gross * 0.72, 0.86 * gross * 0.72, 1); s.visible = k.d > 26; }
     if (this.sonne) {
       // Die Sonne wandert mit der Figur mit, damit die Schatten in ihrer Nähe scharf sind
       this.sonne.position.set(mx + 50, 110, mz + 40);
@@ -572,6 +633,88 @@ export class Anlage {
     g.camPos.lerp(von, kk); g.camLook.lerp(nach, kk);
     g.camera.position.copy(g.camPos);
     g.camera.lookAt(g.camLook);
+    this.schilderOrdnen(dt);
+  }
+
+  // Beschriftungen an- oder abschalten (Knopf 🏷️ rechts oder Taste B). Das Spiel merkt sich die Wahl.
+  schilderSchalten() {
+    this.schilderAn = !this.schilderAn;
+    try { localStorage.setItem(SCHILDER_MERKEN, this.schilderAn ? 'an' : 'aus'); } catch (e) { /* ohne Speicher gilt es nur bis zum Neuladen */ }
+    return this.schilderAn;
+  }
+
+  // Die Schilder sauber ins Bild setzen – in jedem Bild neu, nachdem die Kamera steht.
+  // 1. Für jedes Schild ausrechnen, wo sein Anker (Dach oder Tür) auf dem Bildschirm liegt.
+  // 2. Das Schild ein Stück darüber schweben lassen. Ist dort schon ein anderes, rückt es eine Etage höher.
+  // 3. Ein Pfeil führt vom Schild hinunter zum Anker.
+  // Gerechnet wird in Bildpunkten, deshalb sind die Schilder überall gleich gut lesbar und nie halb hinter einem Haus.
+  schilderOrdnen(dt) {
+    const g = this.game, cam = g.camera, el = g.renderer.domElement, k = this.kam;
+    const B = el.clientWidth || 1, H = el.clientHeight || 1;
+    const alle = [...this.orte.map((o) => o.schild), ...this.namen].filter(Boolean);
+    if (this.pfeile && this.pfeile.parent !== this.gruppe) this.pfeile = null;
+    if (!this.pfeile && this.gruppe) { this.pfeile = pfeileBauen(); this.gruppe.add(this.pfeile); }
+    if (!this.schilderAn) { for (const m of alle) m.visible = false; if (this.pfeile) this.pfeile.visible = false; return; }
+    cam.updateMatrixWorld();
+    const tan = Math.tan(cam.fov * Math.PI / 360), v = new THREE.Vector3();
+    const dran = [];
+    for (const m of alle) {
+      const u = m.userData;
+      m.visible = false;
+      if (u.weg || !u.anker || (u.nurName && k.d < NAMEN_AB)) continue;
+      v.copy(u.anker).applyMatrix4(cam.matrixWorldInverse);
+      const tief = -v.z;                                     // so weit ist der Anker vor der Kamera
+      if (tief < 1.5 || (u.nurName && tief > 900)) continue;
+      const x = (v.x / (tief * tan * cam.aspect) + 1) / 2 * B, y = (1 - v.y / (tief * tan)) / 2 * H;
+      if (x < 0 || x > B || y < SCHILD_OBEN || y > H + 120) continue;          // der Ort ist nicht im Bild (oder unter der Leiste oben)
+      // Nah = groß, fern = kleiner, aber immer lesbar
+      const h = Math.max(SCHILD_KLEIN, Math.min(SCHILD_GROSS, SCHILD_GROSS * Math.sqrt(26 / tief))) * u.gross;
+      dran.push({ m, u, x, y, tief, h, b: h * u.breit });
+    }
+    // Die wichtigen zuerst (Türen vor bloßen Namen), dann die nahen – die bekommen den besten Platz
+    dran.sort((a, c) => (a.u.nurName - c.u.nurName) || (a.tief - c.tief));
+    const belegt = [], pfeile = [];
+    const kk = dt >= 1 ? 1 : 1 - Math.exp(-9 * dt);
+    const links = 6, rechts = B - SCHILD_RECHTS;
+    for (const s of dran) {
+      // Plätze durchprobieren: erst gerade darüber, dann Etage für Etage höher, jeweils auch etwas nach rechts und links versetzt
+      const erst = s.h * 1.5 + 10, stufe = s.h + 5;
+      let platz = null;
+      for (let j = 0; j < SCHILD_ETAGEN && !platz; j++) {
+        for (const seite of j ? [0, 1, -1] : [0]) {
+          const cx = Math.max(links + s.b / 2, Math.min(rechts - s.b / 2, s.x + seite * (s.b * 0.5 + 14)));
+          const unten = s.y - (erst + j * stufe), oben = unten - s.h;
+          if (oben < SCHILD_OBEN) continue;
+          if (belegt.some((r) => cx - s.b / 2 < r.x1 + 4 && cx + s.b / 2 > r.x0 - 4 && oben < r.y1 + 3 && unten > r.y0 - 3)) continue;
+          platz = { dx: cx - s.x, hub: erst + j * stufe };
+          break;
+        }
+      }
+      // Oben kein Platz (zum Beispiel dicht unter der Leiste)? Dann darf das Schild einer Tür auch unter seinem Ort hängen.
+      for (let j = 0; j < 3 && !platz && !s.u.nurName; j++) {
+        const oben = s.y + 16 + j * stufe, unten = oben + s.h, cx = Math.max(links + s.b / 2, Math.min(rechts - s.b / 2, s.x));
+        if (belegt.some((r) => cx - s.b / 2 < r.x1 + 4 && cx + s.b / 2 > r.x0 - 4 && oben < r.y1 + 3 && unten > r.y0 - 3)) continue;
+        platz = { dx: cx - s.x, hub: -(16 + j * stufe) - s.h };
+      }
+      if (!platz) continue;                                   // nirgends Platz: Dieses Schild bleibt lieber weg, als ein anderes zu verdecken
+      belegt.push({ x0: s.x + platz.dx - s.b / 2, x1: s.x + platz.dx + s.b / 2, y0: s.y - platz.hub - s.h, y1: s.y - platz.hub });
+      // weich auf den neuen Platz gleiten statt springen
+      const neu = s.u.hub === undefined || dt >= 1;
+      s.u.hub = neu ? platz.hub : s.u.hub + (platz.hub - s.u.hub) * kk;
+      s.u.dx = neu ? platz.dx : s.u.dx + (platz.dx - s.u.dx) * kk;
+      const mx = s.x + s.u.dx, my = s.y - s.u.hub - s.h / 2;
+      // Zurückrechnen: Bildpunkt → Stelle in der Welt, genauso weit vor der Kamera wie der Anker
+      v.set((mx / B * 2 - 1) * s.tief * tan * cam.aspect, (1 - my / H * 2) * s.tief * tan, -s.tief).applyMatrix4(cam.matrixWorld);
+      if (s.m.parent) s.m.parent.worldToLocal(v);
+      s.m.position.copy(v);
+      const hoch = s.h / H * 2 * s.tief * tan;
+      s.m.scale.set(hoch * s.u.breit, hoch, 1);
+      s.m.visible = true;
+      // Der Pfeil beginnt am Rand des Schilds (nicht in der Mitte) und zeigt auf den Ort
+      const ax = s.x - mx, ay = s.y - my, t = Math.min((s.h / 2 - 2) / Math.abs(ay || 1), Math.abs(ax) > 0.01 ? (s.b / 2 - 2) / Math.abs(ax) : 9);
+      pfeile.push({ x0: mx + ax * t, y0: my + ay * t, x1: s.x, y1: s.y, dick: Math.max(1.8, s.h * 0.1) });
+    }
+    if (this.pfeile) { this.pfeile.visible = pfeile.length > 0; this.pfeile.userData.eckenSetzen(pfeile, B, H); }
   }
 
   ende() {
@@ -588,7 +731,7 @@ export class Anlage {
       g.camera.near = this.alt.nah; g.camera.far = this.alt.fern; g.camera.updateProjectionMatrix();
     }
     this.plan = null; this.gitter = null; this.sonne = null; this.pfad = null; this.namen = []; this.ball = null;
-    this.an = false;
+    this.an = false; this.frei = null; this.drei = null; this.letzterTipp = null;
     this.finger = {};
     this.knueppel = null;
     this.kamTaste = null;

@@ -386,6 +386,7 @@ tr.cut td { text-align: center; font-size: 11px; font-weight: 700; color: var(--
 #anlage .kam { position: absolute; right: max(10px, env(safe-area-inset-right)); top: 50%; transform: translateY(-50%);
   display: grid; gap: 8px; pointer-events: auto; }
 #anlage .kam button { width: 52px; height: 52px; padding: 0; font-size: 22px; background: var(--bg); touch-action: none; }
+#anlage .kam button.aus { opacity: 0.45; filter: grayscale(1); }
 #anlage .oben { align-items: center; }
 #anlage .zeit { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; font-weight: 600; font-size: 15px; }
 #anlage button small { display: block; font-weight: 400; opacity: 0.8; font-size: 13px; }
@@ -476,3 +477,5 @@ details summary { cursor: pointer; margin-top: 10px; color: var(--dim); font-siz
 /* Saison-Planer im Saison-Modus: Spalte mit der Frische-Vorschau */
 table.planer td.frv { min-width: 130px; }
 table.planer td.frv .frische { display: block; margin: 3px 0; }
+/* Niedriger Bildschirm (Handy quer): die Kamera-Knöpfe in zwei Spalten, sonst passen sie nicht untereinander */
+@media (max-height: 560px) { #anlage .kam { grid-template-columns: 1fr 1fr; gap: 6px; } #anlage .kam button { width: 44px; height: 44px; font-size: 19px; } }

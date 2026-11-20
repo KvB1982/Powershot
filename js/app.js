@@ -672,8 +672,8 @@ const kraftZeiger = () => 0.5 - 0.5 * Math.cos(2 * Math.PI * (performance.now() 
 function kraftEnde() { if (kraftSpiel) clearInterval(kraftSpiel.uhr); kraftSpiel = null; }
 function anlageZeigen() {
   const A = game.anlage, ort = A.amOrt;
-  const hilfe = 'Laufen: W A S D oder mit einem Finger ziehen. Tippe auf ein Gebäude, dann läuft deine Figur von selbst hin. In viele Häuser kannst du durch die Tür hineingehen – dann verschwindet das Dach und du siehst die Möbel. Kamera mit zwei Fingern: kneifen = nah oder ganz weit weg, zur Seite wischen = rundherum drehen, hoch oder runter wischen = Blickwinkel. Am PC: rechte Maustaste ziehen und Mausrad.';
-  const kam = [['karte', '🗺️', 'Übersicht'], ['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg']];
+  const hilfe = 'Laufen: W A S D oder mit einem Finger ziehen. Tippe auf ein Gebäude, dann läuft deine Figur von selbst hin. In viele Häuser kannst du durch die Tür hineingehen – dann verschwindet das Dach und du siehst die Möbel. Kamera mit zwei Fingern: kneifen = nah oder ganz weit weg, zur Seite wischen = rundherum drehen, hoch oder runter wischen = Blickwinkel. Mit drei Fingern schiebst du die Ansicht frei über das Gelände (danach reicht ein Finger), Doppel-Tipp oder 🎯 = zurück zur Figur. 🏷️ schaltet die Beschriftungen an und aus. Am PC: rechte Maustaste ziehen und Mausrad, mittlere Maustaste oder Umschalt + ziehen = verschieben, F = zurück zur Figur, B = Beschriftungen.';
+  const kam = [['karte', '🗺️', 'Übersicht'], ['schilder', '🏷️', 'Beschriftungen an oder aus (Taste B)'], ['figur', '🎯', 'Zurück zur Figur (Doppel-Tipp oder Taste F)'], ['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg']];
   let unten = `<p class="dim">${hilfe}</p>`, zeit = '';
   if (anlageTag) {
     // Der Tag vor dem Match: oben steht, wie viel Zeit noch ist
@@ -742,16 +742,23 @@ function anlageZeigen() {
     }
   }
   anlageEl.innerHTML = `<div class="oben"><button class="ghost" data-a="anlageEnde">‹ Zurück</button>${zeit}</div>
-    <div class="kam">${kam.map(([k, z, t]) => `<button data-kam="${k}" title="${t}" aria-label="${t}">${z}</button>`).join('')}</div>
+    <div class="kam">${kam.map(([k, z, t]) => `<button data-kam="${k}"${(k === 'schilder' && !game.anlage.schilderAn) || (k === 'figur' && !game.anlage.frei) ? ' class="aus"' : ''} title="${t}" aria-label="${t}">${z}</button>`).join('')}</div>
     <div class="panel">${unten}${anlageListe && !anlageTag ? '' : wohin}</div>`;
   anlageEl.classList.add('on');
 }
+// Taste B schaltet die Beschriftungen auch – dann den Knopf 🏷️ mit umfärben
+game.anlage.wennSchilder = (an) => { const b = anlageEl.querySelector('[data-kam="schilder"]'); if (b) b.classList.toggle('aus', !an); };
+// Der Knopf 🎯 ist blass, solange die Kamera sowieso bei der Figur ist
+game.anlage.wennFrei = (frei) => { const b = anlageEl.querySelector('[data-kam="figur"]'); if (b) b.classList.toggle('aus', !frei); };
 // Kamera-Knöpfe: solange gedrückt, dreht oder zoomt die Kamera
 anlageEl.addEventListener('pointerdown', (e) => {
   const b = e.target.closest('[data-kam]');
   if (!b) return;
   e.preventDefault();
-  if (b.dataset.kam === 'karte') game.anlage.uebersicht(); else game.anlage.kamTaste = b.dataset.kam;
+  if (b.dataset.kam === 'karte') game.anlage.uebersicht();
+  else if (b.dataset.kam === 'figur') game.anlage.zurFigur();
+  else if (b.dataset.kam === 'schilder') b.classList.toggle('aus', !game.anlage.schilderSchalten());
+  else game.anlage.kamTaste = b.dataset.kam;
 });
 for (const n of ['pointerup', 'pointercancel', 'pointerleave']) anlageEl.addEventListener(n, () => { game.anlage.kamTaste = null; }, true);
 // woher = an welcher Tür die Figur startet · ergebnis = was dort gleich angezeigt wird (nach einem Minispiel)

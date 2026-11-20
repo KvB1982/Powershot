@@ -19,20 +19,72 @@ import { umgebungBauen } from './umgebung.js';
 const HALB = Math.PI / 2;
 
 // Ein Schild mit Text (wird auf ein kleines Bild gemalt). art: 'ort' = weiß, 'info' = hellblau, 'name' = nur Beschriftung
-export function schildBauen(text, art = 'ort') {
+// Das Bild ist genau so breit wie der Text – so wird ein langer Name nicht zusammengequetscht.
+// Das Schild schwebt später über seinem „Anker“ (userData.anker = die Stelle, auf die es zeigt) und wird immer
+// über allem anderen gemalt (depthTest: false), damit kein Dach es halb verdeckt. Wohin genau, rechnet anlage.js aus.
+export function schildBauen(text, art = 'ort', anker = null) {
   const bild = document.createElement('canvas');
-  bild.width = 512; bild.height = 96;
   const s = bild.getContext('2d');
-  s.fillStyle = art === 'info' ? '#dff0ff' : art === 'name' ? 'rgba(20,28,48,0.72)' : '#fdfdf6';
-  s.beginPath(); if (s.roundRect) s.roundRect(2, 2, 508, 92, 18); else s.rect(2, 2, 508, 92); s.fill();
-  s.fillStyle = art === 'name' ? '#ffffff' : '#16203a'; s.font = 'bold 50px sans-serif'; s.textAlign = 'center'; s.textBaseline = 'middle';
-  s.fillText((art === 'info' ? 'ℹ️ ' : '') + text, 256, 50, 490);
+  const schrift = 'bold 50px sans-serif', voll = (art === 'info' ? 'ℹ️ ' : '') + text;
+  s.font = schrift;
+  bild.width = Math.max(150, Math.min(900, Math.ceil(s.measureText(voll).width) + 48)); bild.height = 80;
+  const B = bild.width;
+  s.fillStyle = art === 'info' ? '#dff0ff' : art === 'name' ? 'rgba(20,28,48,0.9)' : '#fdfdf6';
+  s.beginPath(); if (s.roundRect) s.roundRect(4, 4, B - 8, 72, 20); else s.rect(4, 4, B - 8, 72); s.fill();
+  s.lineWidth = 5; s.strokeStyle = art === 'name' ? 'rgba(255,255,255,0.55)' : '#16203a'; s.stroke();      // ein Rand, damit sich das Schild von hellem Boden abhebt
+  s.fillStyle = art === 'name' ? '#ffffff' : '#16203a'; s.font = schrift; s.textAlign = 'center'; s.textBaseline = 'middle';
+  s.fillText(voll, B / 2, 43, B - 36);
   const tex = new THREE.CanvasTexture(bild);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: art !== 'name' }));
+  const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, fog: false }));
+  m.renderOrder = 21;
   m.userData.eigen = true;
-  m.userData.gross = art === 'name' ? 0.72 : 1;
-  m.scale.set(4.6, 0.86, 1);
+  m.userData.gross = art === 'name' ? 0.8 : 1;
+  m.userData.breit = B / 80;                       // wie viel breiter als hoch
+  m.userData.nurName = art === 'name';
+  m.userData.anker = anker;
+  m.scale.set(0.86 * m.userData.breit, 0.86, 1);
+  if (anker) m.position.set(anker.x, anker.y + 1.5, anker.z);
+  return m;
+}
+
+// Die Verbindungs-Pfeile von den Schildern hinunter zu ihrem Ort. Alle Pfeile sind zusammen EINE Form.
+// Ihre Ecken werden gleich in Bildschirm-Maßen angegeben (−1 … +1), deshalb ist der kleine Malplan („Shader“) unten so kurz.
+// eckenSetzen(liste) bekommt für jeden Pfeil { x0, y0 (Anfang am Schild), x1, y1 (Spitze), dick } und baut dunklen Rand + helle Mitte + Pfeilspitze.
+export function pfeileBauen(hoechstens = 260) {
+  const ECKEN = 18;                                 // je Pfeil: 2 × (Strich = 2 Dreiecke, Spitze = 1 Dreieck)
+  const geo = new THREE.BufferGeometry();
+  const ort = new Float32Array(hoechstens * ECKEN * 3), farbe = new Float32Array(hoechstens * ECKEN * 3);
+  geo.setAttribute('position', new THREE.BufferAttribute(ort, 3).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute('farbe', new THREE.BufferAttribute(farbe, 3));
+  for (let i = 0; i < hoechstens * ECKEN; i++) { const hell = i % ECKEN >= 9; farbe.set(hell ? [0.99, 0.99, 0.95] : [0.07, 0.11, 0.2], i * 3); }
+  const stoff = new THREE.ShaderMaterial({
+    vertexShader: 'attribute vec3 farbe; varying vec3 f; void main() { f = farbe; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: 'varying vec3 f; void main() { gl_FragColor = vec4(f, 0.92); }',
+    depthTest: false, depthWrite: false, transparent: true, side: THREE.DoubleSide,
+  });
+  const m = new THREE.Mesh(geo, stoff);
+  m.frustumCulled = false; m.renderOrder = 20; m.userData.eigen = true;
+  geo.setDrawRange(0, 0);
+  // B, H = Breite und Höhe des Bildes in Bildpunkten; alle Angaben in Bildpunkten, y von oben
+  m.userData.eckenSetzen = (liste, B, H) => {
+    let n = 0;
+    const p = (x, y) => { ort[n++] = x / B * 2 - 1; ort[n++] = 1 - y / H * 2; ort[n++] = 0; };
+    for (const a of liste.slice(0, hoechstens)) {
+      // Richtung des Pfeils (rx, ry) und quer dazu (qx, qy)
+      const weit = Math.hypot(a.x1 - a.x0, a.y1 - a.y0) || 1, rx = (a.x1 - a.x0) / weit, ry = (a.y1 - a.y0) / weit, qx = -ry, qy = rx;
+      for (const rand of [1.3, 0]) {                // zuerst etwas dicker in Dunkel (der Rand), dann schmaler in Hell darüber
+        const d = a.dick / 2 + rand, sp = a.dick * 2.2 + rand * 1.5;
+        const lang = Math.min(a.dick * 5, Math.max(2, weit));                  // so lang ist die Pfeilspitze
+        const ex = a.x1 - rx * lang, ey = a.y1 - ry * lang;                    // hier hört der Strich auf und die Spitze fängt an
+        p(a.x0 - qx * d, a.y0 - qy * d); p(a.x0 + qx * d, a.y0 + qy * d); p(ex + qx * d, ey + qy * d);         // der Strich …
+        p(a.x0 - qx * d, a.y0 - qy * d); p(ex + qx * d, ey + qy * d); p(ex - qx * d, ey - qy * d);
+        p(ex - rx * rand - qx * sp, ey - ry * rand - qy * sp); p(ex - rx * rand + qx * sp, ey - ry * rand + qy * sp); p(a.x1 + rx * rand * 1.8, a.y1 + ry * rand * 1.8);   // … und die Spitze
+      }
+    }
+    geo.attributes.position.needsUpdate = true;
+    geo.setDrawRange(0, n / 3);
+  };
   return m;
 }
 
@@ -555,8 +607,8 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
       o.text = o.text || vorgabe.text || '';
       // Gehört die Tür als einzige zum Baustein, hängt das Schild oben in der Mitte – sonst über der Tür
       const allein = tueren.length === 1 && (el.a === 'stadion' || el.a === 'haus') && Math.max(el.b, el.t) < 60;
-      o.schild = schildBauen(o.name, o.info ? 'info' : 'ort');
-      o.schild.position.set(allein ? el.x : o.wx, allein ? hoehe + 1.6 : Math.min(hoehe, 3.2) + 1.5 + (i % 2) * 0.01, allein ? el.z : o.wz);
+      // Der Anker ist die Stelle, auf die der Pfeil des Schilds zeigt: Dachmitte oder die Wand über der Tür
+      o.schild = schildBauen(o.name, o.info ? 'info' : 'ort', allein ? new THREE.Vector3(el.x, hoehe + 0.1, el.z) : new THREE.Vector3(o.wx, Math.min(hoehe, 3.2) + 0.1, o.wz));
       G.add(o.schild);
       o.kreis = neu(new THREE.RingGeometry(0.75, 1.0, 28).rotateX(-HALB), mat(o.info ? 0x6ac8f0 : 0xe8f04a), o.tx, 0.24, o.tz);
       o.kreis.material.polygonOffset = true; o.kreis.material.polygonOffsetFactor = -4; o.kreis.material.polygonOffsetUnits = -40;
@@ -564,9 +616,7 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
     if (haupt && tueren.length) { haupt.userData.ort = tueren[0]; klick.push(haupt); }
     // Bausteine mit Namen, aber ohne Tür, bekommen nur eine kleine Beschriftung
     if (el.name && !el.ort && !el.info) {
-      const s = schildBauen(el.name, 'name');
-      s.position.set(el.x, hoehe + 1.3, el.z);
-      s.userData.nurName = true;
+      const s = schildBauen(el.name, 'name', new THREE.Vector3(el.x, hoehe + 0.1, el.z));
       G.add(s);
       plan.namen = plan.namen || []; plan.namen.push(s);
     }
