@@ -46,6 +46,7 @@ export const GELAENDE = {
   // AUSTRALIAN OPEN – Melbourne Park. Ein langes Gelände zwischen den Bahngleisen (Norden) und dem Fluss Yarra (Süden).
   // =====================================================================================
   ao: {
+    um: { n: 'stadt skyline', o: 'park vorort huegel:14', s: 'park wald', w: 'stadt skyline:1.4' },
     stil: 'modern', name: 'Melbourne Park', stadt: 'Melbourne, Australien',
     rand: { x0: -106, x1: 110, z0: -48, z1: 48 }, umland: 0x6f9a5a, boden: PFLASTER, feld: [0x2f6fc4, 0x1f4f9c],
     teile: [
@@ -80,6 +81,7 @@ export const GELAENDE = {
   // ROLAND GARROS – Paris. Ein schmaler Streifen am Stadtwald Bois de Boulogne, ganz im Osten das Stadion im Gewächshaus-Garten.
   // =====================================================================================
   rg: {
+    um: { n: 'stadt', o: 'stadt skyline:0.6', s: 'wald huegel:18', w: 'wald huegel:22' },
     stil: 'europa', name: 'Stade Roland Garros', stadt: 'Paris, Frankreich',
     rand: { x0: -110, x1: 100, z0: -33, z1: 33 }, umland: 0x5a8a4a, boden: 0xd8cdb8, feld: [0xcc6a3c, 0xbc5e36],
     teile: [
@@ -110,6 +112,7 @@ export const GELAENDE = {
   // WIMBLEDON – London. Rasen, dunkelgrüne Stadien, lila Blumen. Im Norden der Hügel und die Trainingsplätze, im Osten die Church Road.
   // =====================================================================================
   wim: {
+    um: { n: 'vorort huegel:16', o: 'park wald huegel:20', s: 'vorort huegel:24', w: 'vorort wald huegel:30' },
     stil: 'england', name: 'All England Club', stadt: 'London, England',
     rand: { x0: -56, x1: 52, z0: -82, z1: 76 }, umland: 0x4f8a45, boden: 0xb8b4a4, feld: [0x4a9a3c, 0x3f8a34],
     teile: [
@@ -142,6 +145,7 @@ export const GELAENDE = {
   // US OPEN – New York, Flushing Meadows. Das größte Tennisstadion der Welt in der Mitte, die Weltkugel im Park dahinter.
   // =====================================================================================
   uso: {
+    um: { n: 'parkplatz vorort', o: 'park wald', s: 'park wald', w: 'parkplatz stadt skyline:1.5' },
     stil: 'usa', name: 'National Tennis Center', stadt: 'New York, USA',
     rand: { x0: -96, x1: 98, z0: -70, z1: 70 }, umland: 0x5a8a4a, boden: 0xb8b8b4, feld: [0x2f5fb0, 0x3f8a4a],
     teile: [
@@ -172,10 +176,11 @@ export const GELAENDE = {
   // INDIAN WELLS – Kalifornien. Mitten in der Wüste: Palmen, grüne Wiesen und dahinter die Berge.
   // =====================================================================================
   iw: {
+    um: { n: 'wueste fels:170', o: 'parkplatz wueste fels:60', s: 'vorort wueste fels:210', w: 'wueste fels:190' },
     stil: 'wueste', name: 'Indian Wells Tennis Garden', stadt: 'Indian Wells, USA',
     rand: { x0: -92, x1: 94, z0: -74, z1: 72 }, umland: 0xd8c098, boden: 0xd8ccb0, feld: [0x5a4a9c, 0x3f8a5a],
     teile: [
-      { a: 'berge', seite: 'n', farbe: 0x9a8468, h: 70, modell: 'mal_berge' }, { a: 'berge', seite: 'w', farbe: 0xa89070, h: 55, modell: 'mal_berge' },
+      
       F(0, -84, 700, 9, ASPHALT), F(0, -110, 240, 36, 0x8a8a8c),                                       // Straße und Parkplatz
       S('Stadium 1', -6, -10, 54, 54, 15, { modell: 'stadion_iw', form: 'acht', farbe: 0xc8b08a, sitz: 0x7a6a50, ort: 'court', tuer: 's',
         text: 'Das zweitgrößte Tennisstadion der Welt (16.100 Plätze) – und es steht mitten in der Wüste! Von den oberen Reihen sieht man die Berge.' }),
@@ -201,6 +206,7 @@ export const GELAENDE = {
   // MIAMI – Der Centre Court wird jedes Jahr MITTEN IN EIN FOOTBALL-STADION gebaut. Die anderen Plätze stehen auf dem Parkplatz daneben.
   // =====================================================================================
   mia: {
+    um: { n: 'parkplatz vorort', o: 'parkplatz vorort', s: 'parkplatz vorort skyline:0.5', w: 'parkplatz vorort' },
     stil: 'usa', name: 'Hard Rock Stadium', stadt: 'Miami, USA',
     rand: { x0: -90, x1: 90, z0: -74, z1: 74 }, umland: 0x8a8a8c, boden: 0xb4b4b0, feld: [0x4a3a8c, 0x2a8a9a],
     teile: [
@@ -226,10 +232,11 @@ export const GELAENDE = {
   // MONTE-CARLO – Die Plätze liegen wie Treppenstufen am Hang: hinten die Felsen, vorne das Mittelmeer.
   // =====================================================================================
   mc: {
+    um: { n: 'vorort berge:190 ab:95', o: 'vorort berge:120 ab:120', s: 'meer', w: 'stadt berge:150 ab:210' },
     stil: 'mittelmeer', name: 'Monte-Carlo Country Club', stadt: 'Roquebrune-Cap-Martin, Frankreich (direkt neben Monaco)',
     rand: { x0: -72, x1: 72, z0: -50, z1: 46 }, umland: 0x8a9a6a, boden: 0xe0cfa8, feld: [0xc8643a, 0xb85a34], kamW: Math.PI,      // kamW: Die Kamera schaut am Anfang nach Süden, aufs Meer
     teile: [
-      { a: 'meer', ab: 50 }, { a: 'berge', seite: 'n', farbe: 0x8a8a78, h: 90 },
+      { a: 'meer', ab: 50 }, 
       { a: 'modell', modell: 'mal_yacht', x: -30, z: 82, dreh: 12 }, { a: 'modell', modell: 'mal_yacht', x: 44, z: 104, dreh: -20, gr: 0.8 }, { a: 'modell', modell: 'mal_yacht', x: 96, z: 74, dreh: 80, gr: 0.6 },      // Yachten vor der Küste
       F(0, -56, 700, 7, ASPHALT),
       { a: 'tuerme', p: [[-150, -30, 16, 16, 42], [-170, 0, 14, 14, 56], [-140, 14, 14, 14, 34], [-190, -40, 18, 16, 48], [-160, 34, 12, 12, 28]], farbe: 0xe8dcc8, dach: 0xc8b8a0 },    // die Hochhäuser von Monaco
@@ -255,6 +262,7 @@ export const GELAENDE = {
   // MADRID – Die „Caja Mágica“ (Zauberkiste): drei Stadien in einem einzigen Kasten aus Metall, am Wasser.
   // =====================================================================================
   mad: {
+    um: { n: 'stadt skyline:0.8 berge:45', o: 'park vorort', s: 'felder vorort huegel:16', w: 'stadt' },
     stil: 'modern', name: 'Caja Mágica', stadt: 'Madrid, Spanien',
     rand: { x0: -86, x1: 86, z0: -60, z1: 64 }, umland: 0x9a9a6a, boden: 0xc8c4bc, feld: [0xc96a40, 0xb85e38],
     teile: [
@@ -280,10 +288,11 @@ export const GELAENDE = {
   // ROM – Foro Italico. Marmor-Statuen, Schirm-Pinien, der Fluss Tiber im Osten und der Hügel Monte Mario im Westen.
   // =====================================================================================
   rom: {
+    um: { n: 'wald vorort huegel:35', o: 'stadt', s: 'stadt huegel:14', w: 'wald waldberge:60' },
     stil: 'mittelmeer', name: 'Foro Italico', stadt: 'Rom, Italien',
     rand: { x0: -82, x1: 86, z0: -68, z1: 62 }, umland: 0x6a9a52, boden: 0xd4ccb8, feld: [0xc4603a, 0xb45632],
     teile: [
-      F(150, 0, 30, 600, 0x6a9a8a), { a: 'berge', seite: 'w', farbe: 0x4a7a44, h: 40 },                 // Tiber und Monte Mario
+      F(150, 0, 30, 600, 0x6a9a8a),                 // der Tiber (der Hügel Monte Mario im Westen kommt aus `um`)
       S('Stadio Olimpico', -128, -80, 76, 90, 17, { form: 'oval', dach: 'ring', farbe: 0xe8e8e4, sitz: 0x3a5a9a, wiese: true }),
       F(14, -20, 136, 8, WEISS, { e: 2 }), { a: 'obelisk', x: 80, z: -20, b: 2.4, t: 2.4, h: 17, name: 'Obelisk', tuer: 'w', info: 'Ein 17 Meter hoher Obelisk aus weißem Marmor am Eingang. Von hier führt die breite Marmor-Allee zum Olympiastadion, in dem die Fußballer von Rom spielen.' },
       { a: 'kugel', x: -56, z: -20, r: 2.4, voll: true },
@@ -313,6 +322,7 @@ export const GELAENDE = {
   // KANADA – Montreal, IGA-Stadion im Jarry-Park. Früher war hier ein Baseball-Stadion.
   // =====================================================================================
   can: {
+    um: { n: 'vorort', o: 'stadt', s: 'park stadt skyline:0.8 huegel:40', w: 'park vorort' },
     stil: 'usa', name: 'Stade IGA im Jarry-Park', stadt: 'Montreal, Kanada',
     rand: { x0: -78, x1: 78, z0: -56, z1: 56 }, umland: 0x5a9a4c, boden: 0xc4c0b8, feld: [0x2a66b8, 0x3a7a9a],
     teile: [
@@ -337,6 +347,7 @@ export const GELAENDE = {
   // CINCINNATI – Mason, Ohio. 2025 ganz neu gebaut: viele Plätze, ein Clubhaus, ein Stadion im Boden. Rundherum Wiesen.
   // =====================================================================================
   cin: {
+    um: { n: 'parkplatz wald huegel:22', o: 'park wald huegel:26', s: 'parkplatz vorort huegel:18', w: 'wald vorort huegel:24' },
     stil: 'usa', name: 'Lindner Family Tennis Center', stadt: 'Mason bei Cincinnati, USA',
     rand: { x0: -88, x1: 88, z0: -70, z1: 70 }, umland: 0x5c9a4c, boden: 0xc8c4b8, feld: [0x2a5aa8, 0x2a8a6a],
     teile: [
@@ -364,6 +375,7 @@ export const GELAENDE = {
   // SHANGHAI – Qizhong. Das Stadion mit dem Dach, das sich öffnet wie eine Blume mit acht Blättern.
   // =====================================================================================
   sha: {
+    um: { n: 'park stadt skyline:1.2', o: 'felder vorort skyline:0.8', s: 'park felder', w: 'felder stadt' },
     stil: 'asien', name: 'Qizhong Tennis Center', stadt: 'Shanghai, China',
     rand: { x0: -82, x1: 82, z0: -66, z1: 66 }, umland: 0x4a8a44, boden: 0xc8c8c0, feld: [0x3a4aa8, 0x2a6a8a],
     teile: [
@@ -389,6 +401,7 @@ export const GELAENDE = {
   // (Das Dach ist im Spiel durchsichtig, damit man hineinschauen kann.)
   // =====================================================================================
   par: {
+    um: { n: 'stadt skyline:1.3', o: 'stadt skyline:1.8', s: 'stadt skyline', w: 'stadt huegel:20' },
     stil: 'modern', name: 'Arena in La Défense', stadt: 'Nanterre bei Paris, Frankreich',
     rand: { x0: -72, x1: 74, z0: -52, z1: 54 }, umland: 0x8a8a90, boden: 0xc4c4c8, feld: [0x2a3a6a, 0x1a1a22],
     teile: [
@@ -413,10 +426,10 @@ export const GELAENDE = {
   // ATP FINALS – Turin. Eine Halle wie eine Kiste aus Stahl, direkt neben dem alten Olympiastadion.
   // =====================================================================================
   fin: {
+    um: { n: 'stadt alpen:240', o: 'stadt huegel:55', s: 'stadt vorort', w: 'stadt alpen:200' },
     stil: 'modern', name: 'Arena von Turin', stadt: 'Turin, Italien',
     rand: { x0: -70, x1: 72, z0: -50, z1: 52 }, umland: 0x6a9a5a, boden: 0xc8c4bc, feld: [0x1f5fb8, 0x0f1a3a],
     teile: [
-      { a: 'berge', seite: 'n', farbe: 0xd8dce4, h: 80 },                                              // die Alpen mit Schnee
       F(0, -60, 700, 8, ASPHALT),
       S('Olympiastadion', -78, -8, 56, 70, 13, { form: 'oval', dach: 'ring', farbe: 0xc8b8a8, sitz: 0x8a2a2a, wiese: true }),
       { a: 'tuerme', modell: 'mal_turm_turin', p: [[-44, -44, 5, 5, 34]], farbe: 0xc86a4a, dach: 0xc86a4a },                      // der Marathon-Turm

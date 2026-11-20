@@ -178,7 +178,7 @@ export class Anlage {
     this.alt = { hintergrund: g.scene.background, nebel: g.scene.fog.color.clone(), nah: g.camera.near, fern: g.camera.far };
     g.scene.background = new THREE.Color(0x8cc0ee);
     g.scene.fog.color.set(0xa8cdea);
-    g.scene.fog.near = this.weit * 1.2; g.scene.fog.far = this.weit * 1.2 + 520;
+    g.scene.fog.near = this.weit * 1.2; g.scene.fog.far = this.weit * 1.2 + 1500;      // weit hinten verschwinden die Berge im Dunst
     g.camera.near = 1; g.camera.far = 4000; g.camera.updateProjectionMatrix();
     // Besucher: Sie gehen von Tür zu Tür, bleiben stehen, schauen sich um und unterhalten sich (siehe besucher.js)
     const n = Math.min(g.quality === 'niedrig' ? BESUCHER_WENIG : BESUCHER_MAX, plan.g.leute ?? 110);

@@ -110,12 +110,21 @@ export function kleinesGelaende(def) {
   const stadionDach = O.dach || (halle ? 'glas' : 'offen');
   const T = [];          // die Bausteine
   let rand, name, kamW = 0;
+  const um = {};         // die Landschaft rundherum, je Himmelsrichtung
 
   // ---- Landschaft drumherum ----
   const landschaft = (r) => {
     if (land.includes('meer')) { T.push({ a: 'meer', ab: r.z1 + 6 }); kamW = Math.PI; }            // Kamera schaut aufs Meer
-    if (land.includes('alpen')) T.push({ a: 'berge', seite: 'n', farbe: 0xdfe4ea, h: 95 }, { a: 'berge', seite: 'w', farbe: 0x6a8a5a, h: 60 }, { a: 'berge', seite: 'o', farbe: 0x6a8a5a, h: 60 });
-    else if (land.includes('berge')) T.push({ a: 'berge', seite: 'n', farbe: warm ? 0x9a8468 : 0x5a8a50, h: 60 }, { a: 'berge', seite: 'w', farbe: warm ? 0xa89070 : 0x5a8a50, h: 40 });
+    // Was liegt rundherum? (Wörter für umgebung.js: vorn das, was nah am Zaun ist, dahinter die Ferne)
+    const nah = winter ? 'wald felder' : land.includes('wueste') ? 'wueste' : land.includes('wald') ? 'wald felder' : stufe === 0 ? 'felder vorort' : 'vorort felder';
+    for (const k of 'nosw') um[k] = nah;
+    if (land.includes('stadt')) um.w = um.n = stufe >= 2 ? 'stadt skyline:0.8' : 'vorort stadt';
+    if (land.includes('alpen')) { um.n += ' alpen:210'; um.w += ' waldberge:90'; um.o += ' waldberge:80'; um.s += ' huegel:30'; }
+    else if (land.includes('berge')) { um.n += warm ? ' fels:120' : ' berge:110'; um.w += warm ? ' fels:70' : ' waldberge:70'; um.o += ' huegel:30'; }
+    else if (land.includes('wueste')) { um.n += ' fels:80'; um.w += ' fels:45'; um.o += ' huegel:12'; um.s += ' huegel:10'; }
+    else { um.n += ' huegel:22'; um.o += ' huegel:14'; um.w += ' huegel:26'; um.s += ' huegel:10'; }
+    if (land.includes('see')) um.o = 'park wald huegel:16';
+    if (land.includes('meer')) um.s = 'meer';
     if (land.includes('see')) T.push(F(r.x1 + 70, 10, 90, 150, WASSER, { rund: true }));
     if (land.includes('stadt')) {
       const p = [];
@@ -234,7 +243,7 @@ export function kleinesGelaende(def) {
   // Wie sehen die Häuser aus? Das richtet sich nach dem Land (für die 3D-Modelle in gelaendemodelle.js)
   const stil = holz || land.includes('alpen') ? 'alpen' : sued ? 'mittelmeer' : land.includes('wueste') ? 'wueste' : ENGLAND.includes(stadt) ? 'england'
     : def.erdteil === 'na' ? 'usa' : def.erdteil === 'as' ? 'asien' : def.erdteil === 'eu' ? (stufe >= 2 ? 'modern' : 'europa') : 'modern';
-  return { name: liga ? name : name.replace('Tennisclub Zu Hause', 'Dein Verein'), stadt: def.name || stadt, rand, umland, boden, feld, kamW, leute: [10, 40, 90, 130][stufe], klein: true, stufe, stil, fichte: winter || land.includes('alpen'), teile };
+  return { name: liga ? name : name.replace('Tennisclub Zu Hause', 'Dein Verein'), stadt: def.name || stadt, rand, umland, boden, feld, kamW, leute: [10, 40, 90, 130][stufe], klein: true, stufe, stil, um, fichte: winter || land.includes('alpen'), teile };
 }
 
 // Einen Baustein an der Mitte spiegeln (Osten und Westen tauschen)

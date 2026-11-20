@@ -14,6 +14,7 @@ import { PLATZ_L, PLATZ_B } from './gelaende.js';
 import { frei } from './wege.js';
 import { modell, hausModell } from './gelaendemodelle.js';
 import { moebelBauen } from './moebel.js';
+import { umgebungBauen } from './umgebung.js';
 
 const HALB = Math.PI / 2;
 
@@ -389,18 +390,6 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
       for (let i = 0; i < el.n; i++) { fahnenMasten.push([el.x + i * 1.6, 0, el.z]); fahnen.push([el.x + i * 1.6 + 0.62, 5.3, el.z, 0, 1, el.farben[i % el.farben.length]]); }
     } else if (el.a === 'huegel') {
       haupt = neu(new THREE.SphereGeometry(0.5, 24, 10, 0, Math.PI * 2, 0, HALB).scale(el.b, el.h * 2, el.t), mat(el.farbe), el.x, 0, el.z, true);
-    } else if (el.a === 'berge') {
-      // Berge am Horizont: eine Reihe aus großen, kantigen Kegeln
-      let z = 7;
-      const zf = () => { z = (z * 16807) % 2147483647; return z / 2147483647; };
-      for (let i = -5; i <= 5; i++) {
-        const weit = 230 + zf() * 80, quer = i * 95 + (zf() - 0.5) * 50, hh = el.h * (0.6 + zf() * 0.5), rr = 80 + zf() * 50;
-        const px = el.seite === 'w' ? r.x0 - weit : el.seite === 'o' ? r.x1 + weit : mx + quer;
-        const pz = el.seite === 'n' ? r.z0 - weit : el.seite === 's' ? r.z1 + weit : mz + quer;
-        const bm = M(el.modell), wd = zf() * 3, ton = 0.85 + zf() * 0.3;
-        if (bm) { const b = stueck(bm, px, pz, wd, rr * 2.3 / bm.gr.x, hh / bm.gr.y, rr * 2.3 / bm.gr.z, false); b.position.y = -1; }
-        else neu(new THREE.ConeGeometry(rr, hh, 6, 1).rotateY(wd), mat(dunkler(el.farbe, ton), { kantig: true }), px, hh / 2 - 1, pz);
-      }
     } else if (el.a === 'meer') {
       flach(mx, el.ab + 600, 2400, 1200, 0x2a7ab8, 0.9, false, { rau: 0.18, metall: 0.2 });
       flach(mx, el.ab + 1.5, 2400, 3, 0xe8dcc0, 0.95);                                    // heller Strand-Streifen
@@ -598,6 +587,8 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
     pinie: [new THREE.CylinderGeometry(0.2, 0.3, 5.6, 6).translate(0, 2.8, 0), 0x6a4a34, new THREE.SphereGeometry(2.7, 9, 5).scale(1, 0.36, 1).translate(0, 6.2, 0), 0x2a5a30],
     zypresse: [new THREE.CylinderGeometry(0.14, 0.18, 1, 5).translate(0, 0.5, 0), 0x5a4030, new THREE.ConeGeometry(0.75, 6, 7).translate(0, 3.6, 0), 0x1f4a2a],
   };
+  // ---- Die Landschaft rundherum: Berge, Wald, Vororte, Stadt, Felder (umgebung.js). Ihre Bäume kommen mit in die Baum-Listen. ----
+  umgebungBauen({ g, plan, bilder, mat, neu, flach, G, baeume, wenig });
   // Mit Modellen: Die Bäume nah an den Türen sind echte Modelle (viele Dreiecke), alle anderen zwei gekreuzte Bilder desselben Baums.
   const nahGrenze = (() => {
     const weiten = [];
