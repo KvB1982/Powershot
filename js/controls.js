@@ -1,9 +1,11 @@
-// Powershot – Steuerung. Drei Arten:
+// Powershot – Steuerung. Fünf Arten:
 //   klassik : wie in der Python-Version (Mausrad/Pfeile zielen, linke Maustaste halten = Kraft)
 //   touch   : für iPad/Handy (links Joystick, rechts wischen; zwei Finger nach oben = ans Netz, nach unten = Grundlinie)
+//   wisch   : für iPad/Handy, nur wischen: WANN du wischst, bestimmt die Richtung (früh = links, spät = rechts),
+//             WOHIN du wischst, die Schlagart, und WIE SCHNELL, die Härte. Doppelt tippen = ans Netz und zurück.
 //   profi   : Tastatur, selbst laufen, verschiedene Schläge, Richtung beim Treffen
 //   controller : Switch-Controller (Joy-Con, Pro Controller): Stick, Tasten und – in der iOS-App – Schwingen
-// Dazu kommt, wenn man will, das Laufen mit der Kamera (kamera.js) – das geht mit jeder der vier Arten zusammen.
+// Dazu kommt, wenn man will, das Laufen mit der Kamera (kamera.js) – das geht mit jeder der fünf Arten zusammen.
 //
 // Das Match fragt die Steuerung ab:
 //   move()        -> { x, f }   Laufrichtung (-1..1), f = nach vorne
@@ -26,6 +28,36 @@ const DOUBLE = 0.32;                   // Zeitfenster für Doppelklick / Doppelt
 const ZWEI_ZEIT = 0.35;                // so schnell nacheinander (Sekunden) müssen beide Finger aufsetzen
 const ZWEI_NAH = 220;                  // so nah beieinander (Pixel) müssen die beiden Finger sein
 const ZWEI_WEG = 40;                   // so weit (Pixel) müssen beide Finger nach oben oder unten wischen
+
+// --- Wischen (Steuerung "wisch"): Mit diesen Zahlen kannst du das Wischen einstellen. ---
+const WISCH_MIN = 30;                  // so weit (Pixel) muss der Finger mindestens wischen, sonst ist es nur ein Tipp
+const WISCH_LANGSAM = 0.5;             // so langsam (Bildschirmhöhen pro Sekunde) = ganz weicher Schlag
+const WISCH_SCHNELL = 3.5;             // so schnell (Bildschirmhöhen pro Sekunde) = volle Härte
+const WISCH_FENSTER = 0.25;            // gemessen wird nur das letzte Stück des Wischens (Sekunden) – vorher darf der Finger ruhen
+const WISCH_VERZUG = 0.05;             // der Schlag "zählt" ein kleines bisschen früher als das Loslassen des Fingers
+const WISCH_SCHRAEG = 0.6;             // Aufschlag: so schräg gewischt (seitlich geteilt durch hoch) = ganz in die Ecke
+const WISCH_STOPP = 0.15;              // nach unten und langsamer als diese Kraft (0 bis 1) gewischt = Stoppball statt kurzer Slice
+const TIPP_ZEIT = 0.3;                 // so kurz (Sekunden) liegt der Finger bei einem Tipp auf dem Bildschirm
+const TIPP_WEG = 18;                   // so wenig (Pixel) darf er sich dabei bewegen
+const DOPPEL_TIPP = 0.4;               // so schnell nacheinander (Sekunden) müssen zwei Tipps kommen
+
+// Aus der Wisch-Richtung wird die Schlagart. dx = nach rechts, dy = nach unten (in Pixeln, wie auf dem Bildschirm).
+// Ob du nach links oder rechts wischst, ist egal – es zählt nur, wie steil es nach oben oder unten geht:
+//
+//        hoch  ↑   = hoher Topspin
+//   schräg hoch ↗  = normaler Topspin
+//      zur Seite → = gerader, flacher Schlag
+//  schräg runter ↘ = langer Slice
+//      runter  ↓   = kurzer Slice
+//
+export function wischArt(dx, dy) {
+  const steil = Math.atan2(-dy, Math.abs(dx)) * 180 / Math.PI;     // +90 = genau nach oben, 0 = zur Seite, -90 = genau nach unten
+  if (steil > 67.5) return { type: 'topspin', depth: 0.8, name: 'Hoher Topspin' };
+  if (steil > 22.5) return { type: 'drive', depth: 0.78, name: 'Topspin' };
+  if (steil > -22.5) return { type: 'flach', depth: 0.8, name: 'Gerader Schlag' };
+  if (steil > -67.5) return { type: 'slice', depth: 0.85, name: 'Langer Slice' };
+  return { type: 'slice', depth: 0.45, kurz: true, name: 'Kurzer Slice' };
+}
 
 // --- Controller: Schwung-Erkennung. Mit diesen Zahlen kannst du das Schwingen einstellen. ---
 const SWING_START = 1.6;               // ab dieser Beschleunigung (in g, 1 g = Erdanziehung) zählt es als Schwung
@@ -51,6 +83,15 @@ function richtungAusZeit(vorher) {
   if (vorher >= TIMING_MITTE) return -clamp((vorher - TIMING_MITTE) / (TIMING_FRUEH - TIMING_MITTE), 0, 1);
   return clamp((TIMING_MITTE - vorher) / TIMING_MITTE, 0, 1);
 }
+// Wann ist das passiert? Der Browser schreibt an jedes Finger-Ereignis die genaue Zeit (in Millisekunden).
+const zeitVon = (e) => (e.timeStamp != null ? e.timeStamp : performance.now()) / 1000;
+// Das letzte Stück eines Wischens: Wo war der Finger vor WISCH_FENSTER Sekunden, wo ist er jetzt?
+//   f = Finger mit seiner Spur (alle Punkte mit Zeit), jetzt = Zeit des Loslassens
+function wischStueck(f, jetzt) {
+  let start = f.spur[0];
+  for (const p of f.spur) { if (p.t >= jetzt - WISCH_FENSTER) break; start = p; }
+  return { dx: f.x - start.x, dy: f.y - start.y, dauer: Math.min(jetzt - start.t, WISCH_FENSTER) };
+}
 const tot = (v) => (Math.abs(v) < 0.18 ? 0 : v);     // kleine Stick-Wackler ignorieren
 
 export class Controls {
@@ -65,6 +106,7 @@ export class Controls {
     this.stick = { id: null, x0: 0, y0: 0, x: 0, f: 0 };
     this.swipe = null;
     this.lastTap = -9;
+    this.tippZeit = -9;           // Wischen: wann zuletzt getippt wurde (für den Doppel-Tipp)
     this.lastClick = -9;
     this.time = 0;
     // Controller: Stick (x, f), gedrückte Tasten, Name und ob er Bewegungen (Schwingen) meldet
@@ -97,7 +139,7 @@ export class Controls {
     this.live = null;           // Eingabe, die gerade entsteht (Finger noch auf dem Bildschirm)
   }
 
-  setMode(mode) { this.mode = mode; this.reset(); this.showStick(false); this.finger.clear(); this.zwei = null; this.netzWechsel = null; }
+  setMode(mode) { this.mode = mode; this.reset(); this.showStick(false); this.finger.clear(); this.zwei = null; this.netzWechsel = null; this.swipe = null; this.stick = { id: null, x0: 0, y0: 0, x: 0, f: 0 }; }
 
   // ctx: 'serve' | 'rally'
   begin(ctx) {
@@ -302,11 +344,12 @@ export class Controls {
       this.lastClick = this.time;
       return;
     }
-    if (this.mode !== 'touch') return;
+    if (this.mode !== 'touch' && this.mode !== 'wisch') return;
     e.preventDefault();
     const r = this.el.getBoundingClientRect();
     const x = e.clientX - r.left, y = e.clientY - r.top;
-    if (this.zweiStart(e.pointerId, x, y)) return;
+    this.kurzeSeite = Math.min(r.width, r.height) || 700;      // Maß für "wie schnell gewischt" (unabhängig von der Größe des Geräts)
+    if (this.zweiStart(e.pointerId, x, y, zeitVon(e))) return;
     if (x < r.width * 0.42 && this.stick.id === null) {
       this.stick = { id: e.pointerId, x0: x, y0: y, x: 0, f: 0 };
       this.showStick(true, x, y, 0, 0);
@@ -316,12 +359,13 @@ export class Controls {
   }
 
   onMove(e) {
-    if (!this.enabled || this.mode !== 'touch') return;
+    const wisch = this.mode === 'wisch';
+    if (!this.enabled || (this.mode !== 'touch' && !wisch)) return;
     const r = this.el.getBoundingClientRect();
     const x = e.clientX - r.left, y = e.clientY - r.top;
     const fi = this.finger.get(e.pointerId);
-    if (fi) { fi.x = x; fi.y = y; }
-    if (this.zwei) return this.zweiBewegt();
+    if (fi) { fi.x = x; fi.y = y; fi.spur.push({ x, y, t: zeitVon(e) }); if (fi.spur.length > 40) fi.spur.shift(); }
+    if (this.zwei) return wisch ? undefined : this.zweiBewegt();     // beim Wischen wird erst beim Loslassen ausgewertet
     if (e.pointerId === this.stick.id) {
       const R = 55;
       let dx = (x - this.stick.x0) / R, dy = (y - this.stick.y0) / R;
@@ -331,7 +375,7 @@ export class Controls {
       this.showStick(true, this.stick.x0, this.stick.y0, dx * R, dy * R);
     } else if (this.swipe && e.pointerId === this.swipe.id) {
       this.swipe.x = x; this.swipe.y = y;
-      this.live = this.swipeRaw(this.swipe, false);
+      if (!wisch) this.live = this.swipeRaw(this.swipe, false);
     }
   }
 
@@ -341,6 +385,7 @@ export class Controls {
       this.commitClassic('drive');
       return;
     }
+    if (this.mode === 'wisch') return this.wischHoch(e);
     if (this.mode !== 'touch') return;
     this.finger.delete(e.pointerId);
     if (this.zwei) {
@@ -363,14 +408,14 @@ export class Controls {
 
   // Touch: Ein Finger setzt auf. Liegt schon ein zweiter Finger ganz frisch und nah daneben,
   // ist das der Anfang von "mit zwei Fingern wischen". Dann zählt keiner der beiden mehr als Joystick oder Schlag.
-  zweiStart(id, x, y) {
+  zweiStart(id, x, y, t = 0) {
     let partner = null;
     if (!this.zwei) {
       for (const [pid, f] of this.finger) {
         if (this.time - f.t0 <= ZWEI_ZEIT && Math.hypot(f.x0 - x, f.y0 - y) <= ZWEI_NAH && Math.hypot(f.x - f.x0, f.y - f.y0) < 30) partner = pid;
       }
     }
-    this.finger.set(id, { x0: x, y0: y, x, y, t0: this.time });
+    this.finger.set(id, { x0: x, y0: y, x, y, t0: this.time, spur: [{ x, y, t }] });
     if (this.zwei) return true;            // ein dritter Finger während des Wischens: ignorieren
     if (partner === null) return false;
     this.zwei = { a: partner, b: id, fertig: false };
@@ -387,6 +432,89 @@ export class Controls {
     if (Math.abs(da) < ZWEI_WEG || Math.abs(db) < ZWEI_WEG || Math.sign(da) !== Math.sign(db)) return;
     Z.fertig = true;
     this.netzWechsel = da < 0 ? 'vor' : 'zurueck';
+  }
+
+  // ---------------------------------------------------------------
+  // Steuerung "wisch": nur wischen
+  // ---------------------------------------------------------------
+  // Ein Finger geht hoch. Was war das: ein Tipp, ein Wisch mit einem Finger oder einer mit zwei Fingern?
+  wischHoch(e) {
+    const id = e.pointerId, t = zeitVon(e);
+    const fi = this.finger.get(id);
+    this.finger.delete(id);
+    if (this.zwei) {
+      const Z = this.zwei;
+      // Mit zwei Fingern gewischt: Sobald der erste Finger hochgeht, wird ausgewertet (Mittelwert aus beiden Fingern).
+      if (!Z.fertig && fi && (id === Z.a || id === Z.b)) {
+        Z.fertig = true;
+        const anderer = this.finger.get(id === Z.a ? Z.b : Z.a);
+        const a = wischStueck(fi, t), b = anderer ? wischStueck(anderer, t) : a;
+        // Beide Finger müssen in dieselbe Richtung (hoch oder runter) gewischt haben
+        if (this.enabled && Math.sign(a.dy) === Math.sign(b.dy)) {
+          this.wischFertig({ dx: (a.dx + b.dx) / 2, dy: (a.dy + b.dy) / 2, dauer: Math.max(a.dauer, b.dauer) }, 2);
+        }
+      }
+      if (!this.finger.has(Z.a) && !this.finger.has(Z.b)) this.zwei = null;
+      return;
+    }
+    const warStick = id === this.stick.id, warWisch = this.swipe && id === this.swipe.id;
+    if (warStick) { this.stick = { id: null, x0: 0, y0: 0, x: 0, f: 0 }; this.showStick(false); }
+    if (warWisch) this.swipe = null;
+    if (!fi || !this.enabled) return;
+    // Kurz getippt, ohne zu wischen? Zwei Tipps schnell nacheinander = ans Netz und wieder zurück.
+    if (Math.hypot(fi.x - fi.x0, fi.y - fi.y0) < TIPP_WEG) {
+      if (this.time - fi.t0 > TIPP_ZEIT) return;
+      if (t - this.tippZeit <= DOPPEL_TIPP) { this.netzWechsel = 'wechsel'; this.tippZeit = -9; }
+      else this.tippZeit = t;
+      return;
+    }
+    if (warWisch) this.wischFertig(wischStueck(fi, t), 1);
+  }
+
+  // Ein Wisch ist fertig – hier wird daraus ein Schlag oder ein Aufschlag.
+  //   w = { dx, dy, dauer }: so weit (Pixel) und so lange (Sekunden) wurde gewischt · finger: 1 oder 2
+  wischFertig(w, finger) {
+    const len = Math.hypot(w.dx, w.dy);
+    if (len < WISCH_MIN) return;
+    // Wie schnell? In "Bildschirmhöhen pro Sekunde", damit es auf iPhone und iPad gleich ist.
+    const tempo = len / Math.max(w.dauer, 0.03) / (this.kurzeSeite || 700);
+    const kraft = clamp((tempo - WISCH_LANGSAM) / (WISCH_SCHNELL - WISCH_LANGSAM), 0, 1);
+    const power = 0.25 + 0.75 * kraft;
+    const hoch = w.dy < 0;
+    if (this.ctx === 'serve') {
+      // Aufschlag: hoch = gerade, runter = Slice; mit zwei Fingern hoch = Kick, runter = von unten.
+      if (Math.abs(w.dy) < 0.4 * len) { if (this.onHint) this.onHint('Aufschlag: nach oben oder nach unten wischen!'); return; }
+      const art = finger === 2 ? (hoch ? 'kick' : 'unten') : (hoch ? 'gerade' : 'slice');
+      // Schräg gewischt = Richtung: nach links geneigt = linke Ecke des Aufschlagfelds, nach rechts = rechte Ecke
+      const aim = clamp(w.dx / Math.abs(w.dy) / WISCH_SCHRAEG, -1, 1) * 0.85;
+      this.wischLetzter = { name: 'Aufschlag ' + art, kraft, finger };
+      this.committed = { type: 'serve', art, aim, power, committed: true };
+      this.serveOut = this.committed;
+      return;
+    }
+    let c;
+    if (finger === 2) {
+      // Im Ballwechsel: zwei Finger nach oben = Lob (nach unten bedeutet nichts)
+      if (!hoch || Math.abs(w.dy) < Math.abs(w.dx)) return;
+      c = { type: 'lob', name: 'Lob', power: 0.6 };
+    } else {
+      const a = wischArt(w.dx, w.dy);
+      c = { type: a.type, depth: a.depth, name: a.name, power };
+      if (a.kurz) {
+        // Kurzer Slice: nie hart. Ganz sanft gewischt wird daraus ein Stoppball direkt hinter das Netz.
+        if (kraft < WISCH_STOPP) c = { type: 'drop', name: 'Stoppball', power: 0.4 };
+        else c.power = Math.min(power, 0.6);
+      }
+    }
+    this.wischLetzter = { name: c.name, kraft, finger };
+    this.committed = c;
+    this.padAt = this.time - WISCH_VERZUG;      // ab hier läuft die Uhr für das Timing (früh = links, spät = rechts)
+  }
+
+  // Die Richtung kommt wie beim Controller aus dem Zeitpunkt des Wischens.
+  wischRaw(c, spaet = 0) {
+    if (c.type === 'serve') return c;
+    return { type: c.type, aimMode: 'abs', aim: this.timingZiel(spaet) * 0.88, depth: c.depth, power: clamp(c.power, 0.2, 1), committed: true, vonOben: true };
   }
 
   commitClassic(type) {
@@ -452,8 +580,8 @@ export class Controls {
       if (this.charging) this.power = Math.min(POWER_MAX, this.power + dt / CHARGE_TIME);
     } else if (this.mode === 'profi') {
       if (this.charging) this.power = Math.min(this.ctx === 'serve' ? 1.25 : 1, this.power + dt / 0.5);
-    } else if (this.mode === 'controller') {
-      // Zu früh geschwungen? Dann verfällt der Schlag wieder – wie beim echten Tennis muss das Timing stimmen.
+    } else if (this.mode === 'controller' || this.mode === 'wisch') {
+      // Zu früh geschwungen oder gewischt? Dann verfällt der Schlag wieder – wie beim echten Tennis muss das Timing stimmen.
       if (this.committed && this.ctx === 'rally' && this.time - this.padAt > PAD_HALTBAR) this.committed = null;
     }
   }
@@ -479,13 +607,14 @@ export class Controls {
       if (this.charging) return { ...this.profiRaw({ type: this.type, power: this.power }), committed: false };
       return null;
     }
-    if (this.mode === 'controller') {
-      if (this.committed) return this.padRaw(this.committed);
+    if (this.mode === 'controller' || this.mode === 'wisch') {
+      const wisch = this.mode === 'wisch';
+      if (this.committed) return wisch ? this.wischRaw(this.committed) : this.padRaw(this.committed);
       // Noch nicht geschwungen: Die Ziellinie zeigt, wohin der Ball ginge, wenn du GENAU JETZT schwingst.
       // Sie wandert von links (früh) über die Mitte nach rechts (spät).
       if (this.ctx !== 'rally' || bisTreffen === null || bisTreffen > 1.0) return null;
       const ziel = bisTreffen < 0 ? 1 : richtungAusZeit(bisTreffen);
-      return { type: 'drive', aimMode: 'abs', aim: (this.pad.x || ziel) * 0.88, depth: 0.78, power: 0.6, committed: false };
+      return { type: 'drive', aimMode: 'abs', aim: ((!wisch && this.pad.x) || ziel) * 0.88, depth: 0.78, power: 0.6, committed: false };
     }
     return this.committed || this.live;
   }
@@ -500,6 +629,8 @@ export class Controls {
       else if (this.charging) raw = this.profiRaw({ type: this.type, power: this.power });
     } else if (this.mode === 'controller') {
       if (this.committed) raw = this.padRaw(this.committed, spaet);
+    } else if (this.mode === 'wisch') {
+      if (this.committed) raw = this.wischRaw(this.committed, spaet);
     } else {
       raw = this.committed;
     }
@@ -529,7 +660,7 @@ export class Controls {
 
   // Für den Kraftbalken auf dem Bildschirm
   hud() {
-    const show = this.mode !== 'touch' && this.mode !== 'controller' && (this.charging || !!this.committed);
+    const show = this.mode !== 'touch' && this.mode !== 'wisch' && this.mode !== 'controller' && (this.charging || !!this.committed);
     const p = this.committed ? this.committed.power : this.power;
     return { show, power: p, max: POWER_MAX, limit: POWER_LIMIT, charging: this.charging, type: this.committed ? this.committed.type : this.type };
   }

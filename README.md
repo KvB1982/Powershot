@@ -132,6 +132,19 @@ Einstellbar unter „Einstellungen“. Auf Geräten mit Touchscreen ist „Touch
 - Solange der Finger noch auf dem Bildschirm ist, zeigt ein Ring auf dem Platz, wo der Ball hingehen würde.
 - Gewischt wird, sobald der Gegner geschlagen hat. Der Schlag passiert, wenn der Ball da ist.
 
+### Wischen (iPad / Handy) – neu, zum Ausprobieren
+
+Geschlagen wird nur mit einem Wisch. Drei Dinge zählen:
+
+- **Wann** du wischst = Richtung, wie bei der Uhr-Steuerung: früh = nach links, spät = nach rechts. Die Ziellinie auf dem Platz wandert mit.
+- **Wohin** du wischst = Schlagart (links oder rechts herum ist egal):
+  ↑ hoher Topspin · ↗ normaler Topspin · → gerader, flacher Schlag · ↘ langer Slice · ↓ kurzer Slice (ganz langsam gewischt = Stoppball).
+- **Wie schnell** du wischst = Härte.
+- **Zwei Finger nach oben:** Lob. **Doppelt tippen:** ans Netz und wieder zurück.
+- **Aufschlag:** ↑ gerade · ↓ Slice · zwei Finger ↑ Kick · zwei Finger ↓ von unten. Schräg gewischt = Richtung im Aufschlagfeld.
+- Laufen wie bei „Touch“: Finger links auflegen und ziehen. Gewischt wird deshalb rechts davon (ab etwa 4/10 der Breite).
+- Zahlen zum Einstellen: `WISCH_…` oben in `js/controls.js`. Prüfen ohne Gerät: `node tools/wisch.mjs`.
+
 ### Klassik (Maus) – wie in der Python-Version
 
 - Mausrad oder ← → zielen, linke Maustaste halten = Kraft (roter Bereich = Aus), Doppelklick oder rechte Taste = Lob,

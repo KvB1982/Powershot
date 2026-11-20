@@ -19,6 +19,7 @@ node tools/logic.mjs            # Turnier, Karriere (3 Jahre, Ranglisten-Regeln,
 node tools/rookie.mjs           # Neuling gegen Profi auf jeder Schwierigkeit
 node tools/seitenwechsel.mjs hard 10   # Seitenwechsel prüfen: nur nach ungeraden Spielen, nie nach einem Aufschlagfehler
 node tools/wichtig.mjs          # Hinweise Breakball, Satzball, Matchball, Championship Point prüfen (`wichtigerPunkt` in `js/rules.js`)
+node tools/wisch.mjs            # Steuerung „Wischen“: künstliche Finger wischen, geprüft wird Schlagart, Härte, Timing, Aufschlagart, Doppeltipp
 node tools/kamera.mjs           # Laufen mit der Kamera: Rechnung prüfen (ohne Kamera, mit künstlichen Körperpunkten)
 node tools/ballflug.mjs hard     # Flugbahn und Absprung jeder Schlag- und Aufschlagart messen und prüfen (auch clay, grass, indoor)
 node tools/gelaende.mjs         # Lagepläne aller Turniergelände prüfen: alle neun Orte da, nichts steht ineinander, jede Tür zu Fuß erreichbar
@@ -45,7 +46,7 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 | `js/spielzuege.js` | Taktische Spielzüge (`ZUEGE`: 13 Stück, Schritte mit Zielfeld `BEREICH`), `ZugZaehler` (schaut bei jedem Schlag zu), `pruefe`, `zielfeld`, Lernstand (`stufe`, `offen`, `eintragen`), `lieblingsZuege` der Computergegner – ohne three.js und ohne andere Dateien |
 | `js/schlagbuch.js` | Schlagbuch (Hauptmenü → „Schlagarten“): die 23 Schlagarten der Uhr-Aufnahme (`BUCH`, gleiche Kürzel wie `schlagarten` in `ios/PowershotWatch/Schlaeger.swift`) mit Erklärung und Strichmännchen. Je Schlag drei Posen (Ausholen, Treffen, Ausschwingen), daraus rechnet die Datei stehende Bilder und einen kleinen Film (SVG). Dazu die Anleitung „Schläge mit der Uhr aufnehmen“ (`uhrHtml`) – ohne three.js |
 | `js/match.js` | Zustände: intro → serveReady → toss → rally → pointOver → (changeover) → over; Computergegner |
-| `js/controls.js` | Steuerung: `klassik` (Maus), `touch` (iPad), `profi` (Tastatur), `controller` (Switch-Controller; Schwung-Zahlen `SWING_…` oben in der Datei) |
+| `js/controls.js` | Steuerung: `klassik` (Maus), `touch` (iPad), `wisch` (iPad, nur wischen; Zahlen `WISCH_…` oben in der Datei), `profi` (Tastatur), `controller` (Switch-Controller; Schwung-Zahlen `SWING_…` oben in der Datei) |
 | `js/kamera.js` | Laufen mit der Kamera: Körperpunkte → Position auf dem Platz, Einmessen, Zahlen zum Einstellen oben – ohne three.js und ohne Browser testbar |
 | `js/kamerabild.js` | Webcam (`getUserMedia`) und Körpererkennung MediaPipe Pose (`@mediapipe/tasks-vision` von jsDelivr, Modell `assets/koerper_lite.task`), Vorschau |
 | `js/figur.js` | Sechs Spielermodelle (`assets/spieler_a…f.glb`), Skinning auf 13 Knochen, Umfärben im Shader |
@@ -129,6 +130,16 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
   (`gerade`, `slice`, `kick`, `unten`; ohne Angabe: erster gerade, zweiter Kick). Zusätzlich darf sie in `schlag` eigene Zahlen mitgeben,
   die über die Tabelle gelegt werden, z. B. `{ type: 'drive', schlag: { top: 3400, tempo: [28, 28] } }` – gedacht für die Apple Watch.
 - Stoppball und Aufschlag von unten haben kein festes Tempo, sondern `bogen` (Höhe über dem Netz); `solveBogen` sucht das Tempo dazu.
+
+## Steuerung „Wischen“ (`settings.control = 'wisch'`)
+
+- Zweite Touch-Steuerung neben `touch` (die bleibt, wie sie ist). Geschlagen wird nur mit einem Wisch; ausgewertet wird beim Loslassen (`wischHoch` → `wischFertig` in `js/controls.js`).
+- Richtung = Zeitpunkt, derselbe Code wie beim Controller/der Uhr (`padAt`, `timingZiel`, `TIMING_…`; `match.js` behandelt `wisch` wie `controller`: kurze Frist nach dem besten Moment, Volleys auch bei Bällen ins Aus).
+- Schlagart = Steilheit des Wischs (`wischArt`, links/rechts egal): ↑ `topspin`, ↗ `drive`, → `flach`, ↘ `slice` lang, ↓ `slice` kurz (Tiefe 0,45; langsamer als `WISCH_STOPP` = `drop`). Härte = Tempo des letzten Stücks (`WISCH_FENSTER`) in Bildschirmhöhen pro Sekunde (`WISCH_LANGSAM` … `WISCH_SCHNELL`).
+- Zwei Finger im Ballwechsel: hoch = Lob, runter = nichts. Doppelt tippen (überall) = ans Netz und zurück (`netzWechsel = 'wechsel'`). „Zwei Finger hoch = ans Netz“ gilt nur noch in `touch`.
+- Aufschlag: ↑ gerade, ↓ Slice, zwei Finger ↑ Kick, zwei Finger ↓ von unten; seitliche Neigung des Wischs = Richtung (`WISCH_SCHRAEG`). Die Geste überstimmt die Aufschlag-Knöpfe.
+- Laufen: Joystick links (erste 42 % der Breite) wie bei `touch` – dort zählt ein Wisch nicht als Schlag.
+- Geprüft: `tools/wisch.mjs` und im Test-Browser mit künstlichen Finger-Ereignissen (auch zwei Finger). Nicht geprüft: echtes iPad, echte Finger – alle `WISCH_…`-Zahlen sind geschätzt.
 
 ## Taktische Spielzüge (optional)
 

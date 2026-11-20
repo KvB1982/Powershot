@@ -625,6 +625,7 @@ export class Match {
 
   // Ans Netz oder zurück an die Grundlinie – auf Wunsch der Steuerung:
   //   Touch: zwei Finger nach oben = ans Netz ('vor'), zwei Finger nach unten = Grundlinie ('zurueck')
+  //   Wischen: doppelt tippen wechselt hin und her ('wechsel')
   //   Controller/Uhr: Doppelklopfen oder die Taste "Netz" wechselt hin und her ('wechsel')
   netzWunsch() {
     const p = this.P[0];
@@ -858,7 +859,7 @@ export class Match {
     if (!b.live || b.lastHitter === p.side || p.missed || p.noHit || b.bounces >= 2) return;
     if (b.pos.z * p.dz <= 0.15) return;
     const volley = b.bounces === 0;
-    const profi = p.isHuman && (this.cfg.controlMode === 'profi' || this.cfg.controlMode === 'controller');
+    const profi = p.isHuman && ['profi', 'controller', 'wisch'].includes(this.cfg.controlMode);
     if (volley) {
       if (b.isServe) return;
       if (!this.predIn && !profi) return;
@@ -868,8 +869,8 @@ export class Match {
     const receding = dist > p.lastDist + 1e-5;
     p.lastDist = dist;
     const reach = b.isServe ? REACH + 0.3 : REACH;      // beim Return streckt man sich weiter
-    // Controller: Der beste Moment ist vorbei, aber für einen kurzen Augenblick darf man noch (zu spät) schlagen.
-    const pad = p.isHuman && this.cfg.controlMode === 'controller';
+    // Controller und Wischen: Der beste Moment ist vorbei, aber für einen kurzen Augenblick darf man noch (zu spät) schlagen.
+    const pad = p.isHuman && (this.cfg.controlMode === 'controller' || this.cfg.controlMode === 'wisch');
     const spaet = pad && p.spaetSeit != null ? this.sinceHit - p.spaetSeit : 0;
     const nachzuegler = pad && p.spaetSeit != null && b.pos.y >= 0.1;     // läuft, bis getroffen oder endgültig verpasst
     if (!nachzuegler && (dist > reach || b.pos.y > 2.75 || b.pos.y < 0.1)) return;

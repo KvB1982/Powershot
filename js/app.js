@@ -51,7 +51,7 @@ const zugSpeicher = (() => { try { return JSON.parse(localStorage.getItem(ZUG_KE
 const zugSichern = () => { try { localStorage.setItem(ZUG_KEY, JSON.stringify(zugSpeicher)); } catch (e) { /* egal */ } };
 const saveSettings = () => { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) { /* egal */ } };
 
-const CONTROL_NAMES = { klassik: 'Klassik (Maus)', touch: 'Touch (iPad)', profi: 'Profi (Tastatur)', controller: 'Controller / iPhone-Schläger' };
+const CONTROL_NAMES = { klassik: 'Klassik (Maus)', touch: 'Touch (iPad)', wisch: 'Wischen (iPad, neu)', profi: 'Profi (Tastatur)', controller: 'Controller / iPhone-Schläger' };
 const KAMERA_NAMES = { aus: 'Aus', seite: 'Nur links und rechts', voll: 'Auch vor und zurück' };
 const ASSIST_NAMES = { voll: 'Voll (läuft von allein)', seitlich: 'Nur seitlich', aus: 'Aus (selbst laufen)' };
 
@@ -198,6 +198,12 @@ actions.settings = (v) => {
     <div class="bar">${back(settingsBack)}<h2>Einstellungen</h2></div>
     <div class="panel">
       ${optionRow('Steuerung', 'control', CONTROL_NAMES)}
+      ${settings.control === 'wisch' ? `<p class="dim" style="margin:6px 0 0;font-size:13px">👆 <b>Wischen:</b> Du schlägst nur mit einem Wisch.
+        <b>Wann</b> du wischst, bestimmt die Richtung: früh = nach links, spät = nach rechts (die Ziellinie auf dem Platz wandert mit).
+        <b>Wohin</b> du wischst, bestimmt den Schlag: ↑ hoher Topspin · ↗ Topspin · → gerader, flacher Schlag · ↘ langer Slice · ↓ kurzer Slice (ganz langsam = Stoppball).
+        <b>Wie schnell</b> du wischst, bestimmt die Härte. Zwei Finger nach oben = Lob. Doppelt tippen = ans Netz und zurück.<br>
+        <b>Aufschlag:</b> ↑ gerade · ↓ Slice · zwei Finger ↑ Kick · zwei Finger ↓ von unten. Schräg wischen = Richtung.
+        Laufen: Finger links auflegen und ziehen (oder Laufhilfe „Voll“).</p>` : ''}
       <p class="dim" style="margin:6px 0 0;font-size:13px">🎮 ${controls.pad.connected
         ? `Verbunden: ${esc(controls.pad.name)} · ${controls.pad.motion ? 'Schwingen wird erkannt' : 'nur Tasten und Stick (kein Schwingen)'}`
         : 'Kein Controller verbunden. Koppeln: iPad-Einstellungen → Bluetooth, am Joy-Con die kleine runde Taste gedrückt halten.'}</p>
@@ -472,6 +478,8 @@ actions.training = (v) => {
 const ZUG_TIPP = {
   touch: { aufschlag: 'nach oben wischen – schräg wischen = Richtung', drive: 'nach oben wischen – schräg = Richtung, länger = tiefer',
     slice: 'zur Seite wischen', drop: 'nach unten wischen', lob: 'doppelt tippen', netz: 'mit zwei Fingern nach oben wischen' },
+  wisch: { aufschlag: 'nach oben wischen – schräg wischen = Richtung', drive: 'schräg nach oben wischen – früh wischen = links, spät = rechts',
+    slice: 'schräg nach unten wischen (ganz nach unten = kurzer Slice)', drop: 'ganz langsam nach unten wischen', lob: 'mit zwei Fingern nach oben wischen', netz: 'doppelt tippen' },
   klassik: { aufschlag: 'Mausrad zielt, linke Maustaste halten und loslassen', drive: 'Mausrad zielt, linke Maustaste halten = Kraft (mehr Kraft = tiefer)',
     slice: 'geht mit der Maus nicht – nimm die Steuerung „Profi“ oder „Touch“', drop: 'geht mit der Maus nicht – nimm die Steuerung „Profi“ oder „Touch“',
     lob: 'Doppelklick', netz: 'Pfeil nach oben halten' },
@@ -1923,6 +1931,7 @@ function startMatch(o) {
   if (lernen) hud.training(match.training);
   $('#hint').textContent = {
     touch: 'Links: laufen · Rechts: nach oben wischen = Schlag · unten = Stopp · Doppeltipp = Lob · zwei Finger hoch = ans Netz, runter = zurück',
+    wisch: 'Wischen = Schlag: ↑ hoher Topspin · ↗ Topspin · → gerade · ↘ langer Slice · ↓ kurzer Slice · früh = links, spät = rechts · schnell = hart · zwei Finger ↑ = Lob · Doppeltipp = Netz',
     klassik: 'Mausrad/←→ zielen · Linke Taste halten = Kraft · Doppelklick = Lob · ↑↓ laufen',
     controller: 'Schwingen oder A = Schlag · B Slice · X Lob · Y Stopp · früh = links, spät = rechts',
     profi: 'WASD laufen · Leertaste Topspin · U gerade · O hoher Topspin · K Slice · L Lob · I Stopp · Richtung beim Treffen halten',
