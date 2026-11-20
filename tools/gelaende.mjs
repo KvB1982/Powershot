@@ -2,12 +2,13 @@
 //   - Hat jedes Gelände alle neun Orte (Centre Court, Trainingsplatz, Kraftraum …)?
 //   - Stehen Stadien, Häuser und Plätze nicht ineinander?
 //   - Liegt jede Tür frei, und kommt man vom Fahrdienst zu Fuß überall hin?
+//   - Kommt man in jedes begehbare Haus durch seine Türen hinein?
 // Aufruf: node tools/gelaende.mjs
 import { GELAENDE_LISTE, planVon, planAus, gelaendeFuer, PFLICHT_ORTE } from '../js/gelaende.js';
 import { KLEINE_TURNIERE, LIGA } from '../js/kleinetour.js';
 import { gitterBauen, frei, weg } from '../js/wege.js';
 
-let fehler = 0;
+let fehler = 0, raeume = 0, moebel = 0;
 const sag = (t) => { console.log('  ✗ ' + t); fehler++; };
 // Die großen Gelände einzeln, dazu jedes kleine Turnier (jede Stadt und Turnier-Stufe einmal) und das Liga-Spiel
 const alle = GELAENDE_LISTE.map((id) => [id, planVon(id), true]);
@@ -41,9 +42,19 @@ for (const [id, plan, laut] of alle) {
     for (const p of w) { l += Math.hypot(p.x - px, p.z - pz); px = p.x; pz = p.z; }
     laengster = Math.max(laengster, l);
   }
+  // Begehbare Häuser: Kommt man von jeder Tür wirklich hinein? (Die Mitte des Raums muss frei und erreichbar sein.)
+  for (const r of plan.raeume || []) {
+    raeume++;
+    let mx = r.x, mz = r.z, da = false;
+    for (let i = 0; i < 40 && !da; i++) { mx = r.x + ((i * 7) % 5 - 2) * 0.8; mz = r.z + ((i * 3) % 5 - 2) * 0.8; da = frei(G, mx, mz); }
+    if (!da) { sag(`Haus „${r.name}“: drinnen ist kein freier Platz`); continue; }
+    for (const o of r.tueren) if (!o.info && frei(G, o.tx, o.tz) && !weg(G, o.tx, o.tz, mx, mz)) sag(`Haus „${r.name}“: von der Tür „${o.name || o.id}“ kommt man nicht hinein`);
+    moebel += r.moebel.length;
+  }
   if (laut) console.log(`  längster Weg vom Fahrdienst: ${Math.round(laengster)} m`);
   else if (fehler > vorher) console.log(`  ↑ in: ${id}`);
 }
 console.log(`${alle.length} Gelände geprüft (${GELAENDE_LISTE.length} große, ${alle.length - GELAENDE_LISTE.length} kleine).`);
+console.log(`${raeume} begehbare Häuser mit ${moebel} Möbelstücken.`);
 console.log(fehler ? `\n${fehler} Fehler` : '\nAlles in Ordnung.');
 process.exit(fehler ? 1 : 0);

@@ -73,6 +73,8 @@ const ORTE_BESONDERS = {
 const MITTELMEER = ['Barcelona', 'Rom', 'Mallorca', 'Manacor', 'Estoril', 'Umag', 'Murcia', 'Girona', 'Barletta', 'Madrid', 'Oeiras', 'Francavilla', 'Vicenza', 'Mailand', 'Triest', 'Cordenons', 'Lissabon', 'Maia', 'Neapel', 'Perugia',
   'Genua', 'Olbia', 'Zadar', 'Istanbul', 'San Marino', 'Como', 'Valencia', 'Reus', 'Sabadell', 'Reggio Emilia', 'La Bisbal', 'Martos', 'Poreč', 'Santa Margherita di Pula', 'Grasse', 'Xanthi', 'Aix-en-Provence', 'Saint-Tropez', 'Cassis', 'Ajaccio', 'Heraklion', 'Antalya', 'Faro', 'Vila Real de Santo António'];
 
+const ENGLAND = ['London', 'Eastbourne', 'Nottingham', 'Ilkley', 'Surbiton', 'Birmingham', 'Glasgow', 'Sunderland', 'Sheffield', 'Loughborough', 'Bath', 'Roehampton', 'Shrewsbury', 'Edinburgh', 'Dublin'];
+
 // Ein Zufall, der für denselben Text immer dieselben Zahlen liefert
 function zufallAus(text) {
   let s = 2166136261;
@@ -229,7 +231,10 @@ export function kleinesGelaende(def) {
   // ---- Zum Schluss: manchmal spiegeln, damit nicht jedes Gelände gleich herum liegt ----
   const teile = zf() < 0.5 ? T : T.map(spiegeln);
   // so viele Besucher laufen herum: beim ITF-Turnier fast keiner, beim ATP 500 viele
-  return { name: liga ? name : name.replace('Tennisclub Zu Hause', 'Dein Verein'), stadt: def.name || stadt, rand, umland, boden, feld, kamW, leute: [10, 40, 90, 130][stufe], klein: true, stufe, teile };
+  // Wie sehen die Häuser aus? Das richtet sich nach dem Land (für die 3D-Modelle in gelaendemodelle.js)
+  const stil = holz || land.includes('alpen') ? 'alpen' : sued ? 'mittelmeer' : land.includes('wueste') ? 'wueste' : ENGLAND.includes(stadt) ? 'england'
+    : def.erdteil === 'na' ? 'usa' : def.erdteil === 'as' ? 'asien' : def.erdteil === 'eu' ? (stufe >= 2 ? 'modern' : 'europa') : 'modern';
+  return { name: liga ? name : name.replace('Tennisclub Zu Hause', 'Dein Verein'), stadt: def.name || stadt, rand, umland, boden, feld, kamW, leute: [10, 40, 90, 130][stufe], klein: true, stufe, stil, fichte: winter || land.includes('alpen'), teile };
 }
 
 // Einen Baustein an der Mitte spiegeln (Osten und Westen tauschen)

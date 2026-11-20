@@ -17,6 +17,8 @@
 //   haus     Gebäude. dach: 'flach' | 'sattel' | 'glas' (Gewächshaus) | 'zelt'
 //   flaeche  farbige Fläche auf dem Boden (Pflaster, Rasen, Straße). wasser: true = Wasser, da kann man nicht durch
 //   baeume   Bäume: art 'laub' | 'palme' | 'pinie' | 'zypresse' – als Reihe (linie) oder verstreut (feld)
+//   modell   ein einzelnes fertiges 3D-Modell als Schmuck (z. B. eine Yacht): modell = Name der Datei in assets/gelaende/, dreh in Grad, gr = Größe
+//   Stadien, Häuser und Türme dürfen mit „modell“ ein eigenes 3D-Modell nennen; „stil“ beim Gelände sagt, wie die übrigen Häuser aussehen (england, mittelmeer, wueste, usa, asien, alpen, europa, modern).
 //   dazu: huegel, berge, meer, kugel, bogen, tuerme, statuen, obelisk, leinwand, schirme, zelte, glasdach, auto, zaun
 // Ein Baustein mit „ort“ ist eine Tür, an der man etwas tun kann (court, training, kraft, physio, essen, saiten, presse, hotel, fans).
 // Ein Baustein mit „info“ ist eine Sehenswürdigkeit: Wer hingeht, bekommt den Text zu lesen.
@@ -43,13 +45,13 @@ export const GELAENDE = {
   // AUSTRALIAN OPEN – Melbourne Park. Ein langes Gelände zwischen den Bahngleisen (Norden) und dem Fluss Yarra (Süden).
   // =====================================================================================
   ao: {
-    name: 'Melbourne Park', stadt: 'Melbourne, Australien',
+    stil: 'modern', name: 'Melbourne Park', stadt: 'Melbourne, Australien',
     rand: { x0: -106, x1: 110, z0: -48, z1: 48 }, umland: 0x6f9a5a, boden: PFLASTER, feld: [0x2f6fc4, 0x1f4f9c],
     teile: [
       F(0, 55, 700, 8, ASPHALT), F(0, 112, 700, 30, WASSER), F(0, -57, 700, 10, 0x6a6258),          // Straße, Fluss Yarra, Bahngleise
       S('Cricket-Stadion MCG', -20, -104, 74, 68, 17, { form: 'rund', dach: 'ring', farbe: 0xb8bcc4, sitz: 0x8a9aa8, wiese: true }),
       { a: 'huegel', x: 78, z: 88, b: 52, t: 40, h: 11, farbe: 0xf4f4f0 },                            // das Fußballstadion mit dem Blasen-Dach
-      S('Rod Laver Arena', -30, 0, 44, 40, 12, { form: 'acht', dach: 'schieb', farbe: 0xd8dce2, sitz: 0x2a5aa8, ort: 'court', tuer: 's',
+      S('Rod Laver Arena', -30, 0, 44, 40, 12, { modell: 'stadion_ao', form: 'acht', dach: 'schieb', farbe: 0xd8dce2, sitz: 0x2a5aa8, ort: 'court', tuer: 's',
         text: 'Das größte Stadion von Melbourne: fast 15.000 Plätze und ein Dach, das zufahren kann. Benannt nach Rod Laver, der zweimal alle vier Grand Slams in einem Jahr gewann.' }),
       S('Margaret Court Arena', 10, -24, 28, 26, 9, { form: 'eckig', dach: 'schieb', farbe: 0xc8a070, sitz: 0x3a6ab0, tuer: 's',
         info: 'Das drittgrößte Stadion (7.500 Plätze). Sein Dach schließt in nur fünf Minuten – schneller als jedes andere Tennis-Dach.' }),
@@ -77,13 +79,13 @@ export const GELAENDE = {
   // ROLAND GARROS – Paris. Ein schmaler Streifen am Stadtwald Bois de Boulogne, ganz im Osten das Stadion im Gewächshaus-Garten.
   // =====================================================================================
   rg: {
-    name: 'Stade Roland Garros', stadt: 'Paris, Frankreich',
+    stil: 'europa', name: 'Stade Roland Garros', stadt: 'Paris, Frankreich',
     rand: { x0: -110, x1: 100, z0: -33, z1: 33 }, umland: 0x5a8a4a, boden: 0xd8cdb8, feld: [0xcc6a3c, 0xbc5e36],
     teile: [
       F(0, -40, 700, 9, ASPHALT), F(0, 40, 700, 8, ASPHALT),
       B('laub', { feld: [0, -85, 420, 70], n: 150 }),                                                // der Wald Bois de Boulogne
-      { a: 'tuerme', p: [[-90, 56, 14, 12, 9], [-60, 58, 18, 12, 11], [-25, 56, 16, 12, 10], [10, 58, 20, 12, 9], [45, 56, 16, 12, 11], [80, 58, 18, 12, 10]], farbe: 0xe6dcc8, dach: 0x6a7078 },   // Pariser Wohnhäuser
-      S('Court Philippe-Chatrier', 10, 0, 42, 38, 12, { form: 'eckig', dach: 'schieb', farbe: 0xd8d0c0, sitz: 0x2a6a4a, ort: 'court', tuer: 's',
+      { a: 'tuerme', modell: 'haus_altbau', p: [[-90, 56, 14, 12, 9], [-60, 58, 18, 12, 11], [-25, 56, 16, 12, 10], [10, 58, 20, 12, 9], [45, 56, 16, 12, 11], [80, 58, 18, 12, 10]], farbe: 0xe6dcc8, dach: 0x6a7078 },   // Pariser Wohnhäuser
+      S('Court Philippe-Chatrier', 10, 0, 42, 38, 12, { modell: 'stadion_rg', form: 'eckig', dach: 'schieb', farbe: 0xd8d0c0, sitz: 0x2a6a4a, ort: 'court', tuer: 's',
         text: 'Der Centre Court von Paris: 15.000 Plätze, roter Sand und seit 2020 ein Dach. An den vier Tribünen stehen die Namen der „vier Musketiere“ des französischen Tennis.' }),
       S('Court Suzanne-Lenglen', -36, 4, 32, 28, 9, { form: 'oval', dach: 'schieb', farbe: 0xe0d8c8, sitz: 0x2a6a4a, tuer: 's',
         info: 'Das zweitgrößte Stadion (10.000 Plätze), benannt nach der berühmten Spielerin Suzanne Lenglen. Seit 2024 hat es ein Dach aus weißem Stoff.' }),
@@ -107,13 +109,13 @@ export const GELAENDE = {
   // WIMBLEDON – London. Rasen, dunkelgrüne Stadien, lila Blumen. Im Norden der Hügel und die Trainingsplätze, im Osten die Church Road.
   // =====================================================================================
   wim: {
-    name: 'All England Club', stadt: 'London, England',
+    stil: 'england', name: 'All England Club', stadt: 'London, England',
     rand: { x0: -56, x1: 52, z0: -82, z1: 76 }, umland: 0x4f8a45, boden: 0xb8b4a4, feld: [0x4a9a3c, 0x3f8a34],
     teile: [
       F(60, 0, 8, 500, ASPHALT), F(-64, 0, 7, 500, ASPHALT),                                          // Church Road (Osten), Somerset Road (Westen)
       F(110, -10, 46, 70, WASSER, { rund: true }), B('laub', { feld: [115, 0, 90, 240], n: 60 }),     // See und Park hinter der Straße
       { a: 'tuerme', p: [[-84, -50, 12, 10, 7], [-86, -20, 12, 12, 8], [-84, 12, 12, 10, 7], [-86, 44, 12, 12, 8]], farbe: 0xb8866a, dach: 0x5a4a44 },
-      S('Centre Court', 5, 10, 36, 36, 12, { form: 'acht', dach: 'schieb', farbe: 0x1f4a2e, sitz: 0x2a5a3a, dachFarbe: 0xe8ece8, ort: 'court', tuer: 's',
+      S('Centre Court', 5, 10, 36, 36, 12, { modell: 'stadion_wim', form: 'acht', dach: 'schieb', farbe: 0x1f4a2e, sitz: 0x2a5a3a, dachFarbe: 0xe8ece8, ort: 'court', tuer: 's',
         text: 'Der berühmteste Tennisplatz der Welt: 15.000 Plätze, heiliger Rasen und ein Dach wie eine Ziehharmonika. Über dem Spielereingang steht ein Satz aus einem Gedicht über Sieg und Niederlage.' }),
       S('No. 1 Court', 8, -38, 34, 34, 11, { form: 'rund', dach: 'schieb', farbe: 0x1f4a2e, sitz: 0x2a5a3a, dachFarbe: 0xe8ece8, tuer: 'o',
         info: 'Das zweite große Stadion (über 12.000 Plätze). Seit 2019 hat es auch ein Dach.' }),
@@ -139,20 +141,20 @@ export const GELAENDE = {
   // US OPEN – New York, Flushing Meadows. Das größte Tennisstadion der Welt in der Mitte, die Weltkugel im Park dahinter.
   // =====================================================================================
   uso: {
-    name: 'National Tennis Center', stadt: 'New York, USA',
+    stil: 'usa', name: 'National Tennis Center', stadt: 'New York, USA',
     rand: { x0: -96, x1: 98, z0: -70, z1: 70 }, umland: 0x5a8a4a, boden: 0xb8b8b4, feld: [0x2f5fb0, 0x3f8a4a],
     teile: [
       F(0, -80, 700, 12, 0x6a6258),                                                                   // Gleise der U-Bahn
       S('Baseball-Stadion', 40, -136, 80, 76, 16, { form: 'rund', dach: 'ring', farbe: 0x8a5a44, sitz: 0x2a4a8a, wiese: true }),
       { a: 'kugel', x: 0, z: 104, r: 11 }, F(0, 104, 34, 34, WASSER, { rund: true, e: 2 }), F(0, 80, 12, 22, PFLASTER),
       B('laub', { feld: [0, 112, 320, 70], n: 80 }),
-      S('Arthur Ashe Stadium', 0, -6, 60, 56, 16, { form: 'acht', dach: 'schieb', farbe: 0x7a8088, sitz: 0x1f3a7a, dachFarbe: 0xf0f0f0, ort: 'court', tuer: 's',
+      S('Arthur Ashe Stadium', 0, -6, 60, 56, 16, { modell: 'stadion_uso', form: 'acht', dach: 'schieb', farbe: 0x7a8088, sitz: 0x1f3a7a, dachFarbe: 0xf0f0f0, ort: 'court', tuer: 's',
         text: 'Das größte Tennisstadion der Welt: fast 24.000 Plätze! Benannt nach Arthur Ashe, dem ersten schwarzen Sieger der US Open. Abends unter Flutlicht ist es hier am lautesten.' }),
       S('Louis Armstrong Stadium', 64, -40, 36, 32, 11, { form: 'eckig', dach: 'schieb', farbe: 0xc8a888, sitz: 0x1f3a7a, tuer: 's',
         info: 'Das zweitgrößte Stadion (14.000 Plätze), benannt nach dem Jazz-Trompeter Louis Armstrong, der gleich nebenan wohnte. Die Seiten sind offen, damit Wind hindurchweht.' }),
       S('Grandstand', -72, 44, 26, 26, 6, { form: 'rund', dach: 'ring', farbe: 0xe8e8e4, sitz: 0x1f3a7a, tuer: 'o', info: 'Ein rundes Stadion mit 8.000 Plätzen in der Ecke des Geländes. Es liegt tiefer als der Boden drumherum.' }),
       S('Court 17', 76, 46, 18, 18, 4, { form: 'rund', sitz: 0x1f3a7a, tuer: 'w', info: 'Die Fans nennen diesen Platz „die Grube“: Er ist in den Boden eingelassen, und oben stehen die Zuschauer rundherum.' }),
-      F(0, 37, 9, 16, WASSER, { e: 2 }), { a: 'leinwand', x: 0, z: 27.5, b: 0.1, h: 0.1, name: 'Brunnen-Platz', tuer: 'o', v: 18, info: 'Der große Platz mit den Brunnen. Von hier sieht man durch das Tor bis zur riesigen Weltkugel aus Stahl im Park.' },
+      F(0, 37, 9, 16, WASSER, { e: 2, modell: 'mal_brunnen' }), { a: 'leinwand', x: 0, z: 27.5, b: 0.1, h: 0.1, name: 'Brunnen-Platz', tuer: 'o', v: 18, info: 'Der große Platz mit den Brunnen. Von hier sieht man durch das Tor bis zur riesigen Weltkugel aus Stahl im Park.' },
       P(40, 48, 4, 2, { name: 'Plätze 8 bis 16' }), P(-34, 48, 4, 2, { name: 'Plätze 4 bis 7 und mehr' }),
       P(-70, -2, 5, 1, { ort: 'training', tuer: 's', name: 'Trainingsplätze P1 bis P5' }),
       ZAUN(-44, 12),
@@ -169,12 +171,12 @@ export const GELAENDE = {
   // INDIAN WELLS – Kalifornien. Mitten in der Wüste: Palmen, grüne Wiesen und dahinter die Berge.
   // =====================================================================================
   iw: {
-    name: 'Indian Wells Tennis Garden', stadt: 'Indian Wells, USA',
+    stil: 'wueste', name: 'Indian Wells Tennis Garden', stadt: 'Indian Wells, USA',
     rand: { x0: -92, x1: 94, z0: -74, z1: 72 }, umland: 0xd8c098, boden: 0xd8ccb0, feld: [0x5a4a9c, 0x3f8a5a],
     teile: [
-      { a: 'berge', seite: 'n', farbe: 0x9a8468, h: 70 }, { a: 'berge', seite: 'w', farbe: 0xa89070, h: 55 },
+      { a: 'berge', seite: 'n', farbe: 0x9a8468, h: 70, modell: 'mal_berge' }, { a: 'berge', seite: 'w', farbe: 0xa89070, h: 55, modell: 'mal_berge' },
       F(0, -84, 700, 9, ASPHALT), F(0, -110, 240, 36, 0x8a8a8c),                                       // Straße und Parkplatz
-      S('Stadium 1', -6, -10, 54, 54, 15, { form: 'acht', farbe: 0xc8b08a, sitz: 0x7a6a50, ort: 'court', tuer: 's',
+      S('Stadium 1', -6, -10, 54, 54, 15, { modell: 'stadion_iw', form: 'acht', farbe: 0xc8b08a, sitz: 0x7a6a50, ort: 'court', tuer: 's',
         text: 'Das zweitgrößte Tennisstadion der Welt (16.100 Plätze) – und es steht mitten in der Wüste! Von den oberen Reihen sieht man die Berge.' }),
       S('Stadium 2', 60, 26, 32, 32, 10, { form: 'eckig', farbe: 0xc8b08a, sitz: 0x7a6a50, tuer: 'w', info: 'Hier passen 8.000 Leute hinein. Ganz oben gibt es Restaurants, in denen man beim Essen auf den Platz schauen kann.' }),
       H('Restaurants', 60, 3, 26, 8, 7, { farbe: 0xb89a6a, ort: 'essen', tuer: 'n', name2: 'Spieler-Restaurant' }),
@@ -198,11 +200,11 @@ export const GELAENDE = {
   // MIAMI – Der Centre Court wird jedes Jahr MITTEN IN EIN FOOTBALL-STADION gebaut. Die anderen Plätze stehen auf dem Parkplatz daneben.
   // =====================================================================================
   mia: {
-    name: 'Hard Rock Stadium', stadt: 'Miami, USA',
+    stil: 'usa', name: 'Hard Rock Stadium', stadt: 'Miami, USA',
     rand: { x0: -90, x1: 90, z0: -74, z1: 74 }, umland: 0x8a8a8c, boden: 0xb4b4b0, feld: [0x4a3a8c, 0x2a8a9a],
     teile: [
       F(0, -88, 700, 10, ASPHALT), F(120, 0, 10, 500, ASPHALT),
-      S('Football-Stadion', 0, -30, 86, 74, 20, { form: 'acht', dach: 'ring', spitzen: true, farbe: 0xe8e8e4, sitz: 0x2a9aa8, wiese: true, ort: 'court', tuer: 's',
+      S('Football-Stadion', 0, -30, 86, 74, 20, { modell: 'mal_miami', form: 'acht', dach: 'ring', spitzen: true, farbe: 0xe8e8e4, sitz: 0x2a9aa8, wiese: true, ort: 'court', tuer: 's',
         tueren: [{ ort: 'kraft', s: 's', v: -18, name: 'Kraftraum' }, { ort: 'physio', s: 's', v: 18, name: 'Physio' }, { ort: 'presse', s: 'o', v: 10, name: 'Pressesaal' }],
         text: 'Hier spielt sonst die Football-Mannschaft von Miami. Für das Tennisturnier wird auf dem Rasen ein Tennisstadion mit fast 14.000 Plätzen aufgebaut – in einem Stadion für 65.000!' }),
       F(0, 14, 170, 10, 0xd8d0c0, { e: 2 }), { a: 'leinwand', x: 34, z: 13, b: 10, h: 5, name: 'Dolphin Plaza', tuer: 's', info: 'Die breite Straße zwischen dem Stadion und den Tennisplätzen: Palmen, Musik, bunte Wandbilder und eine große Leinwand.' },
@@ -223,13 +225,14 @@ export const GELAENDE = {
   // MONTE-CARLO – Die Plätze liegen wie Treppenstufen am Hang: hinten die Felsen, vorne das Mittelmeer.
   // =====================================================================================
   mc: {
-    name: 'Monte-Carlo Country Club', stadt: 'Roquebrune-Cap-Martin, Frankreich (direkt neben Monaco)',
+    stil: 'mittelmeer', name: 'Monte-Carlo Country Club', stadt: 'Roquebrune-Cap-Martin, Frankreich (direkt neben Monaco)',
     rand: { x0: -72, x1: 72, z0: -50, z1: 46 }, umland: 0x8a9a6a, boden: 0xe0cfa8, feld: [0xc8643a, 0xb85a34], kamW: Math.PI,      // kamW: Die Kamera schaut am Anfang nach Süden, aufs Meer
     teile: [
       { a: 'meer', ab: 50 }, { a: 'berge', seite: 'n', farbe: 0x8a8a78, h: 90 },
+      { a: 'modell', modell: 'mal_yacht', x: -30, z: 82, dreh: 12 }, { a: 'modell', modell: 'mal_yacht', x: 44, z: 104, dreh: -20, gr: 0.8 }, { a: 'modell', modell: 'mal_yacht', x: 96, z: 74, dreh: 80, gr: 0.6 },      // Yachten vor der Küste
       F(0, -56, 700, 7, ASPHALT),
       { a: 'tuerme', p: [[-150, -30, 16, 16, 42], [-170, 0, 14, 14, 56], [-140, 14, 14, 14, 34], [-190, -40, 18, 16, 48], [-160, 34, 12, 12, 28]], farbe: 0xe8dcc8, dach: 0xc8b8a0 },    // die Hochhäuser von Monaco
-      S('Court Rainier III', 4, 8, 36, 30, 8, { form: 'eckig', farbe: 0xe8dcc0, sitz: 0x8a8a90, ort: 'court', tuer: 's',
+      S('Court Rainier III', 4, 8, 36, 30, 8, { modell: 'stadion_mc', form: 'eckig', farbe: 0xe8dcc0, sitz: 0x8a8a90, ort: 'court', tuer: 's',
         text: 'Der Centre Court (10.200 Plätze), benannt nach einem Fürsten von Monaco. Von der Tribüne schaut man über den roten Sand direkt aufs blaue Meer.' }),
       H('Clubhaus', 4, -27, 36, 10, 8, { farbe: 0xe8b890, dachFarbe: 0xc86a4a, dach: 'sattel',
         tueren: [{ ort: 'kraft', s: 's', v: -13 }, { ort: 'essen', s: 's', v: 0, name: 'Terrasse am Clubhaus' }, { ort: 'physio', s: 's', v: 13 }],
@@ -251,12 +254,12 @@ export const GELAENDE = {
   // MADRID – Die „Caja Mágica“ (Zauberkiste): drei Stadien in einem einzigen Kasten aus Metall, am Wasser.
   // =====================================================================================
   mad: {
-    name: 'Caja Mágica', stadt: 'Madrid, Spanien',
+    stil: 'modern', name: 'Caja Mágica', stadt: 'Madrid, Spanien',
     rand: { x0: -86, x1: 86, z0: -60, z1: 64 }, umland: 0x9a9a6a, boden: 0xc8c4bc, feld: [0xc96a40, 0xb85e38],
     teile: [
       F(140, 0, 22, 600, WASSER), B('laub', { feld: [118, 0, 26, 300], n: 40 }),                       // der Fluss Manzanares mit seinem Park
       F(8, -47, 124, 14, WASSER, { e: 2 }), F(-45, -8, 14, 62, WASSER, { e: 2 }),                      // der See um die Kiste
-      S('Estadio Manolo Santana', -8, -10, 44, 44, 14, { form: 'eckig', dach: 'schieb', farbe: 0x7a7e86, sitz: 0x5a5a62, dachFarbe: 0xb8bcc4, ort: 'court', tuer: 's',
+      S('Estadio Manolo Santana', -8, -10, 44, 44, 14, { modell: 'mal_kiste', form: 'eckig', dach: 'schieb', farbe: 0x7a7e86, sitz: 0x5a5a62, dachFarbe: 0xb8bcc4, ort: 'court', tuer: 's',
         text: 'Die „Zauberkiste“: Drei Stadien stecken in einem Kasten aus Metallgitter. Das größte hat 12.442 Plätze. Jedes Dach kann aufklappen wie der Deckel einer Kiste.' }),
       S('Estadio Arantxa Sánchez Vicario', 30, -21, 30, 22, 12, { form: 'eckig', dach: 'schieb', farbe: 0x7a7e86, sitz: 0x5a5a62, dachFarbe: 0xb8bcc4 }),
       S('Stadion 3', 30, 1, 30, 22, 12, { form: 'eckig', dach: 'schieb', farbe: 0x7a7e86, sitz: 0x5a5a62, dachFarbe: 0xb8bcc4, tuer: 'o', info: 'Das kleinste der drei Stadien in der Kiste. Benannt sind die großen nach Manolo Santana und Arantxa Sánchez Vicario, zwei spanischen Tennis-Legenden.' }),
@@ -276,7 +279,7 @@ export const GELAENDE = {
   // ROM – Foro Italico. Marmor-Statuen, Schirm-Pinien, der Fluss Tiber im Osten und der Hügel Monte Mario im Westen.
   // =====================================================================================
   rom: {
-    name: 'Foro Italico', stadt: 'Rom, Italien',
+    stil: 'mittelmeer', name: 'Foro Italico', stadt: 'Rom, Italien',
     rand: { x0: -82, x1: 86, z0: -68, z1: 62 }, umland: 0x6a9a52, boden: 0xd4ccb8, feld: [0xc4603a, 0xb45632],
     teile: [
       F(150, 0, 30, 600, 0x6a9a8a), { a: 'berge', seite: 'w', farbe: 0x4a7a44, h: 40 },                 // Tiber und Monte Mario
@@ -287,7 +290,7 @@ export const GELAENDE = {
       { a: 'statuen', x: 12, z: -46, b: 68, t: 42, n: 30 },
       S('Arena im Stadio dei Marmi', 12, -46, 24, 20, 6, { form: 'eckig', farbe: 0xe8e4dc, sitz: 0x2a5a3a, tuer: 's',
         info: 'Das „Marmor-Stadion“: Rundherum stehen 60 riesige Sportler aus weißem Marmor. Für das Turnier wird mitten hinein ein Tennisstadion für 7.000 Zuschauer gebaut.' }),
-      S('Campo Centrale', -10, 20, 36, 32, 10, { form: 'oval', farbe: 0xd8d0c0, sitz: 0xb8b0a0, ort: 'court', tuer: 's',
+      S('Campo Centrale', -10, 20, 36, 32, 10, { modell: 'stadion_rom', form: 'oval', farbe: 0xd8d0c0, sitz: 0xb8b0a0, ort: 'court', tuer: 's',
         text: 'Der Centre Court von Rom mit 10.500 Plätzen. Die Tribünen heißen wie das, worauf man schaut: „Monte Mario“ (der Hügel) und „Tevere“ (der Fluss).' }),
       S('Stadio Pietrangeli', 32, 14, 26, 20, 2.5, { form: 'oval', farbe: WEISS, sitz: WEISS, tuer: 's',
         info: 'Für viele der schönste Tennisplatz der Welt: Er liegt tief im Boden, die Stufen sind aus weißem Marmor, und oben schauen 18 Statuen zu.' }),
@@ -309,7 +312,7 @@ export const GELAENDE = {
   // KANADA – Montreal, IGA-Stadion im Jarry-Park. Früher war hier ein Baseball-Stadion.
   // =====================================================================================
   can: {
-    name: 'Stade IGA im Jarry-Park', stadt: 'Montreal, Kanada',
+    stil: 'usa', name: 'Stade IGA im Jarry-Park', stadt: 'Montreal, Kanada',
     rand: { x0: -78, x1: 78, z0: -56, z1: 56 }, umland: 0x5a9a4c, boden: 0xc4c0b8, feld: [0x2a66b8, 0x3a7a9a],
     teile: [
       F(92, 0, 12, 500, 0x6a6258), F(0, 64, 700, 8, ASPHALT),                                          // Bahngleise im Osten, Straße im Süden
@@ -333,7 +336,7 @@ export const GELAENDE = {
   // CINCINNATI – Mason, Ohio. 2025 ganz neu gebaut: viele Plätze, ein Clubhaus, ein Stadion im Boden. Rundherum Wiesen.
   // =====================================================================================
   cin: {
-    name: 'Lindner Family Tennis Center', stadt: 'Mason bei Cincinnati, USA',
+    stil: 'usa', name: 'Lindner Family Tennis Center', stadt: 'Mason bei Cincinnati, USA',
     rand: { x0: -88, x1: 88, z0: -70, z1: 70 }, umland: 0x5c9a4c, boden: 0xc8c4b8, feld: [0x2a5aa8, 0x2a8a6a],
     teile: [
       F(-112, 0, 18, 600, ASPHALT),                                                                   // die Autobahn im Westen
@@ -360,12 +363,12 @@ export const GELAENDE = {
   // SHANGHAI – Qizhong. Das Stadion mit dem Dach, das sich öffnet wie eine Blume mit acht Blättern.
   // =====================================================================================
   sha: {
-    name: 'Qizhong Tennis Center', stadt: 'Shanghai, China',
+    stil: 'asien', name: 'Qizhong Tennis Center', stadt: 'Shanghai, China',
     rand: { x0: -82, x1: 82, z0: -66, z1: 66 }, umland: 0x4a8a44, boden: 0xc8c8c0, feld: [0x3a4aa8, 0x2a6a8a],
     teile: [
       F(0, -52, 70, 16, WASSER, { e: 2, rund: true }), F(0, -5, 76, 76, 0xe0dcd0, { e: 2, rund: true }),
       B('laub', { feld: [0, -110, 400, 70], n: 90 }), B('laub', { feld: [-130, 0, 80, 200], n: 50 }), B('laub', { feld: [130, 0, 80, 200], n: 50 }),      // der „Wald“ der Sportstadt
-      S('Centre Court', 0, -5, 52, 52, 14, { form: 'rund', dach: 'blume', farbe: 0xe4e4e0, sitz: 0x7a2a3a, ort: 'court', tuer: 's',
+      S('Centre Court', 0, -5, 52, 52, 14, { modell: 'mal_qizhong', form: 'rund', dach: 'blume', farbe: 0xe4e4e0, sitz: 0x7a2a3a, ort: 'court', tuer: 's',
         text: 'Das Dach dieses Stadions besteht aus acht riesigen Stahl-Blättern. Sie drehen sich in acht Minuten auf – wie eine Magnolie, die Blume der Stadt Shanghai. 13.800 Plätze.' }),
       S('Grandstand 2', -52, 30, 24, 22, 8, { form: 'eckig', dach: 'schieb', farbe: 0xd8d8d4, sitz: 0x7a2a3a, tuer: 'o', info: 'Das zweite Stadion mit 5.000 Plätzen. Seit 2025 hat es auch ein Dach zum Zufahren.' }),
       S('Court 3', 52, 30, 16, 16, 4, { form: 'eckig', farbe: 0xd8d8d4, sitz: 0x7a2a3a }),
@@ -385,13 +388,13 @@ export const GELAENDE = {
   // (Das Dach ist im Spiel durchsichtig, damit man hineinschauen kann.)
   // =====================================================================================
   par: {
-    name: 'Arena in La Défense', stadt: 'Nanterre bei Paris, Frankreich',
+    stil: 'modern', name: 'Arena in La Défense', stadt: 'Nanterre bei Paris, Frankreich',
     rand: { x0: -72, x1: 74, z0: -52, z1: 54 }, umland: 0x8a8a90, boden: 0xc4c4c8, feld: [0x2a3a6a, 0x1a1a22],
     teile: [
       { a: 'bogen', x: 112, z: 10, b: 34, h: 36, t: 34 },
       { a: 'tuerme', p: [[150, -40, 20, 20, 70], [170, 20, 18, 18, 90], [135, 60, 20, 16, 60], [185, -20, 16, 16, 55], [110, -60, 18, 18, 50], [150, 90, 22, 18, 76], [90, 90, 16, 16, 44], [-110, -70, 20, 16, 30], [-120, 40, 18, 18, 24]], farbe: 0x7a9ab8, dach: 0x5a6a7a },
       F(0, -62, 700, 8, ASPHALT),
-      S('Centre Court', -22, -8, 56, 44, 14, { form: 'eckig', dach: 'glas', farbe: 0xc8ccd4, sitz: 0x4a5a8a, ort: 'court', tuer: 's',
+      S('Centre Court', -22, -8, 56, 44, 14, { modell: 'stadion_par', form: 'eckig', dach: 'glas', farbe: 0xc8ccd4, sitz: 0x4a5a8a, ort: 'court', tuer: 's',
         tueren: [{ ort: 'kraft', s: 's', v: -20, name: 'Kraftraum' }, { ort: 'presse', s: 's', v: 20, name: 'Pressesaal' }, { ort: 'physio', s: 'w', v: 0, name: 'Physio' }],
         text: 'Die größte Halle Europas! Hier spielt sonst eine Rugby-Mannschaft. Beim Tennis passen 17.500 Zuschauer um den Centre Court – so viele wie bei keinem anderen Hallenturnier.' }),
       S('Court 1', 20, -19, 26, 21, 12, { form: 'eckig', dach: 'glas', farbe: 0xc8ccd4, sitz: 0x4a5a8a }),
@@ -409,14 +412,14 @@ export const GELAENDE = {
   // ATP FINALS – Turin. Eine Halle wie eine Kiste aus Stahl, direkt neben dem alten Olympiastadion.
   // =====================================================================================
   fin: {
-    name: 'Arena von Turin', stadt: 'Turin, Italien',
+    stil: 'modern', name: 'Arena von Turin', stadt: 'Turin, Italien',
     rand: { x0: -70, x1: 72, z0: -50, z1: 52 }, umland: 0x6a9a5a, boden: 0xc8c4bc, feld: [0x1f5fb8, 0x0f1a3a],
     teile: [
       { a: 'berge', seite: 'n', farbe: 0xd8dce4, h: 80 },                                              // die Alpen mit Schnee
       F(0, -60, 700, 8, ASPHALT),
       S('Olympiastadion', -78, -8, 56, 70, 13, { form: 'oval', dach: 'ring', farbe: 0xc8b8a8, sitz: 0x8a2a2a, wiese: true }),
-      { a: 'tuerme', p: [[-44, -44, 5, 5, 34]], farbe: 0xc86a4a, dach: 0xc86a4a },                      // der Marathon-Turm
-      S('Centre Court', 6, -8, 50, 40, 12, { form: 'eckig', dach: 'glas', farbe: 0xa8acb4, sitz: 0x3a5a9a, ort: 'court', tuer: 's',
+      { a: 'tuerme', modell: 'mal_turm_turin', p: [[-44, -44, 5, 5, 34]], farbe: 0xc86a4a, dach: 0xc86a4a },                      // der Marathon-Turm
+      S('Centre Court', 6, -8, 50, 40, 12, { modell: 'mal_turin', form: 'eckig', dach: 'glas', farbe: 0xa8acb4, sitz: 0x3a5a9a, ort: 'court', tuer: 's',
         tueren: [{ ort: 'kraft', s: 's', v: -18, name: 'Kraftraum' }, { ort: 'presse', s: 's', v: 18, name: 'Pressesaal' }, { ort: 'physio', s: 'o', v: -8, name: 'Physio' }],
         text: 'Hier spielen am Ende des Jahres nur die acht besten Spieler der Welt. Die Halle wurde für die Olympischen Winterspiele 2006 gebaut – damals für Eishockey.' }),
       P(52, 22, 2, 1, { quer: true, ort: 'training', tuer: 'w', name: 'Trainingsplätze im Zelt' }), { a: 'glasdach', x: 52, z: 22, b: 30, t: 10, h: 8 },
@@ -449,6 +452,11 @@ export function plaetzeMass(el) {
 }
 
 const SEITEN = { n: [0, -1], s: [0, 1], o: [1, 0], w: [-1, 0] };
+const WAND = 0.2, TUER_BREIT = 2.6;      // Wände begehbarer Häuser und die Lücke für die Tür (Meter)
+// Was steht drinnen? (Namen der Modelle aus assets/gelaende/)
+const MOEBEL = { kraft: ['innen_kraft', 'innen_laufband'], physio: ['innen_liege', 'innen_spinde'], essen: ['innen_buffet', 'innen_tisch'], saiten: ['innen_bespann'], presse: ['innen_podium', 'innen_stuehle'], hotel: ['innen_empfang', 'innen_sofa'] };
+// In welche Häuser kann man hineingehen? Sie müssen groß genug sein und eine Tür für den Turniertag haben.
+const begehbar = (el) => Math.min(el.b, el.t) >= 6 && el.dach !== 'glas' && el.dach !== 'zelt' && !el.modell && (!!el.ort || (el.tueren || []).some((t) => t.ort));
 const TUER_VOR = 1.9;        // so weit vor der Wand liegt der Punkt, an dem man „an der Tür“ steht
 
 // Macht aus einem Plan alles, was das Spiel zum Bauen und Laufen braucht:
@@ -463,22 +471,24 @@ export const gelaendeFuer = (def) => (def ? GELAENDE[def.id] || kleinesGelaende(
 export function planAus(g, id = g.name) {
   if (!g) return null;
   const teile = g.teile.map((el) => (el.a === 'plaetze' ? { ...el, ...plaetzeMass(el) } : { ...el }));
-  const sperren = [], orte = [], punkte = new Map();
+  const sperren = [], orte = [], punkte = new Map(), fest = [], raeume = [];
   let infoNr = 0;
-  // 1. Feste Dinge sperren
-  for (const el of teile) {
-    if (el.a === 'stadion') sperren.push({ x: el.x, z: el.z, b: el.b, t: el.t, h: el.h, rund: el.form === 'oval' || el.form === 'rund' });
-    else if (el.a === 'haus' || el.a === 'plaetze' || el.a === 'auto' || el.a === 'zaun') sperren.push({ x: el.x, z: el.z, b: el.b, t: el.t, h: el.a === 'haus' ? el.h : 0 });
-    else if (el.a === 'flaeche' && el.wasser) sperren.push({ x: el.x, z: el.z, b: el.b, t: el.t, rund: !!el.rund });
-    else if (el.a === 'huegel') sperren.push({ x: el.x, z: el.z, b: el.b * 0.8, t: el.t * 0.8, h: el.h * 0.7, rund: true });
-    else if (el.a === 'kugel') sperren.push({ x: el.x, z: el.z, b: el.r * 2, t: el.r * 2, rund: true });
-    else if (el.a === 'bogen') sperren.push({ x: el.x, z: el.z, b: el.b, t: el.t });
-    else if (el.a === 'tuerme') for (const [x, z, b, t, h] of el.p) sperren.push({ x, z, b, t, h });
-    else if (el.a === 'obelisk') sperren.push({ x: el.x, z: el.z, b: 2.4, t: 2.4 });
-    else if (el.a === 'hecke') sperren.push({ x: el.x, z: el.z, b: el.b, t: el.t });
-    else if (el.a === 'leinwand' && el.b > 1) { const quer = el.dreh === 90 || el.dreh === 270; sperren.push({ x: el.x, z: el.z, b: quer ? 1 : el.b, t: quer ? el.b : 1, h: el.h + 2 }); }
-  }
-  const fest = sperren.slice();
+  // 1. Feste Dinge sperren. „fest“ merkt sich jedes Haus als Ganzes (dort wächst kein Baum),
+  //    in „sperren“ stehen bei begehbaren Häusern später nur die Wände – innen kann man laufen.
+  const zu = (s) => { sperren.push(s); fest.push(s); };
+  teile.forEach((el, nr) => {
+    if (el.a === 'stadion') zu({ x: el.x, z: el.z, b: el.b, t: el.t, h: el.h, rund: el.form === 'oval' || el.form === 'rund' });
+    else if (el.a === 'haus' && begehbar(el)) { fest.push({ x: el.x, z: el.z, b: el.b, t: el.t, h: el.h }); raeume.push({ teil: nr, x: el.x, z: el.z, b: el.b, t: el.t, h: el.h, name: el.name || '', tueren: [], waende: [], moebel: [] }); }
+    else if (el.a === 'haus' || el.a === 'plaetze' || el.a === 'auto' || el.a === 'zaun') zu({ x: el.x, z: el.z, b: el.b, t: el.t, h: el.a === 'haus' ? el.h : 0 });
+    else if (el.a === 'flaeche' && el.wasser) zu({ x: el.x, z: el.z, b: el.b, t: el.t, rund: !!el.rund });
+    else if (el.a === 'huegel') zu({ x: el.x, z: el.z, b: el.b * 0.8, t: el.t * 0.8, h: el.h * 0.7, rund: true });
+    else if (el.a === 'kugel') zu({ x: el.x, z: el.z, b: el.r * 2, t: el.r * 2, rund: true });
+    else if (el.a === 'bogen') zu({ x: el.x, z: el.z, b: el.b, t: el.t });
+    else if (el.a === 'tuerme') for (const [x, z, b, t, h] of el.p) zu({ x, z, b, t, h });
+    else if (el.a === 'obelisk') zu({ x: el.x, z: el.z, b: 2.4, t: 2.4 });
+    else if (el.a === 'hecke') zu({ x: el.x, z: el.z, b: el.b, t: el.t });
+    else if (el.a === 'leinwand' && el.b > 1) { const quer = el.dreh === 90 || el.dreh === 270; zu({ x: el.x, z: el.z, b: quer ? 1 : el.b, t: quer ? el.b : 1, h: el.h + 2 }); }
+  });
   const inFest = (x, z, luft = 1.2) => fest.some((s) => {
     const dx = (x - s.x) / (s.b / 2 + luft), dz = (z - s.z) / (s.t / 2 + luft);
     return s.rund ? dx * dx + dz * dz <= 1 : Math.abs(dx) <= 1 && Math.abs(dz) <= 1;
@@ -498,6 +508,40 @@ export function planAus(g, id = g.name) {
     else if (el.info) tuer(el, { s: el.tuer, v: el.v, name: el.name, text: el.info }, nr);
     for (const t of el.tueren || []) tuer(el, t, nr);
   });
+  // 2b. Begehbare Häuser: Wände mit Lücken für die Türen, drinnen Möbel passend zu dem, was man dort tut
+  for (const r of raeume) {
+    r.tueren = orte.filter((o) => o.teil === r.teil);
+    const hb = r.b / 2, ht = r.t / 2;
+    for (const [seite, [sx, sz]] of Object.entries(SEITEN)) {
+      // Die Wand läuft von −halb bis +halb; wo eine Tür ist, bleibt ein Stück frei
+      const halb = sx ? ht : hb, mitte = sx ? r.z : r.x;
+      const luecken = r.tueren.filter((o) => o.seite === seite && !o.info).map((o) => (sx ? o.wz : o.wx) - mitte).sort((p, q) => p - q);
+      let von = -halb;
+      const stueck = (a, b) => { if (b - a < 0.3) return; const m = (a + b) / 2, l = b - a; r.waende.push(sx ? { x: r.x + sx * hb, z: r.z + m, b: WAND, t: l, seite } : { x: r.x + m, z: r.z + sz * ht, b: l, t: WAND, seite }); };
+      for (const c of luecken) { stueck(von, c - TUER_BREIT / 2); von = c + TUER_BREIT / 2; }
+      stueck(von, halb);
+    }
+    for (const w of r.waende) sperren.push({ x: w.x, z: w.z, b: w.b, t: w.t, h: r.h });
+    // Möbel stehen an der Wand gegenüber der Tür
+    const stell = (name, x, z, dreh) => {
+      x = Math.max(r.x - hb + 1.9, Math.min(r.x + hb - 1.9, x)); z = Math.max(r.z - ht + 1.9, Math.min(r.z + ht - 1.9, z));
+      if (r.moebel.some((m) => Math.hypot(m.x - x, m.z - z) < 2.5) || r.tueren.some((o) => Math.hypot(o.wx - x, o.wz - z) < 3)) return;
+      r.moebel.push({ name, x, z, dreh });
+      sperren.push({ x, z, b: 1.1, t: 1.1 });
+    };
+    for (const o of r.tueren) {
+      const [sx, sz] = SEITEN[o.seite], liste = MOEBEL[o.id] || [];
+      const dreh = Math.atan2(sx, sz);                                        // die Möbel schauen zur Tür
+      const gx = sx ? r.x - sx * (hb - 1.9) : o.wx, gz = sz ? r.z - sz * (ht - 1.9) : o.wz;
+      liste.forEach((name, i) => stell(name, gx + (sx ? 0 : (i ? 2.8 : 0)), gz + (sx ? (i ? 2.8 : 0) : 0), dreh));
+    }
+    if (/Club|Hotel|Spieler/.test(r.name) && r.tueren.length) {
+      // Im Clubhaus: Pokal-Vitrine und Sofa-Ecke an einer Seitenwand
+      const quer = r.tueren[0].seite === 'o' || r.tueren[0].seite === 'w';
+      if (quer) { stell('innen_vitrine', r.x - 3, r.z - ht + 1.9, 0); stell('innen_sofa', r.x + 2, r.z - ht + 1.9, 0); }
+      else { stell('innen_vitrine', r.x - hb + 1.9, r.z - 2.4, Math.PI / 2); stell('innen_sofa', r.x - hb + 1.9, r.z + 1.2, Math.PI / 2); }
+    }
+  }
   // 3. Bäume, Statuen, Schirme, Zelte: genaue Stellen ausrechnen
   teile.forEach((el, nr) => {
     const z = zufall(nr * 7919 + id.length * 104729 + id.charCodeAt(0)), liste = [];
@@ -532,7 +576,7 @@ export function planAus(g, id = g.name) {
       for (const [x, zz] of liste) sperren.push({ x, z: zz, b: 4, t: 4 });
     }
   });
-  return { id, g, teile, sperren, orte, punkte };
+  return { id, g, teile, sperren, orte, punkte, raeume };
 }
 
 // Die neun Orte, die jedes Gelände braucht (dort passiert am Turniertag etwas)
