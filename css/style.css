@@ -472,3 +472,7 @@ table.form { width: 100%; font-size: 13px; }
 table.form td { padding: 3px 6px; }
 details summary { cursor: pointer; margin-top: 10px; color: var(--dim); font-size: 13px; }
 .kpi div i.frische { margin-top: 6px; }
+
+/* Saison-Planer im Saison-Modus: Spalte mit der Frische-Vorschau */
+table.planer td.frv { min-width: 130px; }
+table.planer td.frv .frische { display: block; margin: 3px 0; }

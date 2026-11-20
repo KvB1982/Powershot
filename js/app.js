@@ -1455,7 +1455,8 @@ const pickS = { me: 'zverev', page: 0 };
 let saisonTab = 'start';
 let zwTraining = false;      // ist die Auswahl „Woran trainierst du?“ gerade aufgeklappt?
 let zwMeldung = null;        // was die letzte Auswahl zwischen den Turnieren gebracht hat: { name, bringt }
-const SAISON_TABS = ['start', 'zeitung', 'team', 'profi', 'race', 'welt', 'punkte'];
+let sPlanWoche = null;       // diese Woche ist im Saison-Planer gerade aufgeklappt
+const SAISON_TABS = ['start', 'planer', 'zeitung', 'team', 'profi', 'race', 'welt', 'punkte'];
 
 actions.saison = (v) => {
   if (!season) return renderSeasonPick();
@@ -1473,11 +1474,12 @@ function showSeasonTournament() {
 function renderSeasonPick() {
   show(`
     <div class="bar">${back()}<h2>Neue Saison</h2><button class="primary" data-a="saisonNeu">Saison starten ›</button></div>
-    <p class="dim">Such dir einen Profi aus. Mit ihm spielst du alle 4 Grand Slams und 9 Masters-Turniere.
+    <p class="dim">Such dir einen Profi aus. Mit ihm spielst du die 4 Grand Slams und 9 Masters-Turniere – und in den freien Wochen dazwischen kleine Turniere, wenn du magst.
     Für jedes Ergebnis gibt es Punkte im ATP Race. Schaffst du es unter die besten 8, darfst du zu den ATP Finals!</p>
     <p class="dim">Dein Profi hat schon alles: Trainer, Physio, Sponsoren und Fans. Dafür <b>erwarten</b> alle etwas von ihm:
     Er muss die Punkte vom letzten Jahr verteidigen, die Ziele der Sponsoren schaffen und sich gegen seine Rivalen behaupten.
-    Je weiter vorn dein Profi steht, desto größer ist der Druck – mit einem Spieler von weiter hinten kannst du dafür alle überraschen.</p>
+    Je weiter vorn dein Profi steht, desto größer ist der Druck – mit einem Spieler von weiter hinten kannst du dafür alle überraschen.
+    Im <b>Saison-Planer</b> teilst du dir das Jahr ein: Wer zu viel spielt, wird müde und verletzt sich.</p>
     <div class="panel"><h3 style="margin-top:0">Dein Profi: ${esc(getPlayer(pickS.me).name)}</h3>${pageTabs('saisonSeite', pickS.page)}
       <div class="grid">${pagePlayers(pickS.page).map((p) => playerCard(p, 'saisonWahl', pickS.me === p.id)).join('')}</div></div>
     <button class="primary" data-a="saisonNeu">Saison starten ›</button>`);
@@ -1515,6 +1517,86 @@ function saisonVorMatch(oppId) {
     <details><summary>Was heute im Match wirkt</summary>${formListe(PS.bonusListe(s, def, oppId))}</details></div>`;
 }
 
+// Der Saison-Planer: das ganze Jahr auf einen Blick, mit Vorschau auf die Frische (Belastungssteuerung)
+function saisonPlanerHtml(s) {
+  const P = s.profi, V = PS.vorschau(s), platz = PS.weltPlatz(s), me = SE.seasonPlayer(s);
+  const zeile = Object.fromEntries(V.wochen.map((z) => [z.nr, z]));
+  const gross = Object.fromEntries(s.history.map((h) => [h.tid, h])), klein = Object.fromEntries((P.kleine || []).map((h) => [h.kw, h]));
+  const zeichen = { schlecht: '🔴', achtung: '🟡', info: 'ℹ️', gut: '🟢' };
+  const wahlText = (wahl) => { const [id, k] = String(wahl).split(':'), A = PS.ZWISCHEN[id]; return A ? `${A.bild} ${A.kurz}${k ? ' (' + D.STAT_NAMES[k] + ')' : ''}` : ''; };
+  const streifen = `<div class="jahr">${KA.WOCHEN.map((w) => { const Ph = KA.phaseVon(w.nr), z = zeile[w.nr];
+    const punkt = !z || z.art === 'zweite' ? '' : z.art === 'gross' ? (z.wahl === 'aus' && !z.vorbei ? '✕' : gross[z.def.id] && !gross[z.def.id].label ? '' : '●') : klein[w.nr] || (z.def && !z.vorbei) ? '•' : z.wahl === 'pause' && !z.vorbei ? '☾' : '';
+    return `<i class="${w.nr === P.kw ? 'heute' : w.nr < P.kw ? 'war' : ''}" style="background:${Ph.farbe}" title="KW ${KA.kw(w.nr)}: ${Ph.name}" data-a="sPlanAuf" data-v="${w.nr}">${punkt}</i>`; }).join('')}</div>`;
+  const kopf = `<div class="panel"><h3 style="margin-top:0">🗓️ Dein Tennisjahr ${s.year}</h3>${streifen}
+      <p class="dim klein">● = großes Turnier · • = kleines Turnier · ☾ = Urlaub · ✕ = du lässt es aus · weißer Rahmen = diese Woche. Tippe auf ein Kästchen, um zu der Woche zu springen.</p>
+      <div class="kpi vier"><div><b>${V.turniere}</b><span>Turniere (gespielt und geplant)</span></div>
+        <div><b class="${V.belastung === 'hoch' ? 'minus' : V.belastung === 'mittel' ? 'gold' : 'plus'}">${V.belastung}</b><span>Belastung für den Körper</span></div>
+        <div><b class="${V.regel && V.n500 < PS.REGEL_500.zahl ? 'minus' : ''}">${V.n500}${V.regel ? ' von ' + PS.REGEL_500.zahl : ''}</b><span>ATP-500-Turniere${V.regel ? ' (Pflicht für die Top ' + PS.REGEL_500.bisPlatz + ')' : ''}</span></div>
+        <div><b class="${V.gefehlt ? 'minus' : 'plus'}">${V.gefehlt}</b><span>Pflichtturniere ausgelassen${V.strafen ? ' · Strafen ' + money(V.strafen) : ''}</span></div></div></div>
+    <div class="cols breit"><div class="panel"><h3 style="margin-top:0">🧑‍🏫 Der Trainer schaut auf deinen Plan</h3>
+      ${V.hinweise.map((h) => `<p class="klein">${zeichen[h.art]} ${esc(h.text)}</p>`).join('') || '<p class="dim klein">Noch nichts geplant: In jeder freien Woche steht erst einmal Urlaub.</p>'}
+      <p><b>Vorschlag vom Trainer</b> <span class="dim klein">– plant alle Wochen neu, die noch kommen</span></p>
+      <div class="row">${Object.entries(PS.AUTO).map(([id, A]) => `<button data-a="sPlanAuto" data-v="${id}" title="${A.text}">${A.bild} ${A.name}</button>`).join('')}
+        <button class="ghost" data-a="sPlanLeeren">Plan leeren</button></div>
+      <p class="dim klein">${Object.values(PS.AUTO).map((A) => `${A.bild} ${A.name}: ${A.text}`).join(' ')}</p></div>
+    <div class="panel"><h3 style="margin-top:0">📜 Was ist Pflicht?</h3>
+      <p class="klein"><b>Pflicht</b> sind die 4 Grand Slams und 8 Masters. <b>Monte-Carlo</b> ist das einzige Masters, das man ohne Folgen auslassen darf. Die kleinen Turniere sind freiwillig.</p>
+      <p class="klein"><b>Wenn du ein Pflichtturnier auslässt:</b> Die Punkte vom letzten Jahr sind immer weg. Beim <b>1. Mal</b> im Jahr gibt es nur eine Verwarnung, und die Sponsoren murren.
+        Ab dem <b>2. Mal</b> kostet es Geld – jedes Mal mehr –, die Sponsoren zahlen weniger und die Zeitungen machen Druck.</p>
+      <p class="klein"><b>Mit Attest:</b> Wer Beschwerden hat oder verletzt ist, ist entschuldigt. Dann gibt es keine Strafe.</p>
+      ${V.regel ? `<p class="klein"><b>Regel für die besten ${PS.REGEL_500.bisPlatz}:</b> mindestens ${PS.REGEL_500.zahl} ATP-500-Turniere im Jahr (Monte-Carlo zählt mit). Für jedes fehlende zahlst du am Jahresende ${money(PS.REGEL_500.strafe)}.</p>` : ''}
+      <p class="dim klein">Die Regeln gibt es im echten Tennis wirklich. Dort bekommt man statt einer Verwarnung gleich null Punkte und eine Geldstrafe; die Höhe der Strafen im Spiel ist geschätzt.</p></div></div>`;
+  let letzter = -1;
+  const reihen = V.wochen.map((z) => {
+    const mo = KA.monatVon(s.year, z.nr), Ph = KA.phaseVon(z.nr);
+    let out = '';
+    if (mo !== letzter) { letzter = mo; out += `<tr class="monat"><td colspan="4"><b>${KA.MONATE[mo]}</b></td></tr>`; }
+    const kleine = PS.kleineDerWoche(z.nr);
+    let was, plan, frische = '';
+    if (z.art === 'zweite') { was = `<span class="dim">${esc(z.def.name)} · 2. Woche</span>`; plan = ''; }
+    else if (z.art === 'gross') {
+      const h = gross[z.def.id], pflicht = CA.istPflicht(z.def);
+      was = `<b>${esc(z.def.name)}</b> ${catTag(z.def)} <span class="belag ${z.def.surface}">${BELAG_KURZ[z.def.surface]}</span><br><small class="dim">${z.def.cat === 'F' ? 'nur die besten 8 im Race' : pflicht ? 'Pflichtturnier' : 'keine Pflicht'}</small>`;
+      if (h) plan = `<span class="dim">${h.label === 'W' ? '🏆 Sieg' : h.label ? D.ROUND_NAMES[h.label] : 'nicht dabei'} · ${h.points} P.</span>`;
+      else if (z.vorbei) plan = '<span class="dim">läuft gerade</span>';
+      else if (z.def.cat === 'F') plan = '<span class="dim">wenn du dich qualifizierst</span>';
+      else plan = `<button class="${z.wahl === 'aus' ? 'sel' : 'ghost'} planknopf" data-a="sPlanAuf" data-v="${z.nr}">${z.wahl === 'aus' ? '📌 ✕ auslassen' : '✓ spielen'}</button>
+        ${z.wahl === 'aus' ? `<br><small class="minus">${z.verloren ? `−${z.verloren} Punkte vom Vorjahr · ` : ''}${z.folgen.strafe ? 'Strafe ' + money(z.folgen.strafe) : z.folgen.pflicht ? 'Verwarnung' : 'keine Strafe'}</small>` : z.verteidigen ? `<br><small class="dim">🛡️ ${z.verteidigen} Punkte verteidigen</small>` : ''}`;
+    } else {
+      const h = klein[z.nr];
+      was = kleine.length ? `<span class="klein">${kleine.map((k) => `${esc(k.city)} <span class="dim">(${k.catName})</span>`).join(' · ')}</span>` : '<span class="dim">kein Turnier</span>';
+      if (z.vorbei) plan = `<span class="dim">${h ? `${esc(h.name)} · ${h.label === 'W' ? '🏆 Sieg' : D.ROUND_NAMES[h.label] || ''} · ${h.points} P.` : esc((P.getan || {})[z.nr] || '–')}</span>`;
+      else plan = `<button class="${z.wahl ? 'sel' : 'ghost'} planknopf" data-a="sPlanAuf" data-v="${z.nr}">${z.def ? '📌 🎾 ' + esc(z.def.name) : z.wahl ? '📌 ' + wahlText(z.wahl) : '＋ planen'}</button>
+        ${z.def && !PS.darfSpielen(s, z.def, platz).ok ? `<br><small class="minus">🔒 ${PS.darfSpielen(s, z.def, platz).warum}</small>` : ''}`;
+    }
+    if (z.art !== 'zweite' && !z.vorbei) frische = `${z.frischeVor != null ? `<small class="dim">Start ${z.frischeVor} %</small><br>` : ''}<b style="color:${ampel(z.frische / 100)}">${z.frische} %</b>${balken(z.frische / 100, ampel(z.frische / 100))}
+      ${z.warn.length ? `<small class="minus">⚠️ ${z.warn.map(esc).join(' · ')}</small>` : ''}`;
+    out += `<tr class="${z.nr === P.kw ? 'me' : ''}" id="skw${z.nr}"><td class="kwzelle" style="border-left:6px solid ${Ph.farbe}"><b>KW ${KA.kw(z.nr)}</b><br><small class="dim">${KA.datumKurz(s.year, z.nr)}</small></td>
+      <td>${was}</td><td>${plan}</td><td class="frv">${frische}</td></tr>`;
+    // Aufgeklappt: alle Möglichkeiten dieser Woche
+    if (sPlanWoche === z.nr && !z.vorbei && z.art !== 'zweite' && z.def !== undefined && !(z.art === 'gross' && z.def.cat === 'F')) {
+      let knoepfe;
+      if (z.art === 'gross') {
+        const F = z.folgen || PS.auslassFolgen(s, z.def, V.gefehlt, false);
+        knoepfe = `<button class="${z.wahl === 'aus' ? '' : 'sel'}" data-a="sPlanSetzen" data-v="${z.nr}:">✓ Spielen</button>
+          <button class="${z.wahl === 'aus' ? 'sel' : ''}" data-a="sPlanSetzen" data-v="${z.nr}:aus">✕ Auslassen <small>${esc(F.text)}</small></button>`;
+      } else {
+        knoepfe = kleine.map((k) => { const d = PS.darfSpielen(s, k, platz); return `<button class="${z.wahl === k.id ? 'sel' : ''} ${d.ok ? '' : 'zu'}" data-a="sPlanSetzen" data-v="${z.nr}:${k.id}">🎾 ${esc(k.name)} <small>${k.catName} · ${BELAG_KURZ[k.surface]} · Sieger ${k.points.W} P.${d.ok ? '' : ' · 🔒 ' + d.warum}</small></button>`; }).join('')
+          + Object.entries(PS.ZWISCHEN).filter(([id]) => id !== 'training').map(([id, A]) => `<button class="${z.wahl === id ? 'sel' : ''}" data-a="sPlanSetzen" data-v="${z.nr}:${id}">${A.bild} ${A.kurz} <small>${A.bringt}</small></button>`).join('')
+          + `</div><p class="klein" style="margin:8px 0 4px">🏋️ Trainingsblock (+2 beim nächsten Turnier) für:</p><div class="row">`
+          + Object.entries(D.STAT_NAMES).map(([k, n]) => `<button class="${z.wahl === 'training:' + k ? 'sel' : ''}" data-a="sPlanSetzen" data-v="${z.nr}:training:${k}">${n} <small>${Math.round(me.stats[k] + P.plus[k])}</small></button>`).join('')
+          + (z.wahl ? `<button class="ghost" data-a="sPlanSetzen" data-v="${z.nr}:">✕ Woche wieder freigeben</button>` : '');
+      }
+      out += `<tr class="planwahl"><td colspan="4"><b>KW ${KA.kw(z.nr)} · ${Ph.bild} ${esc(Ph.name)}</b> – was hast du vor?<div class="row">${knoepfe}</div></td></tr>`;
+    }
+    return out;
+  }).join('');
+  return `${kopf}<div class="panel" style="overflow-x:auto"><table class="planer"><tr><th>Woche</th><th>Turniere der Woche</th><th>Dein Plan</th><th>Frische danach (Vorschau)</th></tr>${reihen}</table>
+    <p class="dim klein">Die Vorschau rechnet so: Du kommst bei jedem Turnier so weit, wie man es von deinem Platz erwartet. Wer weiter kommt, spielt mehr Matches und wird müder; wer früh verliert, bleibt frischer.
+      Eine Woche ohne Plan zählt als Urlaub. Der Plan verpflichtet dich zu nichts: Jede Woche entscheidest du auf der Saison-Seite neu – dort steht dann „📌 in deinem Plan“.
+      Kalender und Turnierorte sind die echten von 2026. Alle Zahlen für Frische, Verletzungsgefahr und Strafen sind geschätzt.</p></div>`;
+}
+
 function renderSeason() {
   const s = season, P = s.profi, me = SE.seasonPlayer(s), ich = SE.myRace(s), def = SE.nextTournament(s);
   const table = SE.raceTable(s);
@@ -1523,7 +1605,7 @@ function renderSeason() {
   const platz = PS.weltPlatz(s);
   // Wie weit ist es bis zur Finals-Linie (Platz 8)?
   const abstand = ich.rank <= SE.FINALS_PLAETZE ? `${(ich.points - neunter.points).toLocaleString('de-DE')} P. vor Platz 9` : `${(achter.points - ich.points).toLocaleString('de-DE')} P. bis Platz 8`;
-  const tabs = [['start', 'Saison'], ['zeitung', 'Zeitung & Rivalen'], ['team', 'Team & Sponsoren'], ['profi', 'Fähigkeiten & Körper' + (P.skillPoints >= PS.PLUS_KOSTET ? ' ●' : P.koerper || P.verletzung ? ' 🩹' : '')], ['race', 'ATP Race'], ['welt', 'Weltrangliste'], ['punkte', 'Punkte-Regeln']];
+  const tabs = [['start', 'Saison'], ['planer', 'Saison-Planer'], ['zeitung', 'Zeitung & Rivalen'], ['team', 'Team & Sponsoren'], ['profi', 'Fähigkeiten & Körper' + (P.skillPoints >= PS.PLUS_KOSTET ? ' ●' : P.koerper || P.verletzung ? ' 🩹' : '')], ['race', 'ATP Race'], ['welt', 'Weltrangliste'], ['punkte', 'Punkte-Regeln']];
   const ziele = (liste) => `<table class="ziele">${liste.map((z) => { const st = z.ok != null ? z : { ...z, ...PS.zielStand(s, z) };
     return `<tr><td>${st.ok ? '✅' : '⬜'}</td><td><b>${esc(z.text)}</b><br><small class="dim">${esc(st.stand)}</small></td><td class="num gold">${money(z.geld)}</td></tr>`; }).join('')}</table>`;
   let body = '';
@@ -1534,42 +1616,61 @@ function renderSeason() {
       next = `<div class="panel center"><h2 class="gold">Saison ${s.year} beendet</h2>
         <p>Du beendest das Jahr auf <b>Platz ${ich.rank}</b> im ATP Race mit <b>${ich.points.toLocaleString('de-DE')} Punkten</b> und ${s.titles} Titel${s.titles === 1 ? '' : 'n'}.
         In der Weltrangliste: <b>Platz ${J.platz}</b> <span class="${J.platz < J.startPlatz ? 'plus' : J.platz > J.startPlatz ? 'minus' : 'dim'}">(Start: Platz ${J.startPlatz})</span>.</p>
-        <p class="dim">ATP-Finals-Sieger: ${esc(sieger.champion)}</p>
+        <p class="dim">ATP-Finals-Sieger: ${esc(sieger.champion)} · Du hast ${J.turniere} Turniere gespielt, davon ${J.kleine.length} kleine.</p>
         <h3>Die Ziele deiner Sponsoren: ${'⭐'.repeat(J.geschafft)}${'☆'.repeat(J.ziele.length - J.geschafft)}</h3>${ziele(J.ziele)}
         <table class="rechnung"><tr><td>Preisgeld</td><td class="num plus">+ ${money(J.bilanz.preis)}</td></tr><tr><td>Sponsoren</td><td class="num plus">+ ${money(J.bilanz.sponsor)}</td></tr>
           ${J.bilanz.praemie ? `<tr><td>Prämien für geschaffte Ziele</td><td class="num plus">+ ${money(J.bilanz.praemie)}</td></tr>` : ''}
           <tr><td>Trainer und Physio</td><td class="num minus">− ${money(J.bilanz.team)}</td></tr><tr><td>Reisen</td><td class="num minus">− ${money(J.bilanz.reise)}</td></tr>
+          ${J.strafen ? `<tr><td>Strafen der ATP${J.fehlen500 ? ` (auch für ${J.fehlen500} fehlende ATP-500-Turniere)` : ''}</td><td class="num minus">− ${money(J.strafen)}</td></tr>` : ''}
           <tr class="summe"><td>Dieses Jahr verdient</td><td class="num ${J.gewinn >= 0 ? 'plus' : 'minus'}">${J.gewinn >= 0 ? '+' : '−'} ${money(Math.abs(J.gewinn))}</td></tr></table>
         <div class="row" style="justify-content:center"><button class="primary" data-a="saisonWeiterJahr">Weiter mit ${esc(me.short)} ins Jahr ${s.year + 1} › <small>Jetzt musst du deine eigenen Punkte verteidigen</small></button>
         <button data-a="saisonEnde">Anderen Profi wählen</button></div></div>`;
     } else {
-      const finals = def.cat === 'F';
-      const laeuft = !!s.tournament;
-      const V = PS.verteidigen(s, def), E = PS.erwartung(s, def), K = PS.kosten(s), G = PS.sponsorGeld(s);
-      const vorSieger = D.playerById(s.vorjahrSieger[def.id]);
-      const verletzt = PS.istVerletzt(s) && !finals;
-      // Die Wochen bis zum nächsten Turnier: Was machst du? (nur solange das Turnier noch nicht läuft)
-      const offen = laeuft ? 0 : PS.zwischenOffen(s), Z = P.zwischen;
-      if (Z && !laeuft && (offen || zwMeldung)) {
-        const knopf = ([id, A]) => `<button data-a="saisonZw" data-v="${id}" ${Z.getan.includes(id) ? 'disabled' : ''}>${A.name} <small>${A.bringt}</small></button>`;
-        zwischen = `<div class="panel zwischen"><h3 style="margin-top:0">🗓️ ${Z.frei === 1 ? 'Eine freie Woche' : Z.frei + ' freie Wochen'} bis ${esc(def.name)}</h3>
-          ${zwMeldung ? `<p><b>${zwMeldung.name}:</b> <span class="gold">${zwMeldung.bringt.join(' · ')}</span></p>` : ''}
-          ${offen ? `<p class="dim">Ein bisschen erholt sich dein Profi von allein. Du kannst noch <b>${offen === 1 ? 'eine Sache' : offen + ' Dinge'}</b> tun – oder gleich zum Turnier fahren.</p>
-            ${zwTraining ? `<p>Woran arbeitest du im Trainingsblock?</p><div class="row">${Object.entries(D.STAT_NAMES).map(([k, n]) => `<button data-a="saisonZw" data-v="training:${k}">${n} <small>${Math.round(me.stats[k] + P.plus[k])}</small></button>`).join('')}</div>`
-              : `<div class="row">${Object.entries(PS.ZWISCHEN).map(knopf).join('')}</div>`}` : '<p class="dim">Die freie Zeit ist verplant. Auf zum Turnier!</p>'}</div>`;
+      const J = PS.jetzt(s), laeuft = !!s.tournament, finals = def.cat === 'F';
+      const verletzt = PS.istVerletzt(s);
+      if (zwMeldung) zwischen = `<div class="panel zwischen"><b>KW ${KA.kw(zwMeldung.kw)} · ${zwMeldung.name}:</b> <span class="gold">${zwMeldung.bringt.map(esc).join(' · ')}</span></div>`;
+      if (J.art === 'klein') {
+        // Ein kleines Turnier läuft gerade
+        const k = J.def;
+        next = `<div class="panel"><div class="dim">Läuft gerade · KW ${KA.kw(J.kw)}</div><h2 style="margin:6px 0">${esc(k.name)}</h2>
+          <p>${catTag(k)} · ${esc(k.city)} · ${D.SURFACE_NAMES[k.surface]} · Sieger: ${k.points.W} Punkte</p>
+          <div class="row"><button class="primary" data-a="saisonWeiter">Weiter im Turnier ›</button></div></div>`;
+      } else {
+        if (J.art === 'frei') {
+          // Eine freie Woche: kleines Turnier spielen oder etwas anderes tun (genau eine Sache)
+          const wahl = PS.planVon(s, J.kw), ruhe = Math.round(PS.erholung(s)), pin = ' · 📌 in deinem Plan';
+          const tKnopf = (k) => { const d = PS.darfSpielen(s, k, platz), an = wahl === k.id;
+            return `<button class="${an ? 'sel' : ''}" data-a="saisonKlein" data-v="${k.id}" ${d.ok ? '' : 'disabled'}>🎾 ${esc(k.name)} <small>${k.catName} · ${D.SURFACE_NAMES[k.surface]} · Sieger ${k.points.W} P.${d.ok ? '' : ' · 🔒 ' + d.warum}${an ? pin : ''}</small></button>`; };
+          const aKnopf = ([id, A]) => { const g = PS.zwischenGeht(s, id), an = !!wahl && wahl.split(':')[0] === id, f = ruhe + A.frische;
+            return `<button class="${an ? 'sel' : ''}" data-a="saisonWoche" data-v="${an && id === 'training' ? wahl : id}" ${g.ok ? '' : 'disabled'}>${A.name} <small>${A.bringt} · Frische ${f >= 0 ? '+' : '−'}${Math.abs(f)}${g.ok ? '' : ' · ' + g.warum}${an ? pin : ''}</small></button>`; };
+          const muede = P.koerper ? `<p class="minus">🩹 Du hast Beschwerden (${esc(P.koerper.teil)}). Eine Woche ohne Turnier heilt das.</p>` : P.frische < 60 ? '<p class="minus">😮‍💨 Dein Profi ist müde. Ein Turnier wäre jetzt gefährlich für den Körper.</p>' : '';
+          zwischen += `<div class="panel zwischen"><h3 style="margin-top:0">🗓️ KW ${KA.kw(J.kw)} (${KA.datumKurz(s.year, J.kw)}) – freie Woche</h3>
+            <p class="dim">Noch ${J.bisGross === 1 ? 'eine Woche' : J.bisGross + ' Wochen'} bis <b>${esc(def.name)}</b> · Frische ${Math.round(P.frische)} %. Diese Woche geht genau eine Sache: ein kleines Turnier spielen – oder etwas anderes tun.</p>${muede}
+            ${verletzt ? `<div class="verletzt"><b>🚑 Verletzt: ${esc(P.verletzung.name)}</b><br>Noch etwa ${P.verletzung.wochen} ${P.verletzung.wochen === 1 ? 'Woche' : 'Wochen'} Pause.</div><div class="row"><button class="primary" data-a="saisonWoche" data-v="pause">🩹 Reha-Woche ›</button></div>`
+              : zwTraining ? `<p>Woran arbeitest du im Trainingsblock?</p><div class="row">${Object.entries(D.STAT_NAMES).map(([k, n]) => `<button data-a="saisonWoche" data-v="training:${k}">${n} <small>${Math.round(me.stats[k] + P.plus[k])}</small></button>`).join('')}</div>`
+              : `${J.turniere.length ? `<p><b>Turniere dieser Woche</b></p><div class="row">${J.turniere.map(tKnopf).join('')}</div>` : '<p class="dim">Diese Woche gibt es kein kleines Turnier für dich.</p>'}
+                <p><b>Oder ohne Turnier</b></p><div class="row">${Object.entries(PS.ZWISCHEN).map(aKnopf).join('')}</div>`}
+            <p class="dim klein">Tipp: Im Reiter „Saison-Planer“ siehst du das ganze Jahr und kannst ausrechnen lassen, wann dein Profi müde wird.</p></div>`;
+        }
+        const dran = J.art === 'gross';
+        const V = PS.verteidigen(s, def), E = PS.erwartung(s, def), K = PS.kosten(s), G = PS.sponsorGeld(s);
+        const vorSieger = D.playerById(s.vorjahrSieger[def.id]);
+        const fehlt = verletzt && !finals;
+        const F = PS.auslassFolgen(s, def), geplantAus = PS.planVon(s, KA.wocheVon(def.id)) === 'aus';
+        const alt = V.punkte ? `Letztes Jahr: <b>${V.titel ? '🏆 Turniersieg' : D.ROUND_NAMES[V.label] || ''}</b> – du musst <b>${V.punkte.toLocaleString('de-DE')} Punkte verteidigen</b>.` : 'Letztes Jahr hast du hier keine Punkte geholt. Du kannst nur gewinnen!';
+        next = `<div class="panel"><div class="dim">${laeuft ? 'Läuft gerade' : dran ? 'Diese Woche · KW ' + KA.kw(J.kw) : 'Das nächste große Turnier'}</div>
+          <h2 style="margin:6px 0">${def.name}</h2>
+          <p>${catTag(def)} · ${def.city} · ${def.month} · ${D.SURFACE_NAMES[def.surface]}${finals ? '' : CA.istPflicht(def) ? ' · <b>Pflichtturnier</b>' : ' · keine Pflicht'}</p>
+          <p class="dim">${finals ? 'Nur die besten 8 im Race. ' + (dabei ? 'Du bist dabei!' : 'Du hast es diesmal nicht geschafft – du kannst zuschauen.')
+            : def.draw + ' Spieler · Sieger: ' + def.points.W.toLocaleString('de-DE') + ' Punkte'}${vorSieger ? ` · Titelverteidiger: ${V.titel ? '<b class="gold">du!</b>' : esc(vorSieger.short)}` : ''}</p>
+          ${finals && !dabei ? '' : `<p>🛡️ ${alt}</p><p>🎯 ${E.text}</p>
+            <p class="dim klein">Kosten für Team und Reise: ${money(K.summe)} · Sponsoren zahlen: ${money(G.summe)}${P.vertrag.schlaeger && P.vertrag.kleidung ? '' : ' · <b class="minus">Du hast noch nicht beide Ausrüster gewählt (Team & Sponsoren) – so verschenkst du Geld!</b>'}</p>`}
+          ${fehlt && dran ? `<div class="verletzt"><b>🚑 Verletzt: ${esc(P.verletzung.name)}</b><br>Noch etwa ${P.verletzung.wochen} ${P.verletzung.wochen === 1 ? 'Woche' : 'Wochen'} Pause. Dieses Turnier findet ohne dich statt${V.punkte ? ` – die ${V.punkte.toLocaleString('de-DE')} Punkte vom letzten Jahr sind weg` : ''}.</div>` : ''}
+          ${P.koerper && !verletzt && dran ? `<p class="minus">🩹 Beschwerden: ${esc(P.koerper.teil)}. Urlaub, der Physio auf der Anlage oder ein ausgelassenes Turnier heilen das. Wer einfach weiterspielt, riskiert eine Verletzung.</p>` : ''}
+          ${dran || laeuft ? `<div class="row"><button class="primary" data-a="${laeuft ? 'saisonWeiter' : fehlt ? 'saisonSkip' : 'saisonPlay'}">${laeuft ? 'Weiter im Turnier ›' : fehlt ? 'Turnier ohne dich ansehen ›' : !finals || dabei ? 'Turnier spielen ›' : 'Turnier ansehen ›'}</button>
+          ${!laeuft && !finals && !fehlt ? `<button class="${geplantAus ? 'sel' : ''}" data-a="saisonSkip">Auslassen <small>${V.punkte ? `−${V.punkte.toLocaleString('de-DE')} Punkte · ` : ''}viel Erholung${F.strafe ? ' · Strafe ' + money(F.strafe) : F.entschuldigt ? ' · mit Attest' : F.pflicht ? ' · Verwarnung' : ' · keine Strafe'}${geplantAus ? ' · 📌 in deinem Plan' : ''}</small></button>` : ''}</div>
+          ${!laeuft && !finals && !fehlt ? `<p class="dim klein">Wenn du auslässt: ${esc(F.text)}</p>` : ''}` : ''}</div>`;
       }
-      const alt = V.punkte ? `Letztes Jahr: <b>${V.titel ? '🏆 Turniersieg' : D.ROUND_NAMES[V.label] || ''}</b> – du musst <b>${V.punkte.toLocaleString('de-DE')} Punkte verteidigen</b>.` : 'Letztes Jahr hast du hier keine Punkte geholt. Du kannst nur gewinnen!';
-      next = `<div class="panel"><div class="dim">${laeuft ? 'Läuft gerade' : 'Als Nächstes'}</div>
-        <h2 style="margin:6px 0">${def.name}</h2>
-        <p>${catTag(def)} · ${def.city} · ${def.month} · ${D.SURFACE_NAMES[def.surface]}</p>
-        <p class="dim">${finals ? 'Nur die besten 8 im Race. ' + (dabei ? 'Du bist dabei!' : 'Du hast es diesmal nicht geschafft – du kannst zuschauen.')
-          : def.draw + ' Spieler · Sieger: ' + def.points.W.toLocaleString('de-DE') + ' Punkte'}${vorSieger ? ` · Titelverteidiger: ${V.titel ? '<b class="gold">du!</b>' : esc(vorSieger.short)}` : ''}</p>
-        ${finals && !dabei ? '' : `<p>🛡️ ${alt}</p><p>🎯 ${E.text}</p>
-          <p class="dim klein">Kosten für Team und Reise: ${money(K.summe)} · Sponsoren zahlen: ${money(G.summe)}${P.vertrag.schlaeger && P.vertrag.kleidung ? '' : ' · <b class="minus">Du hast noch nicht beide Ausrüster gewählt (Team & Sponsoren) – so verschenkst du Geld!</b>'}</p>`}
-        ${verletzt ? `<div class="verletzt"><b>🚑 Verletzt: ${esc(P.verletzung.name)}</b><br>Noch etwa ${P.verletzung.wochen} ${P.verletzung.wochen === 1 ? 'Woche' : 'Wochen'} Pause. Dieses Turnier findet ohne dich statt${V.punkte ? ` – die ${V.punkte.toLocaleString('de-DE')} Punkte vom letzten Jahr sind weg` : ''}.</div>` : ''}
-        ${P.koerper && !verletzt ? `<p class="minus">🩹 Beschwerden: ${esc(P.koerper.teil)}. Urlaub, der Physio auf der Anlage oder ein ausgelassenes Turnier heilen das. Wer einfach weiterspielt, riskiert eine Verletzung.</p>` : ''}
-        <div class="row"><button class="primary" data-a="${laeuft ? 'saisonWeiter' : verletzt ? 'saisonSkip' : 'saisonPlay'}">${laeuft ? 'Weiter im Turnier ›' : verletzt ? 'Turnier ohne dich ansehen ›' : !finals || dabei ? 'Turnier spielen ›' : 'Turnier ansehen ›'}</button>
-        ${!laeuft && !finals && !verletzt ? `<button data-a="saisonSkip">Auslassen <small>${V.punkte ? `−${V.punkte.toLocaleString('de-DE')} Punkte · ` : ''}viel Erholung · Sponsoren murren</small></button>` : ''}</div></div>`;
     }
     body = `${timelineHtml(s)}
       <div class="cols">
@@ -1595,6 +1696,8 @@ function renderSeason() {
           <div class="panel"><h3 style="margin-top:0">ATP Race – Stand</h3>${raceHtml(s, true)}
           <div class="center" style="margin-top:10px"><button data-a="saison" data-v="race">Ganze Tabelle ›</button></div></div></div>
       </div>`;
+  } else if (saisonTab === 'planer') {
+    body = s.over ? '<div class="panel"><p class="dim">Die Saison ist vorbei. Im nächsten Jahr gibt es einen neuen Plan.</p></div>' : saisonPlanerHtml(s);
   } else if (saisonTab === 'zeitung') {
     // Rivalen: die zwei, die in der Rangliste neben dir stehen
     const welt = PS.weltTabelle(s);
@@ -1603,7 +1706,7 @@ function renderSeason() {
         <div class="kpi" style="margin-top:8px"><div><b>${b[0]} : ${b[1]}</b><span>deine Bilanz</span></div><div><b>${w.rank < platz ? '▲ vor dir' : '▼ hinter dir'}</b><span>${Math.abs(w.points - welt.find((x) => x.me).points).toLocaleString('de-DE')} Punkte Abstand</span></div></div></div>`; };
     const gegner = Object.entries(P.h2h).map(([id, b]) => ({ p: D.playerById(id), b })).filter((x) => x.p).sort((x, y) => (y.b[0] + y.b[1]) - (x.b[0] + x.b[1]) || x.p.rank - y.p.rank).slice(0, 12);
     body = `<div class="panel"><h3 style="margin-top:0">⚔️ Deine Rivalen</h3>
-        <p class="dim">Diese zwei stehen in der Weltrangliste direkt neben dir. Ein Sieg gegen sie gibt Selbstvertrauen, eine Niederlage macht Druck. Mit „Gegner studieren“ zwischen den Turnieren bereitest du dich auf sie vor.</p>
+        <p class="dim">Diese zwei stehen in der Weltrangliste direkt neben dir. Ein Sieg gegen sie gibt Selbstvertrauen, eine Niederlage macht Druck. Mit „Gegner studieren“ in einer freien Woche bereitest du dich auf sie vor.</p>
         <div class="grid">${P.rivalen.map(rivale).join('')}</div></div>
       <div class="cols"><div class="panel"><h3 style="margin-top:0">📰 Tennis-Zeitung</h3>${zeitungHtml(s)}
         <p class="dim klein">Die Meldungen schreibt das Spiel selbst – sie sind ausgedacht.</p></div>
@@ -1631,11 +1734,12 @@ function renderSeason() {
       <div class="panel"><h3 style="margin-top:0">Trainer</h3><p class="dim">Dein Profi hat sein Team schon. Du kannst es umbauen: Ein besserer Trainer bringt mehr Erfahrung, kostet aber bei jedem Turnier – auch wenn du früh verlierst.</p>
         <div class="grid">${AU.TRAINER.map((t) => person(t, P.trainer === t.id, t.xp > 1 ? `+${Math.round((t.xp - 1) * 100)} % Erfahrung` : 'keine Hilfe')).join('')}</div></div>
       <div class="panel"><h3 style="margin-top:0">Physio</h3><p class="dim">Der Physio bestimmt, wie viel Frische ein Match kostet und wie schnell du dich zwischen den Turnieren erholst.</p>
-        <div class="grid">${AU.PHYSIOS.map((p) => person(p, P.physio === p.id, `Erholung ${p.erholung} · ein Match kostet etwa ${Math.round(p.last * PS.MATCH_KOSTET)}`)).join('')}</div></div>
+        <div class="grid">${AU.PHYSIOS.map((p) => person(p, P.physio === p.id, `freie Woche: Frische +${Math.round(8 + p.erholung * 0.2)} · ein Match kostet etwa ${Math.round((3 + p.last * 0.4) * PS.MATCH_KOSTET)}`)).join('')}</div></div>
       <div class="panel"><h3 style="margin-top:0">Reisen</h3><p class="dim">Pro Turnier zahlst du zurzeit ${money(K.summe)} für Team und Reise.</p><div class="row">${reise}</div></div>
       <div class="panel"><h3 style="margin-top:0">Geld in diesem Jahr</h3>
         <table class="rechnung"><tr><td>Preisgeld</td><td class="num plus">+ ${money(b.preis)}</td></tr><tr><td>Sponsoren</td><td class="num plus">+ ${money(b.sponsor)}</td></tr>
           <tr><td>Trainer und Physio</td><td class="num minus">− ${money(b.team)}</td></tr><tr><td>Reisen</td><td class="num minus">− ${money(b.reise)}</td></tr>
+          ${b.strafen ? `<tr><td>Strafen der ATP</td><td class="num minus">− ${money(b.strafen)}</td></tr>` : ''}
           <tr class="summe"><td>Konto</td><td class="num gold">${money(P.money)}</td></tr></table></div>
       <div class="panel"><h3 style="margin-top:0">🏆 Pokalschrank</h3>${P.pokale.length ? `<div class="grid">${P.pokale.slice().reverse().map((p) => `<div class="panel teil pokalkarte">${p.foto ? `<img src="${p.foto}" alt="Siegerfoto">` : `<div class="ohnefoto">${p.art === 'silber' ? '🏆' : p.art === 'stern' ? '⭐' : '🥇'}</div>`}
         <b>${esc(p.name)}</b><div class="dim klein">${p.ort ? esc(p.ort) + ' · ' : ''}${p.jahr}</div></div>`).join('')}</div>` : '<p class="dim">Noch leer. Gewinn ein Turnier – dann gibt es eine Siegerehrung und ein Foto für den Schrank.</p>'}</div>`;
@@ -1652,7 +1756,7 @@ function renderSeason() {
         <p>Frische: <b>${Math.round(P.frische)} %</b></p>${balken(P.frische / 100, ampel(P.frische / 100))}
         ${P.verletzung ? `<div class="verletzt"><b>🚑 Verletzt: ${esc(P.verletzung.name)}</b><br>Noch etwa ${P.verletzung.wochen} Wochen Pause.<br><b>Warum ist das passiert?</b><ul>${P.verletzung.fehler.map((f) => `<li>${esc(f)}</li>`).join('')}</ul></div>`
           : P.koerper ? `<p class="minus">🩹 Beschwerden: ${esc(P.koerper.teil)} (−${AB.BESCHWERDEN_ABZUG} auf eine Fähigkeit). Das ist eine Warnung! Urlaub oder der Physio auf der Anlage heilen das.</p>` : '<p class="plus">Alles gesund.</p>'}
-        <p class="dim klein">Jedes Match kostet Frische, am meisten bei Turnieren direkt hintereinander. Unter 70 % wird dein Profi langsamer. Wer müde oder mit Beschwerden weiterspielt, kann sich verletzen und verpasst dann Turniere – und die Punkte vom Vorjahr sind weg.</p></div>
+        <p class="dim klein">Jedes Match kostet Frische – wer weit kommt, wird also müder als einer, der früh verliert. Massage und früh schlafen helfen für den nächsten Tag, aber richtig erholt sich der Körper erst in einer Woche ohne Turnier (im Urlaub am meisten). Unter 70 % wird dein Profi langsamer. Wer müde oder mit Beschwerden weiterspielt, kann sich verletzen und verpasst dann Turniere – und die Punkte vom Vorjahr sind weg.</p></div>
       <div class="panel"><h3 style="margin-top:0">Was gerade wirkt</h3>${formListe(PS.bonusListe(s, def))}
         <p class="dim klein">Selbstvertrauen: <b>${mutText(P)}</b> · Medien-Druck: <b>${druckText(P)}</b>. Gegen einzelne Gegner kommt noch deine Bilanz dazu (Zeitung & Rivalen).</p></div></div></div>`;
   } else if (saisonTab === 'race') {
@@ -1660,7 +1764,7 @@ function renderSeason() {
   } else if (saisonTab === 'welt') {
     body = `<div class="panel"><p class="dim" style="margin-top:0">Die Weltrangliste zählt die Punkte der letzten 52 Wochen. Wird ein Turnier wieder gespielt, fällt das Ergebnis vom letzten Jahr weg und das neue kommt dazu.
       Darum muss man seine Punkte <b>verteidigen</b>: Wer letztes Jahr gewonnen hat und jetzt früh verliert, rutscht ab. ⚔️ = dein Rivale.</p>${weltHtml(s)}
-      <p class="dim klein">Start = die echte Weltrangliste. Die Ergebnisse des Vorjahres bei den einzelnen Turnieren hat der Computer passend dazu ausgerechnet (sie sind nicht die echten). Punkte von kleineren Turnieren bleiben das ganze Jahr gleich.</p></div>`;
+      <p class="dim klein">Start = die echte Weltrangliste. Die Ergebnisse des Vorjahres bei den einzelnen Turnieren hat der Computer passend dazu ausgerechnet (sie sind nicht die echten). Die Punkte von kleinen Turnieren aus dem letzten Jahr fallen Woche für Woche weg – dafür zählen die kleinen Turniere, die du dieses Jahr spielst.</p></div>`;
   } else {
     body = pointsHtml();
   }
@@ -1670,23 +1774,41 @@ function renderSeason() {
   const now = $('#tlNow'), box = screen.querySelector('.tlscroll');
   if (box) box.scrollLeft = now ? Math.max(0, now.offsetLeft - box.clientWidth / 2 + now.offsetWidth / 2) : box.scrollWidth;
 }
-actions.saisonPlay = () => { zwMeldung = null; zwTraining = false; baumTeil = null; PS.turnierStart(season); showSeasonTournament(); };
+actions.saisonPlay = () => {
+  if (PS.jetzt(season).art !== 'gross' || season.tournament) return renderSeason();
+  zwMeldung = null; zwTraining = false; baumTeil = null; PS.turnierStart(season); showSeasonTournament();
+};
 actions.saisonWeiter = () => showSeasonTournament();
 actions.saisonSkip = () => {
+  if (PS.jetzt(season).art !== 'gross' || season.tournament) return renderSeason();
   zwMeldung = null; zwTraining = false; baumTeil = null;
   const T = PS.turnierStart(season, true);
   TN.simulateRest(T);
   SE.saveSeason(season);
   showSeasonTournament();
 };
-// Zwischen den Turnieren etwas tun. v = 'pause' | 'sponsor' | … | 'training' (klappt die Auswahl auf) | 'training:s'
-actions.saisonZw = (v) => {
+// Ein kleines Turnier in einer freien Woche spielen
+actions.saisonKlein = (v) => {
+  zwMeldung = null; zwTraining = false; baumTeil = null;
+  if (PS.kleinStart(season, v)) showSeasonTournament(); else keepScroll(renderSeason);
+};
+// Eine freie Woche ohne Turnier. v = 'pause' | 'sponsor' | … | 'training' (klappt die Auswahl auf) | 'training:s'
+actions.saisonWoche = (v) => {
   const [id, wahl] = String(v).split(':');
-  if (id === 'training' && !wahl) { zwTraining = true; return keepScroll(renderSeason); }
-  const bringt = PS.zwischenTun(season, id, wahl);
+  if (id === 'training' && !wahl && !PS.istVerletzt(season)) { zwTraining = true; return keepScroll(renderSeason); }
+  const r = PS.wocheFrei(season, id, wahl);
   zwTraining = false;
-  if (bringt) { zwMeldung = { name: PS.ZWISCHEN[id].name, bringt }; sound.click(); }
+  if (r) { zwMeldung = r; sound.click(); }
   keepScroll(renderSeason);
+};
+// --- Saison-Planer ---
+actions.sPlanAuf = (v) => { sPlanWoche = sPlanWoche === +v ? null : +v; keepScroll(renderSeason); const el = document.getElementById('skw' + v); if (el && sPlanWoche != null) el.scrollIntoView({ block: 'center' }); };
+actions.sPlanSetzen = (v) => { const i = String(v).indexOf(':'); PS.planSetzen(season, +String(v).slice(0, i), String(v).slice(i + 1) || null); sPlanWoche = null; keepScroll(renderSeason); };
+actions.sPlanAuto = (v) => { PS.autoPlan(season, v); sPlanWoche = null; keepScroll(renderSeason); };
+let sPlanLeerArmed = false;
+actions.sPlanLeeren = (v, el) => {
+  if (!sPlanLeerArmed) { sPlanLeerArmed = true; el.textContent = 'Wirklich leeren? Nochmal tippen'; setTimeout(() => { sPlanLeerArmed = false; }, 4000); return; }
+  sPlanLeerArmed = false; PS.planLeeren(season); keepScroll(renderSeason);
 };
 actions.saisonTeam = (v) => { PS.setTeam(season, v); keepScroll(renderSeason); };
 actions.saisonReise = (v) => { PS.setReise(season, v); keepScroll(renderSeason); };
@@ -1698,27 +1820,40 @@ function seasonTournamentDone() {
     s.label ? `Dein Ergebnis: <b>${s.label === 'W' ? 'Turniersieg 🏆' : D.ROUND_NAMES[s.label]}</b>` : s.verteidigt.punkte || s.tid !== 'fin' ? 'Du hast nicht mitgespielt.' : 'Du warst nicht qualifiziert.',
     `Punkte fürs ATP Race: <b class="gold">+${s.points.toLocaleString('de-DE')}</b> · Platz ${s.rank} im Race (${s.total.toLocaleString('de-DE')} Punkte)`,
   ];
-  // Punkte verteidigen: Was fiel weg, was kam dazu?
-  const d = s.points - s.verteidigt.punkte;
-  lines.push(`🛡️ Weltrangliste: ${s.verteidigt.punkte.toLocaleString('de-DE')} Punkte vom letzten Jahr fallen weg, ${s.points.toLocaleString('de-DE')} neue kommen dazu
-    = <b class="${d > 0 ? 'plus' : d < 0 ? 'minus' : ''}">${d >= 0 ? '+' : '−'}${Math.abs(d).toLocaleString('de-DE')}</b>. Du stehst auf <b>Platz ${s.platz}</b>${s.platzVorher !== s.platz ? ` <span class="${s.platz < s.platzVorher ? 'plus' : 'minus'}">(${s.platz < s.platzVorher ? '▲' : '▼'} ${Math.abs(s.platzVorher - s.platz)})</span>` : ''}.`);
-  if (s.abstand != null && s.label !== 'W') lines.push(s.abstand > 0 ? '<b class="plus">🎯 Besser als erwartet!</b> Das gibt Selbstvertrauen, und die Sponsoren freuen sich.'
-    : s.abstand < 0 ? `<b class="minus">🎯 Erwartet war mindestens ${D.ROUND_NAMES[s.erwartet] || s.erwartet}.</b> Die Zeitungen schreiben böse Sätze – der Druck steigt, das Selbstvertrauen sinkt.` : '🎯 Genau so weit, wie alle erwartet haben.');
-  if (s.label === 'W') lines.push('<b class="gold">Ein Titel! Dein Selbstvertrauen ist riesig, und der Druck ist wie weggeblasen.</b>');
-  const riv = s.rivalen.filter((x) => x.label);
-  if (riv.length) lines.push(`<span class="dim">⚔️ Deine Rivalen: ${riv.map((x) => `${esc(x.name)} – ${x.label === 'W' ? '🏆 Sieg' : D.ROUND_NAMES[x.label]}`).join(' · ')}</span>`);
+  const platzText = `Du stehst auf <b>Platz ${s.platz}</b>${s.platzVorher !== s.platz ? ` <span class="${s.platz < s.platzVorher ? 'plus' : 'minus'}">(${s.platz < s.platzVorher ? '▲' : '▼'} ${Math.abs(s.platzVorher - s.platz)})</span>` : ''}.`;
+  if (s.klein) {
+    lines.push(`🛡️ Weltrangliste: Die ${s.points.toLocaleString('de-DE')} Punkte zählen sofort dazu. ${platzText}`);
+    if (s.label === 'W') lines.push('<b class="gold">Ein Titel! Das gibt Selbstvertrauen für die großen Turniere.</b>');
+    else if (s.abstand <= -2) lines.push(`<b class="minus">🎯 Erwartet war ${D.ROUND_NAMES[s.erwartet] || s.erwartet}.</b> Ausgerechnet bei einem kleinen Turnier – das kratzt am Selbstvertrauen.`);
+  } else {
+    // Punkte verteidigen: Was fiel weg, was kam dazu?
+    const d = s.points - s.verteidigt.punkte;
+    lines.push(`🛡️ Weltrangliste: ${s.verteidigt.punkte.toLocaleString('de-DE')} Punkte vom letzten Jahr fallen weg, ${s.points.toLocaleString('de-DE')} neue kommen dazu
+      = <b class="${d > 0 ? 'plus' : d < 0 ? 'minus' : ''}">${d >= 0 ? '+' : '−'}${Math.abs(d).toLocaleString('de-DE')}</b>. ${platzText}`);
+    if (s.abstand != null && s.label !== 'W') lines.push(s.abstand > 0 ? '<b class="plus">🎯 Besser als erwartet!</b> Das gibt Selbstvertrauen, und die Sponsoren freuen sich.'
+      : s.abstand < 0 ? `<b class="minus">🎯 Erwartet war mindestens ${D.ROUND_NAMES[s.erwartet] || s.erwartet}.</b> Die Zeitungen schreiben böse Sätze – der Druck steigt, das Selbstvertrauen sinkt.` : '🎯 Genau so weit, wie alle erwartet haben.');
+    if (s.label === 'W') lines.push('<b class="gold">Ein Titel! Dein Selbstvertrauen ist riesig, und der Druck ist wie weggeblasen.</b>');
+    const riv = (s.rivalen || []).filter((x) => x.label);
+    if (riv.length) lines.push(`<span class="dim">⚔️ Deine Rivalen: ${riv.map((x) => `${esc(x.name)} – ${x.label === 'W' ? '🏆 Sieg' : D.ROUND_NAMES[x.label]}`).join(' · ')}</span>`);
+    // Ausgelassen: Was sagt die ATP dazu?
+    const F = s.auslassen;
+    if (F) lines.push(F.strafe ? `<b class="minus">⚠️ Das war schon dein ${F.nr}. Pflichtturnier ohne Grund in diesem Jahr: ${money(F.strafe)} Strafe.</b> Beim nächsten Mal wird es noch teurer, und die Sponsoren sind sauer.`
+      : F.entschuldigt ? '📝 Pflichtturnier – aber der Arzt hat ein Attest geschrieben. Keine Strafe.'
+      : F.pflicht ? '<b class="minus">⚠️ Verwarnung der ATP:</b> Das war ein Pflichtturnier. Beim ersten Mal im Jahr bleibt es dabei – ab dem zweiten Mal kostet es Geld.' : 'Das war kein Pflichtturnier. Niemand ist dir böse.');
+  }
   if (s.beschwerden) lines.push(`<b class="minus">🩹 Beschwerden: ${esc(s.beschwerden.leicht)}</b> Das ist eine Warnung deines Körpers. Urlaub, der Physio auf der Anlage oder ein ausgelassenes Turnier heilen das.`);
   if (s.verletzung) lines.push(`<div class="verletzt"><b>🚑 Verletzt: ${esc(s.verletzung.name)}</b><br>Du musst etwa <b>${s.verletzung.wochen} Wochen</b> pausieren.<br><b>Warum ist das passiert?</b><ul>${s.verletzung.fehler.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>
     Turniere in dieser Zeit finden ohne dich statt – und die Punkte, die du dort letztes Jahr geholt hast, sind dann weg.</div>`);
   if (s.gesund) lines.push(`<b class="plus">Du bist wieder gesund!</b> Die Verletzung (${esc(s.gesund)}) ist ausgeheilt.`);
   if (s.geheilt) lines.push('<b class="plus">Die Pause hat gutgetan:</b> Deine Beschwerden sind weg.');
   const z = (name, betrag) => (betrag ? `<tr><td>${name}</td><td class="num ${betrag > 0 ? 'plus' : 'minus'}">${betrag > 0 ? '+' : '−'} ${money(Math.abs(betrag))}</td></tr>` : '');
-  lines.push(`<table class="rechnung">${z('Preisgeld', r.preis)}${r.sponsoren.map((g) => z('Sponsor: ' + esc(g.name), g.geld)).join('')}${z('Trainer und Physio', -r.team)}${z('Reise', -r.reise)}
-    <tr class="summe"><td>Dieses Turnier</td><td class="num ${s.netto >= 0 ? 'plus' : 'minus'}">${s.netto >= 0 ? '+' : '−'} ${money(Math.abs(s.netto))}</td></tr></table>`);
+  const strafe = s.auslassen ? s.auslassen.strafe || 0 : 0, summe = s.netto - strafe;
+  lines.push(`<table class="rechnung">${z('Preisgeld', r.preis)}${r.sponsoren.map((g) => z('Sponsor: ' + esc(g.name), g.geld)).join('')}${z('Trainer und Physio', -r.team)}${z('Reise', -r.reise)}${z('Strafe der ATP', -strafe)}
+    <tr class="summe"><td>Dieses Turnier</td><td class="num ${summe >= 0 ? 'plus' : 'minus'}">${summe >= 0 ? '+' : '−'} ${money(Math.abs(summe))}</td></tr></table>`);
   if (s.finalsQualified === true) lines.push('<b class="gold">Geschafft! Du bist unter den besten 8 und fährst zu den ATP Finals nach Turin!</b>');
   if (s.finalsQualified === false) lines.push('Für die ATP Finals hat es diesmal leider nicht gereicht.');
   if (s.seasonOver) lines.push(`<b>Die Saison ist zu Ende!</b> Du hast ${s.jahr.geschafft} von ${s.jahr.ziele.length} Zielen deiner Sponsoren geschafft.`);
-  else if (s.naechstes) lines.push(`<span class="dim">Als Nächstes: ${esc(s.naechstes)} – ${s.frei ? (s.frei === 1 ? 'eine freie Woche' : s.frei + ' freie Wochen') + ' bis dahin' : 'gleich nächste Woche, ohne Pause'}. Frische jetzt: ${Math.round(P.frische)} %.</span>`);
+  else if (s.naechstes) lines.push(`<span class="dim">Als Nächstes: ${s.naechstes === 'frei' ? 'eine freie Woche – kleines Turnier, Urlaub oder Training?' : esc(s.naechstes) + ' – gleich nächste Woche, ohne Pause.'} Frische jetzt: ${Math.round(P.frische)} %.</span>`);
   if (s.label === 'W') sound.coin();
   saisonTab = 'start'; zwMeldung = null; zwTraining = false;
   showInfo(s.name, lines.join('<br>'), 'saisonStart');
