@@ -159,7 +159,7 @@ export function kleinesGelaende(def) {
     T.push({ a: 'zaun', x: -34, z: -4, b: 4, t: 1, ort: 'fans', tuer: 's' });
     T.push({ a: 'zelte', x: -34, z: -15, b: 0, n: 1 }, INFO('Imbiss', -34, -12, def.erdteil === 'eu' ? 'Der Imbiss-Stand vom Verein: Würstchen, Kuchen von den Eltern und Limo. Mehr gibt es bei einem ITF-Turnier nicht.' : 'Ein kleiner Stand mit Getränken und Snacks – mehr gibt es bei einem ITF-Turnier nicht.'));
     T.push(H('', 43, 26, 1.2, 9, 3.2, { farbe: 0x3a7a4a, dach: 'flach', name: 'Ballwand', tuer: 'w', info: 'An der Ballwand kann man allein üben: Die Wand spielt jeden Ball zurück und macht nie einen Fehler.' }));
-    T.push(F(31, -30, 26, 12, ASPHALT, { e: 2 }), { a: 'autos', x: 34, z: -32, n: 4 + Math.floor(zf() * 3), b: 20 }, { a: 'auto', x: 22, z: -27, b: 4.4, t: 2, ort: 'hotel', tuer: 's' });
+    T.push(F(31, -30, 26, 12, ASPHALT, { e: 2 }), { a: 'autos', x: 34, z: -33.5, n: 4 + Math.floor(zf() * 3), b: 20 }, { a: 'auto', x: 26.5, z: -27, b: 4.4, t: 2, ort: 'hotel', tuer: 's' });
     if (O.hotel) T.push(F(-34, 36, 16, 8, WASSER, { e: 2 }), { a: 'schirme', x: -34, z: 29, b: 14, t: 2, n: 4, farbe: 0xf4f0e4 }, INFO('Hotel-Pool', -22, 36, 'Zwischen zwei Matches liegen die Spieler am Pool – oder sie lernen für die Schule: Viele sind erst 17 oder 18.', 'o'));
     if (O.dazu) T.push(INFO(O.dazu.name, 40, 12, O.dazu.text, 'w'));
     T.push({ a: 'hecke', x: 0, z: 40.5, b: 90, t: 1.2 }, { a: 'hecke', x: -46.5, z: 8, b: 1.2, t: 56 });
@@ -186,7 +186,7 @@ export function kleinesGelaende(def) {
     T.push({ a: 'leinwand', x: -26, z: 22, b: 5, h: 3, dreh: 180, name: 'Anzeigetafel', tuer: 'n', info: 'Die Anzeigetafel zeigt alle Ergebnisse des Tages. Ganz oben stehen die Gesetzten – die vier besten Spieler des Turniers.' });
     T.push({ a: 'zaun', x: 10, z: 24, b: 4, t: 1, ort: 'fans', tuer: 's' });
     fahnen(-18, -22, 4);
-    T.push(F(-2, -42, 34, 12, ASPHALT, { e: 2 }), { a: 'autos', x: 2, z: -44, n: 6 + Math.floor(zf() * 3), b: 26 }, { a: 'auto', x: -12, z: -38.5, b: 4.4, t: 2, ort: 'hotel', tuer: 's' });
+    T.push(F(-2, -42, 34, 12, ASPHALT, { e: 2 }), { a: 'autos', x: 2, z: -45.6, n: 6 + Math.floor(zf() * 3), b: 26 }, { a: 'auto', x: -12, z: -38.5, b: 4.4, t: 2, ort: 'hotel', tuer: 's' });
     if (O.dazu) T.push(INFO(O.dazu.name, 54, 44, O.dazu.text, 'w'));
     T.push({ a: 'hecke', x: 0, z: 50.5, b: 122, t: 1.2 });
     T.push(B(baum, { linie: [-58, -10, -58, 46], n: 8 }), B(baum, { linie: [59, -44, 59, 46], n: 10 }), B(baum, { linie: [-56, -47, -24, -47], n: 4 }));
@@ -220,7 +220,7 @@ export function kleinesGelaende(def) {
       { a: 'leinwand', x: -4, z: fz + 9.5, b: 10, h: 5, dreh: 180, name: 'Fan-Dorf', tuer: 'n', v: 14, info: 'Im Fan-Dorf gibt es Essen, Musik und eine große Leinwand. Wer keine Karte für das Stadion hat, schaut hier zu.' });
     T.push({ a: 'zaun', x: 22, z: gross ? 30 : 26, b: 4, t: 1, ort: 'fans', tuer: 's' });
     fahnen(-30 * k, 24 * k, 5);
-    T.push(F(gross ? -30 : -24, gross ? -56 : -49, 34, 12, ASPHALT, { e: 2 }), { a: 'autos', x: gross ? -28 : -22, z: gross ? -58 : -51, n: 7, b: 26 }, { a: 'auto', x: gross ? -14 : -10, z: gross ? -52.5 : -45.5, b: 4.4, t: 2, ort: 'hotel', tuer: 's' });
+    T.push(F(gross ? -30 : -24, gross ? -56 : -49, 34, 12, ASPHALT, { e: 2 }), { a: 'autos', x: gross ? -28 : -22, z: gross ? -59.6 : -52.6, n: 7, b: 26 }, { a: 'auto', x: gross ? -14 : -10, z: gross ? -52.5 : -45.5, b: 4.4, t: 2, ort: 'hotel', tuer: 's' });
     if (O.pool) T.push(F(70, 20, 10, 16, WASSER, { e: 2 }));
     if (O.teich) T.push(F(-34, 26, 16, 10, WASSER, { e: 2, rund: true }));
     if (O.fussball) T.push(S('Fußballstadion', rand.x1 + 60, -30, 70, 86, 16, { form: 'eckig', dach: 'ring', farbe: 0xc84a3a, sitz: 0x3a5a9a, wiese: true }));

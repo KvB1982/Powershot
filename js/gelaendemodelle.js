@@ -1,6 +1,6 @@
 // Powershot – die fertigen 3D-Modelle für die Turniergelände (Ordner assets/gelaende/).
 //
-// Die Modelle kommen aus 3D AI Studio: Bäume, Besucher, Autos, Häuser für jedes Land, berühmte Stadien, Möbel.
+// Die Modelle kommen aus 3D AI Studio: Bäume, Autos, Häuser für jedes Land, berühmte Stadien, Möbel.
 // Sie werden erst geladen, wenn ein Gelände sie braucht – und nur die, die dort wirklich vorkommen.
 // Bis sie da sind, zeigt das Gelände seine einfachen Formen (Klötze, Kugeln). Danach wird es neu gebaut.
 //
@@ -17,9 +17,8 @@ const V = Math.PI / 2;         // eine Vierteldrehung
 export const MODELLE = {
   // Bäume
   baum_laub: { h: 6.6, beide: true }, baum_palme: { h: 7.2, beide: true }, baum_pinie: { h: 8, beide: true }, baum_zypresse: { h: 7, beide: true }, baum_fichte: { h: 8, beide: true },
-  // Menschen (in den Dateien schauen sie nach +x)
-  besucher_frau: { h: 1.68, dreh: -V }, besucher_mann: { h: 1.8, dreh: -V }, besucher_senior: { h: 1.74, dreh: -V }, besucher_kind: { h: 1.36, dreh: -V },
-  ordner: { h: 1.82, dreh: -V }, kamerateam: { h: 1.9, dreh: -V }, picknick: { l: 2.4 }, liegestuhl: { l: 1.5 },
+  // Auf den Wiesen (die Besucher selbst sind keine fertigen Modelle mehr – sie bewegen sich, siehe besucher.js)
+  picknick: { l: 2.4 }, liegestuhl: { l: 1.5 },
   // Autos: die drei schwarzen sind der Fahrdienst für die Spieler
   auto_limousine: { l: 5.2 }, auto_suv: { l: 4.8 }, auto_van: { l: 5.1 }, auto_kompakt: { l: 3.9, dreh: -V }, auto_kombi: { l: 4.7, dreh: -V },
   // Fan-Dorf und Kleinteile

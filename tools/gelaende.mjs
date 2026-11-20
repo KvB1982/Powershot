@@ -49,7 +49,7 @@ for (const [id, plan, laut] of alle) {
     for (let i = 0; i < 40 && !da; i++) { mx = r.x + ((i * 7) % 5 - 2) * 0.8; mz = r.z + ((i * 3) % 5 - 2) * 0.8; da = frei(G, mx, mz); }
     if (!da) { sag(`Haus „${r.name}“: drinnen ist kein freier Platz`); continue; }
     for (const o of r.tueren) if (!o.info && frei(G, o.tx, o.tz) && !weg(G, o.tx, o.tz, mx, mz)) sag(`Haus „${r.name}“: von der Tür „${o.name || o.id}“ kommt man nicht hinein`);
-    moebel += r.moebel.length;
+    moebel += r.moebel.length + r.sachen.length;
   }
   if (laut) console.log(`  längster Weg vom Fahrdienst: ${Math.round(laengster)} m`);
   else if (fehler > vorher) console.log(`  ↑ in: ${id}`);

@@ -13,6 +13,7 @@ import { requisit } from './requisiten.js';
 import { PLATZ_L, PLATZ_B } from './gelaende.js';
 import { frei } from './wege.js';
 import { modell, hausModell } from './gelaendemodelle.js';
+import { moebelBauen } from './moebel.js';
 
 const HALB = Math.PI / 2;
 
@@ -97,6 +98,23 @@ function koernBild() {
   return t;
 }
 
+// Bild für die Außenwand eines Stadions: Pfeiler, dazwischen helle Felder mit einem Fensterband, unten ein dunkler Eingang
+function fassadeBild() {
+  const b = document.createElement('canvas');
+  b.width = 64; b.height = 128;
+  const s = b.getContext('2d');
+  s.fillStyle = '#e9e9e9'; s.fillRect(0, 0, 64, 128);
+  s.fillStyle = '#ffffff'; s.fillRect(0, 0, 9, 128); s.fillRect(55, 0, 9, 128);                 // Pfeiler
+  s.fillStyle = 'rgba(0,0,0,0.18)'; s.fillRect(9, 0, 2, 128); s.fillRect(53, 0, 2, 128);        // Schatten neben den Pfeilern
+  s.fillStyle = '#5d6f82'; s.fillRect(14, 18, 36, 26);                                           // Fensterband
+  s.fillStyle = '#93a9bf'; s.fillRect(14, 18, 36, 7);
+  s.fillStyle = 'rgba(0,0,0,0.22)'; s.fillRect(0, 60, 64, 3);                                    // Kante zwischen den Stockwerken
+  s.fillStyle = '#cfcfcf'; s.fillRect(11, 63, 42, 65);
+  s.fillStyle = '#3a4350'; s.fillRect(18, 84, 28, 44);                                           // dunkle Öffnung unten
+  const t = new THREE.CanvasTexture(b);
+  t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
+  return t;
+}
 // Holzdielen für die Fußböden in den Häusern
 function dielenBild() {
   const b = document.createElement('canvas');
@@ -118,15 +136,13 @@ const NAH_BAEUME = 26;         // so viele Bäume (die nächsten an den Türen) 
 // Bild eines Baums für die Ferne: [Breite, Höhe] der Bildtafel, wenn der Baum 1 hoch ist
 const FLACH = { laub: [0.98, 1.47], palme: [0.7, 1.05], pinie: [0.98, 1.47], zypresse: [0.667, 1], fichte: [0.667, 1] };
 const BAUM_HOCH = { laub: 6.6, palme: 7.2, pinie: 8, zypresse: 7, fichte: 8 };
-const TOENE = [0xffffff, 0xffe9e0, 0xe2ecff, 0xfff4d6, 0xe6f6e2, 0xdedede, 0xffe0ee];      // leichte Farbtöne, damit nicht alle Besucher gleich aussehen
-const BESUCHER = ['besucher_frau', 'besucher_mann', 'besucher_senior', 'besucher_kind'];
 const WAND_DREH = { s: 0, o: HALB, n: Math.PI, w: -HALB };
 
 // Baut das ganze Gelände. plan = planVon(id) aus gelaende.js · gitter = wo man laufen kann (für die Besucher) ·
 // namen = { court: 'Centre Court', … } Namen und Texte der Orte, falls der Plan keinen eigenen Namen hat
 export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig = false } = {}) {
   const g = plan.g, G = new THREE.Group(), klick = [];
-  const bilder = { fenster: fensterBild(), publikum: publikumBild(), koern: koernBild(), dielen: dielenBild(), platz: {} };
+  const bilder = { fenster: fensterBild(), publikum: publikumBild(), koern: koernBild(), dielen: dielenBild(), fassade: fassadeBild(), platz: {} };
   // ---- Fertige Modelle ----
   const gewollt = new Set();                      // diese Modelle hätte das Gelände gern
   const M = (name) => { if (wenig || !name) return null; gewollt.add(name); return modell(name); };
@@ -199,6 +215,16 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
   const plaetze = {};        // Farbe → Liste aller Plätze dieser Farbe
   const netze = [], baeume = { laub: [], palme: [], pinie: [], zypresse: [] }, statuen = [], schirme = {}, zelte = [];
   const autos = [], masten = [], stuehle = [], baenke = [], fahnenMasten = [], fahnen = [], laternen = [], gitterTeile = [], wiesen = [];
+  // Straßen: weiße Striche [x, z, breit, tief], Bordsteine, Schranken, und die Fahrbahnen, auf denen draußen Autos fahren
+  const striche = [], gelbe = [], bordsteine = [], fahrbahnen = [], wartende = [];
+  const ASPHALT_DUNKEL = 0x5c5d62;
+  const strasseMalen = (el, laengs, mitte = true) => {
+    // Randlinien und ein gestrichelter Mittelstreifen
+    const lang = laengs === 'x' ? el.b : el.t, breit = laengs === 'x' ? el.t : el.b, n = Math.min(160, Math.floor(lang / 7));
+    const rein = (l, q, lb, qb) => striche.push(laengs === 'x' ? [el.x + l, el.z + q, lb, qb] : [el.x + q, el.z + l, qb, lb]);
+    for (const s of [-1, 1]) rein(0, s * (breit / 2 - 0.25), lang, 0.14);
+    if (mitte) for (let i = 0; i < n; i++) rein((i - (n - 1) / 2) * 7, 0, 3, 0.14);
+  };
   const tuerenVon = (nr) => plan.orte.filter((o) => o.teil === nr);
   const tuerBauen = (o, breit = 1.3, hoch = 2.1) => {
     const quer = o.seite === 'o' || o.seite === 'w';
@@ -216,13 +242,26 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
         // Für dieses Stadion gibt es ein eigenes Modell (z. B. Centre Court von Wimbledon mit Efeu)
         haupt = einpassen(sm, el.x, el.z, el.b, el.t, el.h * 1.12);
       } else {
-      const ecken = { oval: 36, rund: 36, acht: 8, eckig: 4 }[el.form || 'oval'], eckig = ecken <= 8;
+      // ---- Selbst gebautes Stadion: Fassade mit Pfeilern, echte Sitzstufen mit Zuschauern, Umgang oben, Dach, Anzeigetafel ----
+      const ecken = { oval: 40, rund: 40, acht: 8, eckig: 4 }[el.form || 'oval'], eckig = ecken <= 8;
       const dreh = eckig ? Math.PI / ecken : 0, k = eckig ? 1 / Math.cos(Math.PI / ecken) : 1;        // k: damit die geraden Seiten genau auf dem Rand liegen
-      const hb = el.b / 2, ht = el.t / 2, h = el.h, INNEN = 0.44;
+      const hb = el.b / 2, ht = el.t / 2, h = el.h, INNEN = 0.44, OBEN = 0.9;
       const form = (geo) => geo.rotateY(dreh).scale(hb, 1, ht);
-      haupt = neu(form(new THREE.CylinderGeometry(k, k, h, ecken, 1, true)), mat(el.farbe || 0xd0d0d0, { beide: true }), el.x, h / 2, el.z, true);
-      const pub = bilder.publikum.clone(); pub.needsUpdate = true; pub.repeat.set(Math.round((el.b + el.t) / 5), Math.max(1, Math.round(h / 3.5)));
-      neu(form(new THREE.CylinderGeometry(k * 0.985, k * INNEN, h * 0.9, ecken, 1, true)), mat(el.sitz || 0x8a8a90, { beide: true, bild: pub }), el.x, 0.3 + h * 0.45, el.z);
+      // Eine Form, die entsteht, wenn man eine Linie im Kreis herumdreht: punkte = [[Abstand von der Mitte, Höhe], …]
+      const dreh3d = (punkte) => form(new THREE.LatheGeometry(punkte.map(([rr, y]) => new THREE.Vector2(rr * k, y)), ecken));
+      const umfang = (el.b + el.t) * (eckig ? 2 : 1.6), wand = el.farbe || 0xd0d0d0;
+      // Fassade: Pfeiler und Fensterbänder, unten ein dunkler Sockel
+      const fas = bilder.fassade.clone(); fas.needsUpdate = true; fas.repeat.set(Math.max(4, Math.round(umfang / 5)), Math.max(1, Math.round(h / 4.5)));
+      haupt = neu(dreh3d([[1, 0], [1, h]]), mat(wand, { beide: true, bild: fas }), el.x, 0, el.z, true);
+      neu(dreh3d([[1.012, 0], [1.012, Math.min(1.1, h * 0.2)]]), mat(dunkler(wand, 0.62)), el.x, 0, el.z);
+      // Die Ränge: Stufe für Stufe nach oben, auf jeder Stufe eine Reihe Zuschauer
+      const reihen = Math.max(3, Math.min(16, Math.round(h / 0.8))), y0 = Math.min(1.1, h * 0.25), dr = (OBEN - INNEN) / reihen, dy = (h - 0.3 - y0) / reihen;
+      const stufen = [[INNEN, 0.3], [INNEN, y0]];
+      for (let i = 0; i < reihen; i++) stufen.push([INNEN + (i + 1) * dr, y0 + i * dy], [INNEN + (i + 1) * dr, y0 + (i + 1) * dy]);
+      const pub = bilder.publikum.clone(); pub.needsUpdate = true; pub.repeat.set(Math.round(umfang / 5), reihen / 8 + 0.02);
+      neu(dreh3d(stufen), mat(el.sitz || 0x8a8a90, { beide: true, bild: pub, kantig: true }), el.x, 0, el.z);
+      // Oben der Umgang mit Geländer
+      neu(dreh3d([[OBEN, h - 0.3], [1.03, h - 0.3], [1.03, h + 0.15], [1.0, h + 0.15], [1.0, h + 0.75]]), mat(dunkler(wand, 1.12), { beide: true, kantig: true }), el.x, 0, el.z, true);
       const feld = el.feld || g.feld;
       neu(form(new THREE.CircleGeometry(k * INNEN, ecken).rotateX(-HALB)), mat(el.wiese ? 0x4a9a3c : feld[1]), el.x, 0.3, el.z);
       if (!el.wiese || el.ort) {
@@ -235,18 +274,43 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
         const netz = neu(new THREE.BoxGeometry(PLATZ_B * gr * 0.62, 0.5, 0.06), mat(0x20242c), el.x, 0.62, el.z);
         if (quer) netz.rotation.y = HALB;
       }
-      const dachFarbe = el.dachFarbe || 0xf0f0f0, dy = h + 0.25;
-      const ring = (innen) => neu(form(new THREE.RingGeometry(k * innen, k * 1.04, ecken, 1).rotateX(-HALB)), mat(dachFarbe, { beide: true, rau: 0.6 }), el.x, dy, el.z, true);
-      if (el.dach === 'ring') ring(0.6);
+      const dachFarbe = el.dachFarbe || 0xf0f0f0, dm = () => mat(dachFarbe, { beide: true, rau: 0.55, kantig: eckig });
+      // Ein Vordach rundherum: außen niedrig, nach innen ansteigend, darunter ein dunkles Band aus Stahlträgern
+      const vordach = (innen, hoch = Math.max(1.6, h * 0.22)) => {
+        neu(dreh3d([[1.0, h + 0.75], [1.05, h + hoch]]), mat(0x4a5058, { beide: true, kantig: true }), el.x, 0, el.z);
+        neu(dreh3d([[1.07, h + hoch], [innen, h + hoch * 1.55], [innen, h + hoch * 1.55 + 0.25], [1.07, h + hoch + 0.3]]), dm(), el.x, 0, el.z, true);
+        return h + hoch * 1.55;
+      };
+      if (el.dach === 'ring') hoehe = vordach(0.6);
       else if (el.dach === 'schieb') {
-        // Schiebedach: zwei Hälften, in der Mitte offen, damit man den Platz sieht
-        ring(0.66);
-        for (const s of [-1, 1]) neu(new THREE.BoxGeometry(hb * 0.36, 0.5, ht * 1.3), mat(dachFarbe, { rau: 0.6 }), el.x + s * hb * 0.5, dy + 0.5, el.z, true);
-      } else if (el.dach === 'zu') neu(form(new THREE.CircleGeometry(k * 1.04, ecken).rotateX(-HALB)), mat(dachFarbe, { beide: true }), el.x, dy, el.z, true);
-      else if (el.dach === 'glas') neu(form(new THREE.CircleGeometry(k * 1.02, ecken).rotateX(-HALB)), mat(0xcfe4f0, { beide: true, durch: 0.15, rau: 0.2 }), el.x, dy, el.z);
-      else if (el.dach === 'blume') {
+        // Schiebedach: zwei Hälften auf Schienen, halb aufgefahren, damit man den Platz sieht
+        const dy2 = vordach(0.68);
+        for (const s of [-1, 1]) {
+          neu(new THREE.BoxGeometry(hb * 0.42, 0.45, ht * 1.36), mat(dachFarbe, { rau: 0.5 }), el.x + s * hb * 0.5, dy2 + 0.55, el.z, true);
+          neu(new THREE.BoxGeometry(hb * 2.1, 0.5, 0.7), mat(0x4a5058), el.x, dy2 + 0.15, el.z + s * ht * 0.7, true);        // die Schienen
+        }
+        hoehe = dy2 + 0.8;
+      } else if (el.dach === 'zu' || el.dach === 'glas') {
+        const glas = el.dach === 'glas', hoch = Math.max(1.6, h * 0.2);
+        neu(dreh3d([[1.0, h + 0.75], [1.05, h + hoch]]), mat(0x4a5058, { beide: true, kantig: true }), el.x, 0, el.z);
+        neu(dreh3d([[1.07, h + hoch], [0.6, h + hoch * 1.7], [0.001, h + hoch * 1.95]]), glas ? mat(0xcfe4f0, { beide: true, durch: 0.28, rau: 0.2 }) : dm(), el.x, 0, el.z, !glas);
+        hoehe = h + hoch * 2;
+      } else if (el.dach === 'blume') {
         // Acht Blätter wie bei einer Blume, leicht verdreht und halb geöffnet
-        for (let i = 0; i < 8; i++) neu(new THREE.RingGeometry(0.36, 1.07, 5, 1, i * Math.PI / 4 + 0.05, Math.PI / 4 - 0.16).rotateX(-HALB).scale(hb, 1, ht), mat(dachFarbe, { beide: true, rau: 0.5 }), el.x, dy + (i % 2) * 0.35, el.z, true);
+        for (let i = 0; i < 8; i++) neu(new THREE.RingGeometry(0.36, 1.07, 5, 1, i * Math.PI / 4 + 0.05, Math.PI / 4 - 0.16).rotateX(-HALB).scale(hb, 1, ht), mat(dachFarbe, { beide: true, rau: 0.5 }), el.x, h + 1 + (i % 2) * 0.35, el.z, true);
+        hoehe = h + 1.6;
+      } else if (h >= 7) {
+        // Offenes Stadion: vier Flutlicht-Masten an den Ecken
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) masten.push([el.x + sx * (hb + 1.2), 0, el.z + sz * (ht + 1.2)]);
+        hoehe = h + 0.8;
+      } else hoehe = h + 0.8;
+      // Anzeigetafel auf dem oberen Rand (bei Stadien ohne geschlossenes Dach)
+      if (h >= 5 && el.dach !== 'zu' && el.dach !== 'glas' && !el.wiese) {
+        const breit = Math.min(9, hb * 0.5), ty = h + 0.75 + breit * 0.22;
+        neu(new THREE.BoxGeometry(breit, breit * 0.42, 0.5), mat(0x15181e), el.x, ty, el.z - ht * 0.97, true);
+        const bild = new THREE.Mesh(new THREE.PlaneGeometry(breit * 0.92, breit * 0.34), new THREE.MeshBasicMaterial({ color: 0x1c4f9a }));
+        bild.userData.eigen = true; bild.position.set(el.x, ty, el.z - ht * 0.97 + 0.27); G.add(bild);
+        for (let i = 0; i < 2; i++) { const zeile = new THREE.Mesh(new THREE.PlaneGeometry(breit * 0.8, breit * 0.07), new THREE.MeshBasicMaterial({ color: 0xf2f2e6 })); zeile.userData.eigen = true; zeile.position.set(el.x, ty + (i ? -1 : 1) * breit * 0.07, el.z - ht * 0.97 + 0.29); G.add(zeile); }
       }
       if (el.spitzen) for (const sx of [-1, 1]) for (const sz of [-1, 1]) neu(new THREE.CylinderGeometry(0.5, 1.1, h * 1.75, 8), mat(0xf4f4f4), el.x + sx * hb * 0.86, h * 0.875, el.z + sz * ht * 0.86, true);
       }
@@ -304,6 +368,7 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
       hoehe = 1.2;
     } else if (el.a === 'flaeche') {
       flach(el.x, el.z, el.b, el.t, el.farbe, el.e || 1, el.rund, el.wasser ? { rau: 0.2, metall: 0.15 } : {});
+      if (el.strasse) { strasseMalen(el, el.strasse); fahrbahnen.push({ laengs: el.strasse, x: el.x, z: el.z, breit: Math.min(el.b, el.t) }); }
       if (el.e === 2 && !el.wasser && !el.rund && (el.farbe === 0x5c9a4c || el.farbe === 0x4f8a45) && Math.min(el.b, el.t) >= 10) wiesen.push(el);
       if (el.modell) { const bm = M(el.modell); if (bm) stueck(bm, el.x, el.z, 0, (el.gr || 1)); }
       if (el.wasser && el.e) neu(el.rund ? new THREE.TorusGeometry(0.5, 0.012, 6, 40).rotateX(HALB).scale(el.b, 14, el.t) : new THREE.BoxGeometry(el.b + 0.5, 0.3, el.t + 0.5), mat(0xd8d4c8), el.x, el.rund ? 0.12 : -0.02, el.z);       // Beckenrand
@@ -396,6 +461,51 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
     } else if (el.a === 'glasdach') {
       neu(new THREE.BoxGeometry(el.b, 0.3, el.t), mat(0xcfe4f0, { durch: 0.3, rau: 0.2 }), el.x, el.h, el.z);
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) neu(new THREE.BoxGeometry(0.4, el.h, 0.4), mat(0xb8bcc4), el.x + sx * (el.b / 2 - 0.2), el.h / 2, el.z + sz * (el.t / 2 - 0.2));
+    } else if (el.a === 'strasse') {
+      // ---- Straßen für den Fahrdienst (wo sie liegen, rechnet strassenFuer in gelaende.js aus) ----
+      if (el.art === 'aussen') {
+        flach(el.x, el.z, el.b, el.t, ASPHALT_DUNKEL, 1.5);
+        strasseMalen(el, el.laengs);
+        fahrbahnen.push({ laengs: el.laengs, x: el.x, z: el.z, breit: Math.min(el.b, el.t) });
+      } else if (el.art === 'zufahrt' || el.art === 'wende') {
+        flach(el.x, el.z, el.b, el.t, ASPHALT_DUNKEL, 3, el.rund);
+        if (el.art === 'zufahrt') for (const s of [-1, 1]) bordsteine.push([el.x + s * (el.b / 2 + 0.1), el.z, 0.2, el.t]);
+        else neu(new THREE.CylinderGeometry(1.5, 1.5, 0.22, 20), mat(0x6a9a52), el.x, 0.11, el.z);       // die kleine Grün-Insel in der Mitte des Wendeplatzes
+      } else if (el.art === 'bucht') {
+        flach(el.x, el.z, el.b, el.t, ASPHALT_DUNKEL, 3);
+        // Bordstein an der Seite, an der man einsteigt, und eine gelb umrandete Haltebucht für den Wagen
+        const [ax, az] = el.auto;
+        bordsteine.push([el.x, el.z + el.t / 2 + 0.1, el.b, 0.2]);
+        striche.push([el.x, el.z - el.t / 2 + 0.2, el.b, 0.12]);
+        for (const [dx, dz, b, t] of [[0, -1.25, 13.4, 0.12], [-6.7, 0, 0.12, 2.5], [6.7, 0, 0.12, 2.5]]) gelbe.push([ax - 3.4 + dx, az + dz, b, t]);
+        // Zebrastreifen: Hier gehen die Besucher über die Vorfahrt
+        const zx = ax + (el.x + el.b / 2 - ax > 9 ? 7.5 : -9.5);
+        if (Math.abs(zx - el.x) < el.b / 2 - 1.5) for (let i = 0; i < 5; i++) striche.push([zx + (i - 2) * 0.9, el.z, 0.5, el.t - 0.5]);
+        // Der Name auf der Straße
+        const sb = strassenSchrift('FAHRDIENST');
+        const sm = neu(new THREE.PlaneGeometry(6.2, 1.1).rotateX(-HALB), new THREE.MeshBasicMaterial({ map: sb, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -40 }), ax - 0.4, 0.19, el.z - 1.25);
+        sm.rotation.y = Math.PI;
+      } else if (el.art === 'schranke') {
+        // Eine offene Schranke am Rand des Geländes: Pfosten, rot-weißer Balken (steht schräg nach oben) und ein Wachhäuschen
+        const quer = el.laengs === 'x', halb = (quer ? el.t : el.b) / 2 + 0.5;
+        const px = el.x + (quer ? 0 : -halb), pz = el.z + (quer ? -halb : 0);
+        neu(new THREE.BoxGeometry(0.35, 1.1, 0.35), mat(0xd8d8d8), px, 0.55, pz, true);
+        const balken = neu(new THREE.BoxGeometry(4.6, 0.12, 0.12).translate(2.3, 0, 0), mat(0xffffff, { bild: schrankenBild() }), px, 1.05, pz, true);
+        balken.rotation.set(0, quer ? -HALB : 0, 1.05);
+        neu(new THREE.BoxGeometry(1.6, 2.4, 1.6), mat(0xe8e6de), el.x + (quer ? 0 : halb + 1), 1.2, el.z + (quer ? halb + 1 : 0), true);
+        neu(new THREE.BoxGeometry(1.9, 0.14, 1.9), mat(0x3a4048), el.x + (quer ? 0 : halb + 1), 2.47, el.z + (quer ? halb + 1 : 0), true);
+        neu(new THREE.BoxGeometry(quer ? 1.62 : 1.1, 0.8, quer ? 1.1 : 1.62), mat(0x8ab4d0, { rau: 0.2 }), el.x + (quer ? 0 : halb + 1), 1.6, el.z + (quer ? halb + 1 : 0));
+      } else if (el.art === 'wagen') {
+        wartende.push([el.x, el.z]);
+      } else if (el.art === 'warten') {
+        // Wartehäuschen: Glasdach auf vier Pfosten, Rückwand aus Glas, eine Bank und ein Schild
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) neu(new THREE.BoxGeometry(0.1, 2.4, 0.1), mat(0x3a4048, { metall: 0.4, rau: 0.5 }), el.x + sx * (el.b / 2 - 0.1), 1.2, el.z + sz * (el.t / 2 - 0.1), true);
+        neu(new THREE.BoxGeometry(el.b + 0.5, 0.1, el.t + 0.7), mat(0x3a4048, { metall: 0.3, rau: 0.5 }), el.x, 2.45, el.z, true);
+        neu(new THREE.BoxGeometry(el.b - 0.2, 1.9, 0.05), mat(0xbfdcea, { durch: 0.35, rau: 0.15 }), el.x, 1.25, el.z + el.t / 2 - 0.1);
+        neu(new THREE.BoxGeometry(el.b - 1, 0.08, 0.45), mat(0x8a6a44), el.x, 0.5, el.z + 0.2, true);
+        for (const sx of [-1, 1]) neu(new THREE.BoxGeometry(0.08, 0.5, 0.4), mat(0x3a4048), el.x + sx * (el.b / 2 - 0.8), 0.25, el.z + 0.2);
+        hoehe = 2.5;
+      }
     } else if (el.a === 'auto') {
       // Das Auto vom Fahrdienst: bei den großen Turnieren eine schwarze Limousine, sonst ein großer Geländewagen oder ein Kleinbus
       const am = M(g.klein ? (g.stufe >= 2 ? 'auto_suv' : 'auto_van') : 'auto_limousine');
@@ -424,15 +534,6 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
       const em = M(el.modell);
       if (em) stueck(em, el.x, el.z, (el.dreh || 0) * Math.PI / 180, el.gr || 1);
     }
-    if (el.a === 'stadion' || el.a === 'haus') {
-      // Besondere Leute an besonderen Türen: Ordner am Stadion, Kamerateam an der Presse, ein Spieler mit Tasche am Trainingsplatz
-      for (const o of tueren) {
-        const wer = o.id === 'court' ? 'ordner' : o.id === 'presse' ? 'kamerateam' : null, pm = M(wer);
-        if (!pm) continue;
-        const quer = o.seite === 'o' || o.seite === 'w', aus = o.seite === 'o' || o.seite === 's' ? 0.7 : -0.7;
-        stueck(pm, o.wx + (quer ? aus : 1.9), o.wz + (quer ? 1.9 : aus), WAND_DREH[o.seite]);
-      }
-    }
     // ---- Begehbares Haus: alles, was bis hier gebaut wurde, ist „außen“ (wird versteckt, wenn man drinnen ist) ----
     const raum = raumVon.get(nr);
     if (raum) {
@@ -449,6 +550,7 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
         if (mm) stueck(mm, mo.x, mo.z, mo.dreh, 1, 1, 1, false, innen);
         else drin(new THREE.BoxGeometry(1.4, 0.9, 0.9), mat(0x8a7a66), mo.x, 0.45, mo.z).rotation.y = mo.dreh;
       }
+      if (raum.sachen && raum.sachen.length) innen.add(moebelBauen(raum.sachen));       // alles Selbstgebaute: Regale, Tische, Pflanzen …
       G.add(innen);
       raeume.push({ r: raum, aussen, innen });
     }
@@ -553,6 +655,38 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
     farbig(viele(new THREE.BoxGeometry(1.8, 0.75, 4.2).translate(0, 0.7, 0), mat(0xffffff, { rau: 0.4 }), autos, true), autos.map((a) => [0, 0, 0, 0, 0, LACK[a[5]]]));
     viele(new THREE.BoxGeometry(1.6, 0.55, 2.2).translate(0, 1.35, -0.2), mat(0x2a3440, { rau: 0.3 }), autos);
   }
+  // ---- Straßen: Striche, Bordsteine, der zweite wartende Wagen und die Autos, die draußen vorbeifahren ----
+  const streifen = (liste, farbe, y, hoch = 0) => {
+    if (!liste.length) return;
+    const geo = hoch ? new THREE.BoxGeometry(1, hoch, 1) : new THREE.PlaneGeometry(1, 1).rotateX(-HALB);
+    const im = new THREE.InstancedMesh(geo, hoch ? mat(farbe) : new THREE.MeshBasicMaterial({ color: farbe, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -30 }), liste.length), o = new THREE.Object3D();
+    liste.forEach(([x, z, b, t], i) => { o.position.set(x, y, z); o.scale.set(b, 1, t); o.updateMatrix(); im.setMatrixAt(i, o.matrix); });
+    im.userData.eigen = true; im.frustumCulled = false; im.receiveShadow = !!hoch;
+    G.add(im);
+  };
+  streifen(striche, 0xeeeeea, 0.2); streifen(gelbe, 0xf0c832, 0.2); streifen(bordsteine, 0xb8b6ae, 0.09, 0.18);
+  const dienstM = M(g.klein ? 'auto_van' : 'auto_suv');
+  for (const [x, z] of wartende) {
+    if (dienstM) stueck(dienstM, x, z, HALB);
+    else { neu(new THREE.BoxGeometry(4.4, 0.8, 1.9), mat(0x22242a, { rau: 0.4 }), x, 0.75, z, true); neu(new THREE.BoxGeometry(2.6, 0.6, 1.7), mat(0x39424e, { rau: 0.3 }), x - 0.2, 1.4, z, true); }
+  }
+  // Fahrende Autos: Auf jeder Straße draußen sind ein paar unterwegs, auf jeder Spur in ihre Richtung (bewegt werden sie in anlage.js)
+  const fahrer = [];
+  if (!wenig) fahrbahnen.slice(0, 3).forEach((bahn, b) => {
+    for (let i = 0; i < 3; i++) {
+      const hin = (i + b) % 2 === 0, m3 = [a1, a2, dienstM][(i + b) % 3];
+      let wagen;
+      if (m3) { wagen = stueck(m3, 0, 0, 0); if (m3 !== dienstM) { wagen.material = m3.mat.clone(); wagen.material.color.setHex(hell(LACK[(i * 2 + b) % LACK.length])); wagen.userData.nurStoff = true; } }
+      else {
+        wagen = new THREE.Group(); G.add(wagen);
+        const unten = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.75, 4.2).translate(0, 0.7, 0), mat(LACK[(i * 2 + b) % LACK.length], { rau: 0.4 })), oben = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.55, 2.2).translate(0, 1.35, -0.2), mat(0x2a3440, { rau: 0.3 }));
+        for (const t of [unten, oben]) { t.userData.eigen = true; t.castShadow = schatten; wagen.add(t); }
+      }
+      // Rechtsverkehr: Wer nach Osten (+x) fährt, fährt auf der südlichen Spur; wer nach Süden (+z) fährt, auf der westlichen
+      const spur = Math.min(1.9, bahn.breit / 4) * (hin ? 1 : -1);
+      fahrer.push({ wagen, laengs: bahn.laengs, mitte: bahn.laengs === 'x' ? bahn.x : bahn.z, quer: bahn.laengs === 'x' ? bahn.z + spur : bahn.x - spur, hin, tempo: 9 + ((i * 7 + b * 3) % 5), weg: (i * 131 + b * 77) % 460, lang: 460 });
+    }
+  });
   // ---- Flutlicht, Schiedsrichterstühle, Bänke, Fahnen ----
   const lichtM = masten.length <= 24 ? M('flutlicht') : null;        // das Flutlicht-Modell hat viele Dreiecke: nur, wenn es wenige Masten sind
   if (lichtM) vieleM(lichtM, masten.map(([x, y, z], i) => [x, y, z, x < mx ? HALB : -HALB]), false);
@@ -589,47 +723,36 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
   viele(new THREE.CylinderGeometry(0.05, 0.06, 6, 5).translate(0, 3, 0), mat(0xd8d8d8), fahnenMasten);
   farbig(viele(new THREE.BoxGeometry(1.2, 0.8, 0.04), mat(0xffffff, { beide: true }), fahnen), fahnen);
 
-  // ---- Besucher: bunte Figuren, die in der Nähe der Türen herumstehen ----
-  if (!wenig) {
-    let z = 4711;
-    const zf = () => { z = (z * 16807) % 2147483647; return z / 2147483647; };
-    const leute = [], n = g.leute ?? 110;
-    for (let i = 0, versuch = 0; i < n && versuch < n * 20; versuch++) {
-      const o = plan.orte[Math.floor(zf() * plan.orte.length)], w = zf() * 6.283, weit = 3.5 + zf() * 22;
-      const x = o.tx + Math.sin(w) * weit, zz = o.tz + Math.cos(w) * weit;
-      if (!frei(gitter, x, zz) || !frei(gitter, x + 0.6, zz) || !frei(gitter, x - 0.6, zz) || plan.orte.some((p) => Math.hypot(p.tx - x, p.tz - zz) < 2.4)) continue;
-      if ((plan.raeume || []).some((h) => Math.abs(x - h.x) < h.b / 2 + 0.5 && Math.abs(zz - h.z) < h.t / 2 + 0.5)) continue;       // nicht in den Häusern herumstehen
-      leute.push([x, 0, zz, w, 0.9 + zf() * 0.2]); i++;
-    }
-    const bm = BESUCHER.map((n) => M(n));
-    if (bm.every(Boolean)) bm.forEach((m, k) => vieleM(m, leute.filter((_, i) => i % 4 === k).map(([x, y, zz, w, gr], i) => [x, y, zz, w, gr, TOENE[(i + k) % TOENE.length]])));
-    else {
-    const koerper = viele(new THREE.CapsuleGeometry(0.2, 0.95, 2, 6).translate(0, 0.72, 0), mat(0xffffff), leute, true);
-    const kopf = viele(new THREE.SphereGeometry(0.16, 8, 6).translate(0, 1.55, 0), mat(0xffffff), leute);
-    const kleider = [0xe84a3a, 0x3a6ae8, 0xf0d040, 0x3aa85a, 0xf4f4f0, 0xe89ac0, 0x404858, 0xf08a3a, 0x8a5ac8, 0x3ab8c8], haut = [0xf0c8a0, 0xd8a078, 0xa87850, 0x7a5236, 0xf4d8b8];
-    const c = new THREE.Color();
-    leute.forEach((_, i) => { koerper.setColorAt(i, c.setHex(kleider[Math.floor(zf() * kleider.length)])); kopf.setColorAt(i, c.setHex(haut[Math.floor(zf() * haut.length)])); });
-    }
-  }
   bilder.fenster.userData.weg = bilder.publikum.userData.weg = true;
-  return { gruppe: G, klick, boden, bilder, gewollt, raeume };
+  fahrerSetzen(fahrer, 0);
+  return { gruppe: G, klick, boden, bilder, gewollt, raeume, fahrer };
 }
 
-// Besucher, die über das Gelände LAUFEN (die anderen stehen nur herum). Gibt zwei Formen zurück: Körper und Köpfe.
-// Bewegt werden sie in anlage.js.
-export function laeuferBauen(n, schatten = true, mitModellen = true) {
-  const bm = mitModellen ? BESUCHER.map((name) => modell(name)) : [];
-  if (bm.length && bm.every(Boolean)) {
-    // Mit Modellen: vier verschiedene Besucher, jeder Läufer bekommt eines davon
-    const teile = bm.map((m) => { const im = new THREE.InstancedMesh(m.geo, m.mat, Math.ceil(n / 4)), c = new THREE.Color(); const nichts = new THREE.Matrix4().makeScale(0, 0, 0); for (let i = 0; i < im.count; i++) { im.setColorAt(i, c.setHex(TOENE[i % TOENE.length])); im.setMatrixAt(i, nichts); } im.frustumCulled = false; im.castShadow = schatten; return im; });
-    return { teile, setze: (i, matrix) => teile[i % 4].setMatrixAt(Math.floor(i / 4), matrix) };
+// Die Autos auf den Straßen draußen ein Stück weiterfahren lassen. Am Ende der Straße tauchen sie am Anfang wieder auf.
+export function fahrerSetzen(fahrer, dt) {
+  for (const f of fahrer) {
+    f.weg = (f.weg + f.tempo * dt) % f.lang;
+    const l = f.mitte + (f.hin ? 1 : -1) * (f.weg - f.lang / 2);
+    if (f.laengs === 'x') { f.wagen.position.set(l, 0, f.quer); f.wagen.rotation.y = f.hin ? HALB : -HALB; }
+    else { f.wagen.position.set(f.quer, 0, l); f.wagen.rotation.y = f.hin ? 0 : Math.PI; }
   }
-  const koerper = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.2, 0.95, 2, 6).translate(0, 0.72, 0), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }), n);
-  const kopf = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 8, 6).translate(0, 1.55, 0), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }), n);
-  const kleider = [0xe84a3a, 0x3a6ae8, 0xf0d040, 0x3aa85a, 0xf4f4f0, 0xe89ac0, 0xf08a3a, 0x8a5ac8, 0x3ab8c8], haut = [0xf0c8a0, 0xd8a078, 0xa87850, 0x7a5236, 0xf4d8b8], c = new THREE.Color();
-  for (let i = 0; i < n; i++) { koerper.setColorAt(i, c.setHex(kleider[i % kleider.length])); kopf.setColorAt(i, c.setHex(haut[(i * 3) % haut.length])); }
-  for (const m of [koerper, kopf]) { m.userData.eigen = true; m.frustumCulled = false; m.castShadow = schatten; }
-  return { teile: [koerper, kopf], setze: (i, matrix) => { koerper.setMatrixAt(i, matrix); kopf.setMatrixAt(i, matrix); } };
+}
+// Weiße Schrift, die auf die Straße gemalt ist
+function strassenSchrift(text) {
+  const b = document.createElement('canvas'); b.width = 512; b.height = 96;
+  const s = b.getContext('2d');
+  s.fillStyle = '#f0f0ea'; s.font = 'bold 78px sans-serif'; s.textAlign = 'center'; s.textBaseline = 'middle';
+  s.fillText(text, 256, 52, 500);
+  const bild = new THREE.CanvasTexture(b); bild.colorSpace = THREE.SRGBColorSpace; bild.anisotropy = 4;
+  return bild;
+}
+// Rot-weiße Streifen für die Schranke
+function schrankenBild() {
+  const b = document.createElement('canvas'); b.width = 64; b.height = 8;
+  const s = b.getContext('2d');
+  for (let i = 0; i < 8; i++) { s.fillStyle = i % 2 ? '#f4f4f0' : '#d0302a'; s.fillRect(i * 8, 0, 8, 8); }
+  const bild = new THREE.CanvasTexture(b); bild.colorSpace = THREE.SRGBColorSpace;
+  return bild;
 }
 // Der goldene Glücksball mit einem leuchtenden Ring auf dem Boden
 export function gluecksballBauen() {

@@ -24,6 +24,7 @@
 // Ein Baustein mit „info“ ist eine Sehenswürdigkeit: Wer hingeht, bekommt den Text zu lesen.
 
 import { kleinesGelaende } from './gelaendeklein.js';
+import { gitterBauen, frei, weg } from './wege.js';
 
 // So groß ist ein Tennisplatz auf dem Gelände (mit Auslauf) und so viel Abstand ist zum nächsten
 export const PLATZ_L = 13, PLATZ_B = 7, LUECKE_B = 1.2, LUECKE_L = 1.5;
@@ -115,7 +116,7 @@ export const GELAENDE = {
       F(60, 0, 8, 500, ASPHALT), F(-64, 0, 7, 500, ASPHALT),                                          // Church Road (Osten), Somerset Road (Westen)
       F(110, -10, 46, 70, WASSER, { rund: true }), B('laub', { feld: [115, 0, 90, 240], n: 60 }),     // See und Park hinter der Straße
       { a: 'tuerme', p: [[-84, -50, 12, 10, 7], [-86, -20, 12, 12, 8], [-84, 12, 12, 10, 7], [-86, 44, 12, 12, 8]], farbe: 0xb8866a, dach: 0x5a4a44 },
-      S('Centre Court', 5, 10, 36, 36, 12, { modell: 'stadion_wim', form: 'acht', dach: 'schieb', farbe: 0x1f4a2e, sitz: 0x2a5a3a, dachFarbe: 0xe8ece8, ort: 'court', tuer: 's',
+      S('Centre Court', 5, 10, 36, 36, 12, { form: 'acht', dach: 'schieb', farbe: 0x1f4a2e, sitz: 0x2a5a3a, dachFarbe: 0xe8ece8, ort: 'court', tuer: 's',
         text: 'Der berühmteste Tennisplatz der Welt: 15.000 Plätze, heiliger Rasen und ein Dach wie eine Ziehharmonika. Über dem Spielereingang steht ein Satz aus einem Gedicht über Sieg und Niederlage.' }),
       S('No. 1 Court', 8, -38, 34, 34, 11, { form: 'rund', dach: 'schieb', farbe: 0x1f4a2e, sitz: 0x2a5a3a, dachFarbe: 0xe8ece8, tuer: 'o',
         info: 'Das zweite große Stadion (über 12.000 Plätze). Seit 2019 hat es auch ein Dach.' }),
@@ -204,7 +205,7 @@ export const GELAENDE = {
     rand: { x0: -90, x1: 90, z0: -74, z1: 74 }, umland: 0x8a8a8c, boden: 0xb4b4b0, feld: [0x4a3a8c, 0x2a8a9a],
     teile: [
       F(0, -88, 700, 10, ASPHALT), F(120, 0, 10, 500, ASPHALT),
-      S('Football-Stadion', 0, -30, 86, 74, 20, { modell: 'mal_miami', form: 'acht', dach: 'ring', spitzen: true, farbe: 0xe8e8e4, sitz: 0x2a9aa8, wiese: true, ort: 'court', tuer: 's',
+      S('Football-Stadion', 0, -30, 86, 74, 20, { form: 'acht', dach: 'ring', spitzen: true, farbe: 0xe8e8e4, sitz: 0x2a9aa8, wiese: true, ort: 'court', tuer: 's',
         tueren: [{ ort: 'kraft', s: 's', v: -18, name: 'Kraftraum' }, { ort: 'physio', s: 's', v: 18, name: 'Physio' }, { ort: 'presse', s: 'o', v: 10, name: 'Pressesaal' }],
         text: 'Hier spielt sonst die Football-Mannschaft von Miami. Für das Tennisturnier wird auf dem Rasen ein Tennisstadion mit fast 14.000 Plätzen aufgebaut – in einem Stadion für 65.000!' }),
       F(0, 14, 170, 10, 0xd8d0c0, { e: 2 }), { a: 'leinwand', x: 34, z: 13, b: 10, h: 5, name: 'Dolphin Plaza', tuer: 's', info: 'Die breite Straße zwischen dem Stadion und den Tennisplätzen: Palmen, Musik, bunte Wandbilder und eine große Leinwand.' },
@@ -232,7 +233,7 @@ export const GELAENDE = {
       { a: 'modell', modell: 'mal_yacht', x: -30, z: 82, dreh: 12 }, { a: 'modell', modell: 'mal_yacht', x: 44, z: 104, dreh: -20, gr: 0.8 }, { a: 'modell', modell: 'mal_yacht', x: 96, z: 74, dreh: 80, gr: 0.6 },      // Yachten vor der Küste
       F(0, -56, 700, 7, ASPHALT),
       { a: 'tuerme', p: [[-150, -30, 16, 16, 42], [-170, 0, 14, 14, 56], [-140, 14, 14, 14, 34], [-190, -40, 18, 16, 48], [-160, 34, 12, 12, 28]], farbe: 0xe8dcc8, dach: 0xc8b8a0 },    // die Hochhäuser von Monaco
-      S('Court Rainier III', 4, 8, 36, 30, 8, { modell: 'stadion_mc', form: 'eckig', farbe: 0xe8dcc0, sitz: 0x8a8a90, ort: 'court', tuer: 's',
+      S('Court Rainier III', 4, 8, 36, 30, 8, { form: 'eckig', farbe: 0xe8dcc0, sitz: 0x8a8a90, ort: 'court', tuer: 's',
         text: 'Der Centre Court (10.200 Plätze), benannt nach einem Fürsten von Monaco. Von der Tribüne schaut man über den roten Sand direkt aufs blaue Meer.' }),
       H('Clubhaus', 4, -27, 36, 10, 8, { farbe: 0xe8b890, dachFarbe: 0xc86a4a, dach: 'sattel',
         tueren: [{ ort: 'kraft', s: 's', v: -13 }, { ort: 'essen', s: 's', v: 0, name: 'Terrasse am Clubhaus' }, { ort: 'physio', s: 's', v: 13 }],
@@ -378,7 +379,7 @@ export const GELAENDE = {
       H('Pressezentrum', 30, -46, 14, 9, 5, { farbe: 0x4a5a6a, ort: 'presse', tuer: 'w' }),
       H('Besaiter', 30, 30, 7, 6, 3.2, { farbe: 0x6a4ac8, ort: 'saiten', tuer: 'w' }),
       { a: 'leinwand', x: -22, z: 34, b: 10, h: 5, dreh: 180 },
-      ZAUN(-14, 36), AUTO(8, 40),
+      ZAUN(-14, 36), AUTO(0, -57),
       B('laub', { linie: [-78, 63, 78, 63], n: 14 }), B('laub', { linie: [-79, -60, -79, 56], n: 10 }), B('laub', { linie: [79, -60, 79, 56], n: 10 }),
     ],
   },
@@ -459,6 +460,141 @@ const MOEBEL = { kraft: ['innen_kraft', 'innen_laufband'], physio: ['innen_liege
 const begehbar = (el) => Math.min(el.b, el.t) >= 6 && el.dach !== 'glas' && el.dach !== 'zelt' && !el.modell && (!!el.ort || (el.tueren || []).some((t) => t.ort));
 const TUER_VOR = 1.9;        // so weit vor der Wand liegt der Punkt, an dem man „an der Tür“ steht
 
+// ---- Einrichtung der begehbaren Häuser ----
+// Zu den wenigen fertigen Möbel-Modellen kommt viel Selbstgebautes (aus Kisten und Rollen, siehe moebel.js),
+// damit kein Raum leer aussieht. Hier wird nur ausgerechnet, WAS WO steht:  w = an der Wand, m = mitten im Raum.
+export const SACHEN = {
+  kraft: { w: ['hantelregal', 'spiegel', 'rad', 'gymbaelle', 'sprossen', 'wasser', 'rad', 'spiegel'], m: ['hantelbank', 'matte', 'rad'] },
+  physio: { w: ['regal', 'liege', 'eiswanne', 'schrank', 'liege', 'wasser'], m: ['liege', 'hocker'] },
+  essen: { w: ['theke', 'kuehlschrank', 'eckbank', 'pflanze', 'eckbank', 'theke'], m: ['tisch4'] },
+  saiten: { w: ['werkbank', 'schlaegerwand', 'rollen', 'regal', 'schlaegerwand'], m: ['werktisch'] },
+  presse: { w: ['stellwand', 'schreibtisch', 'stativ', 'schreibtisch', 'pflanze'], m: ['stuhlreihe'] },
+  hotel: { w: ['sofa2', 'pflanze', 'regal', 'koffer', 'lampe', 'sofa2'], m: ['sessel', 'tisch4'] },
+  sonst: { w: ['bank', 'pflanze', 'regal', 'schrank', 'koffer'], m: ['sessel'] },
+};
+const OHNE_SPERRE = ['matte'];                 // darüber kann man einfach laufen
+function einrichten(r, sperren, rand, abHier) {
+  r.sachen = [];
+  const hb = r.b / 2, ht = r.t / 2, tueren = r.tueren.filter((o) => !o.info);
+  if (!tueren.length) return;
+  const lang = r.b >= r.t;                      // liegt der Raum quer (lange Seite in x-Richtung)?
+  // Zu welcher Tür gehört eine Stelle? Danach richtet sich, was dort steht (Kraftraum-Ecke, Physio-Ecke …)
+  const thema = (x, z) => {
+    let best = tueren[0], bd = 1e9;
+    for (const o of tueren) { const d = Math.hypot(o.wx - x, o.wz - z); if (d < bd) { bd = d; best = o; } }
+    return SACHEN[best.id] ? best.id : (/Club|Hotel|Spieler|Lounge/.test(r.name) ? 'hotel' : 'sonst');
+  };
+  const nahTuer = (x, z, weit) => r.tueren.some((o) => Math.hypot(o.wx - x, o.wz - z) < weit);
+  const nahMoebel = (x, z, weit) => r.moebel.some((m) => Math.hypot(m.x - x, m.z - z) < weit) || r.sachen.some((m) => Math.hypot(m.x - x, m.z - z) < weit * 0.6);
+  const zaehler = {};
+  const naechstes = (x, z, wo) => { const t = thema(x, z), liste = SACHEN[t][wo], k = t + wo; zaehler[k] = (zaehler[k] || 0) + 1; return liste[(zaehler[k] - 1) % liste.length]; };
+  const hin = (art, x, z, dreh, b, t) => {
+    r.sachen.push({ art, x, z, dreh });
+    if (!OHNE_SPERRE.includes(art)) sperren.push({ x, z, b, t });
+  };
+  // 1. An den Wänden entlang, alle 2,4 m ein Stück (mit der Rückseite zur Wand)
+  for (const [seite, [sx, sz]] of Object.entries(SEITEN)) {
+    const halb = sx ? ht : hb, n = Math.floor((halb * 2 - 3.2) / 2.4) + 1;
+    for (let i = 0; i < n; i++) {
+      const l = (i - (n - 1) / 2) * 2.4;
+      const x = sx ? r.x + sx * (hb - 0.78) : r.x + l, z = sx ? r.z + l : r.z + sz * (ht - 0.78);
+      if (nahTuer(x, z, 2.5) || nahMoebel(x, z, 2.0)) continue;
+      hin(naechstes(x, z, 'w'), x, z, Math.atan2(-sx, -sz), sx ? 0.9 : 1.9, sx ? 1.9 : 0.9);
+    }
+  }
+  // 2. Mitten im Raum: Inseln. Ist der Raum breit genug, stehen sie links und rechts vom Mittelgang, sonst in einer Reihe.
+  //    Nach jeder Insel wird nachgeprüft, ob man von jeder Tür noch in die Mitte kommt – wenn nicht, kommt sie wieder weg.
+  const reihe = (halb) => { const l = []; if (halb - 2.9 < 2.5) return halb >= 4.4 ? [0] : l; for (let a = 2.5; a <= halb - 2.9 + 0.01; a += 4.2) l.push(-a, a); return l; };
+  const kommtDurch = () => {
+    const G = gitterBauen({ x0: rand.x0 + Math.floor(r.x - hb - 4 - rand.x0), x1: rand.x0 + Math.ceil(r.x + hb + 4 - rand.x0), z0: rand.z0 + Math.floor(r.z - ht - 4 - rand.z0), z1: rand.z0 + Math.ceil(r.z + ht + 4 - rand.z0) }, sperren.slice(abHier));
+    let mx = r.x, mz = r.z, da = false;
+    for (let i = 0; i < 40 && !da; i++) { mx = r.x + ((i * 7) % 5 - 2) * 0.8; mz = r.z + ((i * 3) % 5 - 2) * 0.8; da = frei(G, mx, mz); }
+    return da && tueren.every((o) => !frei(G, o.tx, o.tz) || weg(G, o.tx, o.tz, mx, mz));
+  };
+  for (const dx of reihe(hb)) for (const dz of reihe(ht)) {
+    const x = r.x + dx, z = r.z + dz;
+    if ((dx === 0 && dz === 0) || nahTuer(x, z, 3.2) || nahMoebel(x, z, 2.6)) continue;
+    const o = tueren.reduce((p, q) => (Math.hypot(q.wx - x, q.wz - z) < Math.hypot(p.wx - x, p.wz - z) ? q : p)), [sx, sz] = SEITEN[o.seite];
+    const n = sperren.length, art = naechstes(x, z, 'm');
+    hin(art, x, z, Math.atan2(-sx, -sz), 1.7, 1.7);       // schaut von der Tür weg (zum Podium, zur Theke …)
+    if (!kommtDurch()) { r.sachen.pop(); sperren.length = n; }
+  }
+  // 3. In den Ecken stehen Pflanzen
+  for (const ex of [-1, 1]) for (const ez of [-1, 1]) {
+    const x = r.x + ex * (hb - 0.55), z = r.z + ez * (ht - 0.55);
+    if (!nahTuer(x, z, 2.2) && !r.sachen.some((m) => Math.hypot(m.x - x, m.z - z) < 1.3) && !r.moebel.some((m) => Math.hypot(m.x - x, m.z - z) < 1.4)) hin('pflanze', x, z, 0, 0.6, 0.6);
+  }
+  // 4. Ein Teppich in der Mitte (nur zum Anschauen, man läuft darüber)
+  if (Math.min(r.b, r.t) >= 8) r.sachen.push({ art: 'teppich', x: r.x, z: r.z, dreh: lang ? 0 : Math.PI / 2, farbe: tueren[0].id });
+}
+
+// ---- Straßen für den Fahrdienst ----
+// Das Auto vom Fahrdienst soll nicht einfach irgendwo herumstehen. Darum bekommt es:
+//   • eine Vorfahrt (ein Stück Straße mit Haltebucht, Wartehäuschen und einem zweiten wartenden Wagen),
+//   • eine Zufahrt bis zum Rand des Geländes (mit Schranke),
+//   • draußen eine Straße mit Mittelstreifen, auf der Autos fahren.
+// Probiert werden alle vier Richtungen; genommen wird die kürzeste, bei der kein Haus und kein Platz im Weg ist.
+const BUCHT_LANG = 30, BUCHT_BREIT = 5.2, ZUFAHRT_BREIT = 5, STRASSE_BREIT = 7.5, STRASSE_WEG = 10;      // alles in Metern
+function strassenFuer(g, teile, fest) {
+  const auto = teile.find((el) => el.a === 'auto'), r = g.rand;
+  // Lange graue Flächen, die es im Plan schon gibt, sind auch Straßen: Sie bekommen Mittelstreifen und fahrende Autos
+  const schon = teile.filter((el) => el.a === 'flaeche' && el.farbe === ASPHALT && !el.rund && Math.max(el.b, el.t) >= 200 && Math.min(el.b, el.t) <= 20);
+  for (const el of schon) el.strasse = el.b > el.t ? 'x' : 'z';
+  if (!auto || !r) return [];
+  // Was steht im Weg? Alles Feste (außer dem Auto selbst), dazu Parkplätze und Zelte
+  const dinge = fest.filter((s) => !(s.x === auto.x && s.z === auto.z)).concat(teile.filter((el) => el.a === 'autos' || el.a === 'zelte').map((el) => ({ x: el.x, z: el.z, b: el.b + 3, t: 4.4 })));
+  const wasser = teile.filter((el) => el.a === 'flaeche' && el.wasser);
+  const trifft = (f, liste, luft = 0.4) => liste.some((s) => Math.abs(f.x - s.x) < (f.b + s.b) / 2 + luft && Math.abs(f.z - s.z) < (f.t + s.t) / 2 + luft);
+  const kasten = (x0, z0, x1, z1, mehr) => ({ a: 'strasse', x: (x0 + x1) / 2, z: (z0 + z1) / 2, b: Math.abs(x1 - x0), t: Math.abs(z1 - z0), ...mehr });
+  const bz = auto.z - 1.1;                                   // Mitte der Vorfahrt: Das Auto steht an ihrem südlichen Rand, dort steigt man ein
+  const wege = [];
+  // Jede Richtung in mehreren Größen: erst die große Schleife, dann kleinere und einseitige (l/r = so weit reicht die Vorfahrt nach links/rechts)
+  const GROESSEN = [[15, 15], [10.5, 10.5], [15, 6.5], [6.5, 15], [10.5, 6.5], [6.5, 10.5], [15, 4], [4, 15]];
+  for (const seite of ['n', 's', 'o', 'w']) for (const [nr, [li, re]] of GROESSEN.entries()) {
+    const quer = seite === 'o' || seite === 'w', vz = seite === 'n' || seite === 'w' ? -1 : 1;
+    if (quer && nr > 1) continue;
+    const rand = seite === 'n' ? r.z0 : seite === 's' ? r.z1 : seite === 'o' ? r.x1 : r.x0;
+    // Gibt es dort draußen schon eine Straße? Dann führt die Zufahrt zu ihr. Sonst wird eine neue gebaut.
+    const alt = schon.find((el) => el.strasse === (quer ? 'z' : 'x') && ((quer ? el.x : el.z) - rand) * vz > 2 && ((quer ? el.x : el.z) - rand) * vz < 45);
+    const draussen = alt ? (quer ? alt.x : alt.z) : rand + vz * STRASSE_WEG;
+    const stuecke = [];
+    if (quer) {
+      // Die Vorfahrt wird einfach bis zur Straße verlängert; am anderen Ende ist (wenn Platz ist) ein Wendeplatz
+      const innen = auto.x - vz * (nr ? 5.5 : 9);
+      stuecke.push(kasten(innen, bz - BUCHT_BREIT / 2, draussen, bz + BUCHT_BREIT / 2, { art: 'bucht', laengs: 'x' }));
+      if (!nr) stuecke.push({ a: 'strasse', art: 'wende', rund: true, x: innen, z: bz - 1.2, b: 11, t: 11 });
+      stuecke.push({ a: 'strasse', art: 'schranke', laengs: 'x', x: rand, z: bz, b: 0.4, t: BUCHT_BREIT });
+    } else {
+      // Eine Schleife: auf der einen Seite hinein, am Auto vorbei, auf der anderen Seite wieder hinaus
+      stuecke.push(kasten(auto.x - li, bz - BUCHT_BREIT / 2, auto.x + re, bz + BUCHT_BREIT / 2, { art: 'bucht', laengs: 'x' }));
+      for (const [sx, weit] of [[-1, li], [1, re]]) {
+        if (weit < 10) continue;                                  // auf der kurzen Seite gibt es keine Zufahrt
+        const x = auto.x + sx * (weit - ZUFAHRT_BREIT / 2);
+        stuecke.push(kasten(x - ZUFAHRT_BREIT / 2, bz + vz * BUCHT_BREIT / 2, x + ZUFAHRT_BREIT / 2, draussen, { art: 'zufahrt', laengs: 'z' }));
+        stuecke.push({ a: 'strasse', art: 'schranke', laengs: 'z', x, z: rand, b: ZUFAHRT_BREIT, t: 0.4 });
+      }
+    }
+    const lang = (quer ? r.z1 - r.z0 : r.x1 - r.x0) + 30;
+    const neu = alt ? null : (quer ? { a: 'strasse', art: 'aussen', laengs: 'z', x: draussen, z: (r.z0 + r.z1) / 2, b: STRASSE_BREIT, t: lang } : { a: 'strasse', art: 'aussen', laengs: 'x', x: (r.x0 + r.x1) / 2, z: draussen, b: lang, t: STRASSE_BREIT });
+    const imWeg = stuecke.filter((f) => f.art !== 'schranke').some((f) => trifft(f, dinge)) || (neu && (trifft(neu, dinge, 1) || trifft(neu, wasser, 1)));
+    if (neu) { if (quer) neu.t = 760; else neu.b = 760; }           // gezeichnet wird die Straße viel länger, bis in die Ferne
+    wege.push({ seite, weit: Math.abs((quer ? auto.x : auto.z) - rand) + nr * 6, imWeg, stuecke: neu ? [neu, ...stuecke] : stuecke });
+  }
+  wege.sort((p, q) => (p.imWeg - q.imWeg) || (p.weit - q.weit));
+  let liste = wege[0].stuecke;
+  // Passt gar nichts, bleibt wenigstens die Haltebucht am Auto
+  if (wege[0].imWeg) liste = [kasten(auto.x - 9, bz - BUCHT_BREIT / 2, auto.x + 9, bz + BUCHT_BREIT / 2, { art: 'bucht', laengs: 'x', kurz: true })];
+  const bucht = liste.find((f) => f.art === 'bucht');
+  bucht.auto = [auto.x, auto.z];
+  // Ein zweiter Wagen wartet dahinter, und daneben steht ein Wartehäuschen – wenn dafür Platz ist
+  const frei = (f) => !trifft(f, dinge, 0.8) && Math.abs(f.x - auto.x) < 30;
+  const wagen = { a: 'strasse', art: 'wagen', sperre: true, x: auto.x - 7.2, z: auto.z, b: 4.6, t: 2 };
+  if (frei(wagen) && wagen.x - 2.5 > bucht.x - bucht.b / 2) liste.push(wagen);
+  const haus = { a: 'strasse', art: 'warten', sperre: true, x: auto.x + 5.6, z: auto.z + 3.4, b: 4.2, t: 1.5, h: 2.6 };
+  if (frei(haus)) liste.push(haus);
+  return liste;
+}
+
 // Macht aus einem Plan alles, was das Spiel zum Bauen und Laufen braucht:
 //   teile   = die Bausteine (Plätze bekommen ihre Größe b/t dazu)
 //   sperren = Formen, durch die man nicht laufen kann
@@ -489,6 +625,10 @@ export function planAus(g, id = g.name) {
     else if (el.a === 'hecke') zu({ x: el.x, z: el.z, b: el.b, t: el.t });
     else if (el.a === 'leinwand' && el.b > 1) { const quer = el.dreh === 90 || el.dreh === 270; zu({ x: el.x, z: el.z, b: quer ? 1 : el.b, t: quer ? el.b : 1, h: el.h + 2 }); }
   });
+  // 1b. Straßen für den Fahrdienst: eine Vorfahrt mit Haltebucht am Auto, eine Zufahrt zum Rand und draußen eine Straße
+  const strassen = strassenFuer(g, teile, fest);
+  for (const st of strassen) { teile.push(st); if (st.sperre) sperren.push({ x: st.x, z: st.z, b: st.b, t: st.t, h: st.h || 0 }); }
+  const aufStrasse = (x, z, luft = 1.2) => strassen.some((st) => !st.sperre && (st.rund ? Math.hypot(x - st.x, z - st.z) < st.b / 2 + luft : Math.abs(x - st.x) < st.b / 2 + luft && Math.abs(z - st.z) < st.t / 2 + luft));
   const inFest = (x, z, luft = 1.2) => fest.some((s) => {
     const dx = (x - s.x) / (s.b / 2 + luft), dz = (z - s.z) / (s.t / 2 + luft);
     return s.rund ? dx * dx + dz * dz <= 1 : Math.abs(dx) <= 1 && Math.abs(dz) <= 1;
@@ -521,6 +661,7 @@ export function planAus(g, id = g.name) {
       for (const c of luecken) { stueck(von, c - TUER_BREIT / 2); von = c + TUER_BREIT / 2; }
       stueck(von, halb);
     }
+    const abRaum = sperren.length;                      // ab hier gehören die Sperren zu diesem Raum
     for (const w of r.waende) sperren.push({ x: w.x, z: w.z, b: w.b, t: w.t, h: r.h });
     // Möbel stehen an der Wand gegenüber der Tür
     const stell = (name, x, z, dreh) => {
@@ -541,6 +682,7 @@ export function planAus(g, id = g.name) {
       if (quer) { stell('innen_vitrine', r.x - 3, r.z - ht + 1.9, 0); stell('innen_sofa', r.x + 2, r.z - ht + 1.9, 0); }
       else { stell('innen_vitrine', r.x - hb + 1.9, r.z - 2.4, Math.PI / 2); stell('innen_sofa', r.x - hb + 1.9, r.z + 1.2, Math.PI / 2); }
     }
+    einrichten(r, sperren, g.rand, abRaum);
   }
   // 3. Bäume, Statuen, Schirme, Zelte: genaue Stellen ausrechnen
   teile.forEach((el, nr) => {
@@ -557,12 +699,12 @@ export function planAus(g, id = g.name) {
           liste.push([x, zz, gr]); i++;
         }
       }
-      const frei = liste.filter(([x, zz]) => !inFest(x, zz, 0.6) && !orte.some((o) => Math.hypot(o.tx - x, o.tz - zz) < 2.2));
+      const frei = liste.filter(([x, zz]) => !inFest(x, zz, 0.6) && !aufStrasse(x, zz) && !orte.some((o) => Math.hypot(o.tx - x, o.tz - zz) < 2.2));
       punkte.set(nr, frei);
       for (const [x, zz] of frei) sperren.push({ x, z: zz, b: 0.5, t: 0.5, rund: true });
     } else if (el.a === 'statuen') {
       for (let i = 0; i < el.n; i++) { const w = (i + 0.5) / el.n * Math.PI * 2; liste.push([el.x + Math.sin(w) * el.b / 2, el.z + Math.cos(w) * el.t / 2, 1]); }
-      const frei = liste.filter(([x, zz]) => !orte.some((o) => Math.hypot(o.tx - x, o.tz - zz) < 2.6 || Math.hypot(o.wx - x, o.wz - zz) < 2.6));
+      const frei = liste.filter(([x, zz]) => !aufStrasse(x, zz, 0.6) && !orte.some((o) => Math.hypot(o.tx - x, o.tz - zz) < 2.6 || Math.hypot(o.wx - x, o.wz - zz) < 2.6));
       punkte.set(nr, frei);
       for (const [x, zz] of frei) sperren.push({ x, z: zz, b: 0.7, t: 0.7 });
     } else if (el.a === 'autos') {

@@ -105,6 +105,18 @@ const GANG = {
   armBeugen: 0.10,    // vorn beugt sich der Ellbogen, die Hand kommt so viel höher (Meter)
   ferse: 0.5,         // so stark rollt der Fuß ab: hinten geht die Ferse hoch, vorn zeigen die Zehen hoch (Bogenmaß)
 };
+// --- Joggen auf dem Turniergelände (kommt zum Gehen dazu, je schneller die Figur läuft) ---
+const JOGGEN = {
+  schritt: 0.66,      // Schrittlänge beim Joggen in Metern …
+  schrittTempo: 0.15, // … plus so viel für jeden Meter pro Sekunde Tempo (schneller = längere Schritte, nicht hektischere)
+  fussHoch: 0.09,     // so viel höher hebt der Fuß ab als beim Gehen (Meter)
+  ferseHoch: 0.34,    // hinten schwingt die Ferse hoch Richtung Po (Meter)
+  huepfen: 0.055,     // der Körper hebt bei jedem Schritt etwas ab (Meter)
+  vorlage: 0.07,      // der Oberkörper neigt sich leicht nach vorn (Meter)
+  armHoch: 0.24,      // die Hände kommen so viel höher – dadurch sind die Ellbogen angewinkelt (Meter)
+  armVor: 0.13,       // … und so viel weiter nach vorn (Meter)
+  armSchwung: 0.05,   // die Arme schwingen etwas weiter als beim Gehen (Meter)
+};
 const UP = new THREE.Vector3(0, 1, 0);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const smooth = (s) => { s = clamp(s, 0, 1); return s * s * (3 - 2 * s); };
@@ -423,7 +435,11 @@ export class Avatar {
     const walkK = smooth(a.walkK);
     // Gibt es eine Aufnahme vom Gehen? Dann bestimmt sie auch die Schrittlänge (weg = Meter für zwei Schritte).
     const gang = this.real && walkK > 0 ? mocapClip('walk') : null;
-    const stepRun = 0.5 + 0.18 * sp, stepWalk = gang && gang.weg > 0.6 ? gang.weg / 2 : GANG.schritt;
+    // Joggen (auf dem Turniergelände): lockeres Laufen ohne Schläger. jog = 0 (gehen) … 1 (joggen). Die Schritte werden länger,
+    // die Füße heben höher ab, die Arme sind angewinkelt und schwingen mit.
+    a.jogK = (a.jogK || 0) + ((st.jog || 0) - (a.jogK || 0)) * Math.min(1, dt * 5);
+    const jog = a.jogK;
+    const stepRun = 0.5 + 0.18 * sp, stepWalk = (gang && gang.weg > 0.6 ? gang.weg / 2 : GANG.schritt) + jog * Math.max(0, JOGGEN.schritt + JOGGEN.schrittTempo * sp - GANG.schritt);
     const stepLen = stepRun + (stepWalk - stepRun) * walkK;
     // Beim Gehen dreht sich der ganze Körper in Laufrichtung (sonst schaut die Figur immer zum Netz).
     // An der Bank angekommen, dreht sie sich zum Platz um.
@@ -467,10 +483,10 @@ export class Avatar {
     const bob = Math.sin(a.time * 4) * 0.012 * still;
     // Beim Rennen hebt der Körper ab, wenn die Beine auseinander sind. Beim Gehen ist es umgekehrt:
     // Die Hüfte ist am höchsten, wenn ein Bein gerade unter dem Körper steht.
-    const hipH = 0.90 - pose.cr + pose.jp + bob + run * Math.abs(sinS) * 0.035 * (1 - walkK) - gehK * GANG.wippen * (1 - Math.cos(2 * a.step));
+    const hipH = 0.90 - pose.cr + pose.jp + bob + run * Math.abs(sinS) * 0.035 * (1 - walkK) - gehK * GANG.wippen * (1 - Math.cos(2 * a.step)) * (1 - jog) + gehK * jog * JOGGEN.huepfen * Math.abs(sinS);
     const dm = this.dim;
     const shH = hipH + dm.shUp;
-    const lean = (0.05 + 0.07 * run) * (1 - 0.7 * walkK) + pose.ln + GANG.nicken * Math.cos(2 * a.step) * gehK;
+    const lean = (0.05 + 0.07 * run) * (1 - 0.7 * walkK) + pose.ln + GANG.nicken * Math.cos(2 * a.step) * gehK + JOGGEN.vorlage * jog * gehK;
     // Der Körper wiegt sich über das Standbein; im Stehen verlagert er ab und zu gemütlich das Gewicht
     const wiegen = -cosS * GANG.wiegen * gehK + Math.sin(a.time * 0.8) * 0.03 * stehK;
 
@@ -496,11 +512,11 @@ export class Avatar {
     const schwung = sinS + (2 / Math.PI * Math.asin(sinS) - sinS) * 0.8 * walkK;      // −1 = Fuß hinten … +1 = Fuß vorn
     const swingLeg = schwung * a.amp;
     const liftH = 0.07 + 0.17 * run;
-    const lift = cosS * (liftH + (GANG.fussHoch - liftH) * walkK) * Math.min(1, a.amp * 4);
+    const lift = cosS * (liftH + (GANG.fussHoch + JOGGEN.fussHoch * jog - liftH) * walkK) * Math.min(1, a.amp * 4);
     // Abrollen: Ist der Fuß hinten, geht die Ferse hoch; ist er vorn, zeigen die Zehen nach oben.
     const hintenR = Math.max(0, -schwung) ** 2 * gehK, hintenL = Math.max(0, schwung) ** 2 * gehK;
-    let footR = [stepR + a.dir[0] * swingLeg, stance + a.dir[1] * swingLeg, 0.07 + dm.ankle + air + Math.max(0, lift) + 0.05 * hintenR];
-    let footL = [stepL - a.dir[0] * swingLeg, -stance - a.dir[1] * swingLeg, 0.07 + dm.ankle + air + Math.max(0, -lift) + 0.05 * hintenL];
+    let footR = [stepR + a.dir[0] * swingLeg, stance + a.dir[1] * swingLeg, 0.07 + dm.ankle + air + Math.max(0, lift) + (0.05 + JOGGEN.ferseHoch * jog) * hintenR];
+    let footL = [stepL - a.dir[0] * swingLeg, -stance - a.dir[1] * swingLeg, 0.07 + dm.ankle + air + Math.max(0, -lift) + (0.05 + JOGGEN.ferseHoch * jog) * hintenL];
     let kneeR = ik(hipR, footR, dm.thigh, dm.shin, [1, 0.15, 0.2]);
     let kneeL = ik(hipL, footL, dm.thigh, dm.shin, [1, -0.15, 0.2]);
 
@@ -512,8 +528,10 @@ export class Avatar {
       const vorL = armS * gehK, vorR = -armS * gehK;
       // Die Hände hängen ein Stück neben dem Körper; vorn schwingen sie leicht nach innen, hinten nach außen.
       const ab = GANG.armAbstand;
-      const gehL = add3(shL, [0.04 + GANG.armFrei * vorL, -(ab - 0.04 * vorL), -0.535 + GANG.armBeugen * Math.max(0, vorL)]);
-      const gehR = add3(shR, [0.06 + GANG.armSchlaeger * vorR, ab - 0.03 * vorR, -0.51 + GANG.armBeugen * 0.5 * Math.max(0, vorR)]);
+      // Ohne Schläger (auf dem Turniergelände) schwingen beide Arme gleich. Beim Joggen sind die Ellbogen angewinkelt: Die Hände kommen höher und weiter nach vorn.
+      const frei = st.ohneSchlaeger, weitR = frei ? GANG.armFrei : GANG.armSchlaeger, hoch = JOGGEN.armHoch * jog, vor = JOGGEN.armVor * jog;
+      const gehL = add3(shL, [0.04 + vor + (GANG.armFrei + JOGGEN.armSchwung * jog) * vorL, -(ab - 0.04 * vorL), -0.535 + hoch + GANG.armBeugen * Math.max(0, vorL)]);
+      const gehR = add3(shR, [(frei ? 0.04 : 0.06) + vor + (weitR + JOGGEN.armSchwung * jog) * vorR, ab - (frei ? 0.04 : 0.03) * vorR, (frei ? -0.535 : -0.51) + hoch + GANG.armBeugen * (frei ? 1 : 0.5) * Math.max(0, vorR)]);
       handL = mix3(handL, limitReach(shL, gehL, dm.reach), walkK);
       handR = mix3(handR, limitReach(shR, gehR, dm.reach), walkK);
     }

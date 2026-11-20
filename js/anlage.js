@@ -15,14 +15,15 @@
 import * as THREE from 'three';
 import { requisit } from './requisiten.js';
 import { planVon, planAus } from './gelaende.js';
-import { baueGelaende, laeuferBauen, gluecksballBauen } from './gelaendebau.js';
+import { baueGelaende, gluecksballBauen, fahrerSetzen } from './gelaendebau.js';
+import { Besucher } from './besucher.js';
 import { gitterBauen, frei, weg, naechsteFreie, hoeheBei } from './wege.js';
 import { ladeModelle, fehltNoch } from './gelaendemodelle.js';
 
 // ---- Zahlen zum Einstellen ----
 const TEMPO = 3.4;            // so schnell läuft die Figur (Meter pro Sekunde)
-const TEMPO_GROSS = 5.4;      // auf den großen Geländen joggt sie schneller, die Wege sind dort lang
-const GEH_BIS = 2.0;          // bis zu diesem Tempo wird gegangen, darüber gejoggt
+const TEMPO_GROSS = 4.0;      // auf den großen Geländen joggt sie, die Wege sind dort lang (schneller sähe nach Sprint aus)
+const GEH_BIS = 1.9;          // bis zu diesem Tempo wird gegangen, darüber geht das Gehen nach und nach ins Joggen über
 // Kamera: w = Drehung um die Figur (0 = von vorn/Süden), e = Neigung (0 flach … 1.5 von oben), d = Abstand in Metern
 const KAM_START = { w: 0, e: 0.7, d: 15 }, KAM_WEIT = { e: 1.05, d: 46 };
 // Kamera von Hand: wie stark Wischen dreht und neigt (Bogenmaß je Pixel) und wie weit man gehen darf
@@ -31,9 +32,9 @@ const DREH_MAUS = 0.008, NEIG_MAUS = 0.006;          // rechte Maustaste ziehen
 const NEIG_MIN = 0.04, NEIG_MAX = 1.54;              // fast flach über dem Boden … fast senkrecht von oben
 const NAH_MIN = 2.5;                                 // so nah darf die Kamera an die Figur (Meter)
 const FERN_MAL = 2.6;                                // so weit weg: 2,6-mal die Übersicht – das ganze Gelände wird klein wie ein Modell
-const LAEUFER = 26;           // so viele Besucher laufen höchstens über ein großes Gelände (die übrigen stehen)
+const BESUCHER_MAX = 130;     // so viele Besucher sind höchstens auf einem Gelände unterwegs
+const BESUCHER_WENIG = 24;    // … und so viele bei Qualität „niedrig“
 const DRINNEN_D = 9, DRINNEN_E = 1.0;      // Kamera in einem Haus: höchstens so weit weg und mindestens so steil von oben
-const LAEUFER_TEMPO = 1.3;    // Meter pro Sekunde – gemütliches Schlendern
 const BALL_NAH = 1.4;         // so nah muss man an den Glücksball heran, um ihn aufzuheben
 const TUER_NAH = 1.6;         // so nah an der Tür (Meter) gilt: „du bist da“
 const RING_X = 17, RING_Z = 13;   // so groß ist der Kreis, auf dem die Gebäude stehen
@@ -179,13 +180,10 @@ export class Anlage {
     g.scene.fog.color.set(0xa8cdea);
     g.scene.fog.near = this.weit * 1.2; g.scene.fog.far = this.weit * 1.2 + 520;
     g.camera.near = 1; g.camera.far = 4000; g.camera.updateProjectionMatrix();
-    // Besucher, die herumlaufen: Jeder sucht sich eine Tür als Ziel, schlendert hin und sucht sich dann die nächste aus
-    const n = g.quality === 'niedrig' ? 0 : Math.min(LAEUFER, Math.round((plan.g.leute ?? 110) / 4));
-    this.laeufer = [];
-    if (n) {
-      this.laeuferNeu(n);
-      for (let i = 0; i < n; i++) { const o = plan.orte[(i * 7 + 3) % plan.orte.length]; this.laeufer.push({ x: o.tx + (i % 3) - 1, z: o.tz + ((i * 5) % 3) - 1, pfad: null, warte: i * 0.4, dreh: 0, tempo: LAEUFER_TEMPO * (0.8 + (i % 5) * 0.1) }); }
-    }
+    // Besucher: Sie gehen von Tür zu Tür, bleiben stehen, schauen sich um und unterhalten sich (siehe besucher.js)
+    const n = Math.min(g.quality === 'niedrig' ? BESUCHER_WENIG : BESUCHER_MAX, plan.g.leute ?? 110);
+    this.besucher = n ? new Besucher(plan, this.gitter, n, g.quality !== 'niedrig') : null;
+    if (this.besucher) this.gruppe.add(this.besucher.gruppe);
   }
 
   // Das Gelände aus dem Lageplan bauen – beim ersten Mal aus einfachen Formen, später noch einmal mit den geladenen Modellen
@@ -199,17 +197,11 @@ export class Anlage {
     this.klick = bau.klick;
     this.boden = bau.boden;
     this.namen = plan.namen || [];
-    if (this.laeufer && this.laeufer.length) this.laeuferNeu(this.laeufer.length);
-  }
-  // Die Formen für die laufenden Besucher (neu) anlegen
-  laeuferNeu(n) {
-    if (this.laeuferForm) for (const m of this.laeuferForm.teile) { m.removeFromParent(); if (m.userData.eigen) { m.geometry.dispose(); m.material.dispose(); } }
-    this.laeuferForm = laeuferBauen(n, this.game.quality !== 'niedrig');
-    this.gruppe.add(...this.laeuferForm.teile);
   }
   // Alles Selbstgebaute einer Gruppe wieder freigeben (geladene Modelle bleiben, die werden noch gebraucht)
   wegraeumen(gruppe) {
     gruppe.traverse((m) => {
+      if (m.userData.nurStoff) m.material.dispose();                       // ein fahrendes Auto: nur seine eigene Lackfarbe freigeben, die Form wird noch gebraucht
       if (!m.userData.eigen || !m.material) return;
       if (m.isMesh) m.geometry.dispose();
       if (m.material.map) m.material.map.dispose();
@@ -230,35 +222,6 @@ export class Anlage {
     if (jetzt && !this.drinnen) { this.kamDraussen = { d: k.zd, e: k.ze }; k.zd = Math.min(k.zd, DRINNEN_D); k.ze = Math.max(k.ze, DRINNEN_E); }
     else if (!jetzt && this.kamDraussen) { k.zd = this.kamDraussen.d; k.ze = this.kamDraussen.e; this.kamDraussen = null; }
     this.drinnen = jetzt;
-  }
-
-  // Die laufenden Besucher ein Stück weiterbewegen
-  laeuferBewegen(dt) {
-    if (!this.laeufer || !this.laeufer.length) return;
-    const o3 = this.hilfe3 || (this.hilfe3 = new THREE.Object3D()), orte = this.plan.orte;
-    let gesucht = false;
-    this.laeufer.forEach((l, i) => {
-      if (l.warte > 0) l.warte -= dt;
-      else if (!l.pfad) {
-        // neues Ziel suchen – aber pro Bild nur für EINEN Besucher, das Suchen kostet Rechenzeit
-        if (!gesucht) {
-          gesucht = true;
-          const ziel = orte[Math.floor(Math.random() * orte.length)], w = Math.random() * 6.28, r = 2.5 + Math.random() * 4;
-          const stelle = naechsteFreie(this.gitter, ziel.tx + Math.sin(w) * r, ziel.tz + Math.cos(w) * r);
-          l.pfad = stelle ? weg(this.gitter, l.x, l.z, stelle.x, stelle.z) : null;
-          if (!l.pfad) l.warte = 2;
-        }
-      } else {
-        const n = l.pfad[0], dx = n.x - l.x, dz = n.z - l.z, weit = Math.hypot(dx, dz);
-        if (weit < 0.3) { l.pfad.shift(); if (!l.pfad.length) { l.pfad = null; l.warte = 3 + Math.random() * 9; } }       // angekommen: eine Weile stehen bleiben
-        else { l.x += dx / weit * l.tempo * dt; l.z += dz / weit * l.tempo * dt; l.dreh = Math.atan2(dx, dz); }
-      }
-      o3.position.set(l.x, l.pfad ? Math.abs(Math.sin(performance.now() / 160 + i)) * 0.06 : 0, l.z);
-      o3.rotation.set(0, l.dreh, 0);
-      o3.updateMatrix();
-      this.laeuferForm.setze(i, o3.matrix);
-    });
-    for (const m of this.laeuferForm.teile) m.instanceMatrix.needsUpdate = true;
   }
 
   // Den goldenen Glücksball irgendwo auf dem Gelände verstecken (nur auf den Geländen mit Lageplan)
@@ -536,11 +499,12 @@ export class Anlage {
       av.group.visible = true;
       // (face: Die Figur von Spieler 0 schaut von sich aus nach −z, unser blick zählt ab +z. Darum wird umgerechnet.)
       // Langsam wird gegangen, schnell gejoggt.
-      av.update(dt, { x: p.x, z: p.z, vx: p.vx, vz: p.vz, walk: tempo < GEH_BIS, face: Math.PI - p.blick, faceFest: true, ohneSchlaeger: true });
+      av.update(dt, { x: p.x, z: p.z, vx: p.vx, vz: p.vz, walk: true, jog: Math.max(0, Math.min(1, (tempo - GEH_BIS) / 1.4)), face: Math.PI - p.blick, faceFest: true, ohneSchlaeger: true });
     }
     if (g.avatars[1]) g.avatars[1].group.visible = false;
 
-    this.laeuferBewegen(dt);
+    if (this.besucher) this.besucher.bewege(Math.min(dt, 0.1));
+    if (this.bau) fahrerSetzen(this.bau.fahrer, Math.min(dt, 0.1));                 // die Autos auf den Straßen draußen
     // --- Der Glücksball hüpft auf der Stelle. Wer nah genug ist, hebt ihn auf. ---
     if (this.ball) {
       this.ball.userData.ball.position.y = 0.9 + Math.sin(performance.now() / 300) * 0.18;
@@ -614,7 +578,7 @@ export class Anlage {
     if (!this.gruppe) { this.an = false; return; }
     const g = this.game;
     this.wegraeumen(this.gruppe);                       // geladene Modelle (Ballkinder, Häuser, Bäume …) bleiben im Speicher
-    this.gruppe = null; this.bau = null; this.drinnen = null; this.kamDraussen = null; this.laeuferForm = null;
+    this.gruppe = null; this.bau = null; this.drinnen = null; this.kamDraussen = null; this.besucher = null;
     if (this.plan) {
       // Licht, Himmel und Kamera wieder so einstellen wie vorher
       for (const l of this.altesLicht) l.visible = true;
@@ -623,7 +587,7 @@ export class Anlage {
       g.scene.fog.color.copy(this.alt.nebel);
       g.camera.near = this.alt.nah; g.camera.far = this.alt.fern; g.camera.updateProjectionMatrix();
     }
-    this.plan = null; this.gitter = null; this.sonne = null; this.pfad = null; this.namen = []; this.laeufer = null; this.ball = null;
+    this.plan = null; this.gitter = null; this.sonne = null; this.pfad = null; this.namen = []; this.ball = null;
     this.an = false;
     this.finger = {};
     this.knueppel = null;
