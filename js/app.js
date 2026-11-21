@@ -20,6 +20,8 @@ import * as QZ from './quiz.js';
 import * as TA from './aufgaben.js';
 import * as MS from './minispiele.js';
 import * as GL from './gelaende.js';
+import { hotelArt, hotelFuer } from './hotelfahrt.js';
+import { stadtGelaende, sterneFuer } from './hotelweg.js';
 import * as AU from './ausruestung.js';
 import * as KT from './kleinetour.js';
 import * as KA from './kalender.js';
@@ -202,7 +204,7 @@ actions.settings = (v) => {
     <div class="panel">
       ${optionRow('Steuerung', 'control', CONTROL_NAMES)}
       ${settings.control === 'wisch' ? `<p class="dim" style="margin:6px 0 0;font-size:13px">👆 <b>Wischen:</b> Du schlägst nur mit einem Wisch.
-        <b>Wann</b> du wischst, bestimmt die Richtung: früh = nach links, spät = nach rechts (die Ziellinie auf dem Platz wandert mit).
+        <b>Wann</b> du wischst, bestimmt die Richtung: früh = cross (quer über den Platz), spät = longline (die Linie entlang). Die Ziellinie auf dem Platz wandert mit – bei der Vorhand von links nach rechts, bei der Rückhand von rechts nach links.
         <b>Wohin</b> du wischst, bestimmt den Schlag: ↑ hoher Topspin · ↗ Topspin · → gerader, flacher Schlag · ↘ langer Slice · ↓ kurzer Slice (ganz langsam = Stoppball).
         <b>Wie schnell</b> du wischst, bestimmt die Härte. Zwei Finger nach oben = Lob. Doppelt tippen = ans Netz und zurück.<br>
         <b>Aufschlag:</b> ↑ gerade · ↓ Slice · zwei Finger ↑ Kick · zwei Finger ↓ von unten. Schräg wischen = Richtung.
@@ -393,7 +395,7 @@ const HELP = `
     <li><b>iPhone als Schläger fürs iPad</b> (in der App): Auf dem iPad „Controller / iPhone-Schläger“ wählen.
       Auf dem iPhone Powershot öffnen → Einstellungen → „Dieses Gerät als Schläger … benutzen“. Die Geräte finden sich von selbst.</li>
     <li><b>iPhone als Schläger</b> (in der App): Halte das iPhone fest in der Hand und schwing es wie einen Schläger.
-      <b>Timing = Richtung:</b> früh schwingen = Ball nach links, genau richtig = Mitte, spät = nach rechts.
+      <b>Timing = Richtung:</b> früh schwingen = cross (Vorhand: nach links, Rückhand: nach rechts), genau richtig = Mitte, spät = die Linie entlang.
       Aufschlag und Schmetterball (hoher Ball): von oben nach unten schwingen.
       Lass am besten die Laufhilfe auf „Voll“. Achtung: gut festhalten, am besten mit Hülle!</li></ul></div>
   <div class="panel help"><h3>Laufen mit der Kamera (Webcam oder Kamera vom iPad)</h3><ul>
@@ -481,7 +483,7 @@ actions.training = (v) => {
 const ZUG_TIPP = {
   touch: { aufschlag: 'nach oben wischen – schräg wischen = Richtung', drive: 'nach oben wischen – schräg = Richtung, länger = tiefer',
     slice: 'zur Seite wischen', drop: 'nach unten wischen', lob: 'doppelt tippen', netz: 'mit zwei Fingern nach oben wischen' },
-  wisch: { aufschlag: 'nach oben wischen – schräg wischen = Richtung', drive: 'schräg nach oben wischen – früh wischen = links, spät = rechts',
+  wisch: { aufschlag: 'nach oben wischen – schräg wischen = Richtung', drive: 'schräg nach oben wischen – früh wischen = cross, spät = die Linie entlang',
     slice: 'schräg nach unten wischen (ganz nach unten = kurzer Slice)', drop: 'ganz langsam nach unten wischen', lob: 'mit zwei Fingern nach oben wischen', netz: 'doppelt tippen' },
   klassik: { aufschlag: 'Mausrad zielt, linke Maustaste halten und loslassen', drive: 'Mausrad zielt, linke Maustaste halten = Kraft (mehr Kraft = tiefer)',
     slice: 'geht mit der Maus nicht – nimm die Steuerung „Profi“ oder „Touch“', drop: 'geht mit der Maus nicht – nimm die Steuerung „Profi“ oder „Touch“',
@@ -604,7 +606,8 @@ function renderTournament() {
     top = `<div class="panel"><h3 style="margin-top:0">📋 Nach dem Match: Aufgaben von deinem Team</h3>${aufgabenHtml('nach', false)}
       <div class="center">${nachOffen ? `<button class="primary" data-a="nachAnlage">🚶 Auf die Anlage <small>noch ${nachOffen} ${nachOffen === 1 ? 'Aufgabe' : 'Aufgaben'} offen</small></button>` : '<b class="gold">⭐ Alles erledigt – dein Team ist stolz auf dich!</b>'}</div></div>
       <div class="panel"><h3 style="margin-top:0">🌙 Der Abend nach deinem Sieg</h3><p class="dim">Morgen geht das Turnier für dich weiter. Was machst du heute Abend noch?${nachOffen ? ' (Danach ist der Tag vorbei – offene Aufgaben verfallen.)' : ''}</p>
-      <div class="row">${Object.entries(TT.ABEND).map(([id, A]) => `<button data-a="abend" data-v="${id}">${A.name} <small>${A.bringt}</small></button>`).join('')}</div></div>`;
+      <div class="row">${Object.entries(TT.ABEND).map(([id, A]) => `<button data-a="abend" data-v="${id}">${A.name} <small>${A.bringt}</small></button>`).join('')}</div>
+      ${hotelKnopf(def)}</div>`;
   } else if (m) {
     const oppId = m.a === T.humanId ? m.b : m.a;
     const opp = getPlayer(oppId), me = ctxT.season ? ichJetzt(oppId) : getPlayer(T.humanId);
@@ -705,13 +708,14 @@ try { stempel = JSON.parse(localStorage.getItem(STEMPEL_KEY)) || {}; } catch (e)
 const stempelVon = (G) => stempel[G.name] || [];
 let anlageListe = false;     // ist die Liste „Gelände wechseln“ gerade aufgeklappt?
 // Welches Gelände wird gerade gezeigt? Die großen Turniere haben ihr eigenes, die kleinen die einfache Anlage (null).
-const anlageGelaende = () => GL.gelaendeFuer(anlageTag ? anlageTag.def : D.tournamentById(anlageWo));
+const anlageGelaende = () => (hotelWeg && hotelWeg.stadt) || GL.gelaendeFuer(anlageTag ? anlageTag.def : D.tournamentById(anlageWo));
 // Für die Auswahl im Hauptmenü: ein paar kleine Turniere als Beispiele (je Stadt das erste im Kalender) und dein Heimatverein
 const ANLAGE_KLEIN = ['Halle', 'Hamburg', 'London', 'Dubai', 'Tokio', 'Basel', 'Kitzbühel', 'Umag', 'Stuttgart', 'Hongkong', 'Heilbronn', 'Ortisei', 'Neapel', 'Saarlouis', 'Monastir', 'Nußloch']
   .map((stadt) => KT.KLEINE_TURNIERE.find((t) => t.city === stadt)).filter(Boolean).concat([KT.LIGA]);
 let anlageErgebnis = null;   // was die letzte Tätigkeit gebracht hat: { ort, text, bringt }
 let anlageMeldung = null;    // was nach einem Zufall (Ereignis) passiert ist: { text, bringt }
 function anlageZeigen() {
+  if (hotelWeg || (anlageTag && anlageTag.abend)) return hotelZeigen();      // Fahrt oder Fußweg ins Hotel: eigenes Fenster (weiter unten)
   const A = game.anlage, ort = A.amOrt;
   const hilfe = 'Laufen: W A S D oder mit einem Finger ziehen. Tippe auf ein Gebäude, dann läuft deine Figur von selbst hin. In viele Häuser kannst du durch die Tür hineingehen – dann verschwindet das Dach und du siehst die Möbel. Kamera mit zwei Fingern: kneifen = nah oder ganz weit weg, zur Seite wischen = rundherum drehen, hoch oder runter wischen = Blickwinkel. Mit drei Fingern schiebst du die Ansicht frei über das Gelände (danach reicht ein Finger), Doppel-Tipp oder 🎯 = zurück zur Figur. 🏷️ schaltet die Beschriftungen an und aus. Am PC: rechte Maustaste ziehen und Mausrad, mittlere Maustaste oder Umschalt + ziehen = verschieben, F = zurück zur Figur, B = Beschriftungen.';
   const kam = [['karte', '🗺️', 'Übersicht'], ['schilder', '🏷️', 'Beschriftungen an oder aus (Taste B)'], ['figur', '🎯', 'Zurück zur Figur (Doppel-Tipp oder Taste F)'], ['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg']];
@@ -754,7 +758,8 @@ function anlageZeigen() {
     unten = `<p>${esc(anlageMeldung.text)}</p>${anlageMeldung.bringt.length ? `<p class="gold">${anlageMeldung.bringt.join(' · ')}</p>` : ''}<p class="dim">Und jetzt: Such dir aus, was du vor dem Match machst.</p>`;
   } else if (ort) {
     unten = `<h3>${esc(ort.name)}</h3><p>${ort.text}</p>${ort.info || G ? '' : '<p class="dim klein">Hier passiert noch nichts. Später gehst du hier hinein.</p>'}`;
-    if (G && !ort.info && !anlageTag) unten += `<p class="dim klein">${esc({ court: 'In der Karriere spielst du hier dein Match.', hotel: 'In der Karriere bringt dich der Fahrdienst nach dem Match ins Hotel.' }[ort.id] || 'In der Karriere kannst du hier am Tag vor dem Match etwas tun.')}</p>`;
+    if (G && !ort.info && !anlageTag && ort.id !== 'hotel') unten += `<p class="dim klein">${esc({ court: 'In der Karriere spielst du hier dein Match.' }[ort.id] || 'In der Karriere erledigst du hier am Turniertag Aufgaben von deinem Team.')}</p>`;
+    if (G && !anlageTag && ort.id === 'hotel') unten = hotelAmWagen(G);
     if (anlageTag && !ort.info) {
       const phase = phaseJetzt(), c = lebenC();
       // Was gerade hier herausgekommen ist (nach einem Mini-Spiel), steht oben
@@ -765,7 +770,7 @@ function anlageZeigen() {
           : `<h3>${esc(ort.name)}</h3><p>Dein Gegner wartet schon. Bist du bereit?${offen ? ` <span class="dim">(Du hast noch ${offen} ${offen === 1 ? 'Aufgabe' : 'Aufgaben'} vom Team offen – die verfallen dann.)</span>` : ''}</p><button class="primary" data-a="anlageMatch">Match spielen ›</button>`;
       } else if (ort.id === 'hotel') {
         const nachOffen = TA.offen(c, 'nach');
-        unten = phase === 'nach' ? `${tagListe}<p>Der Fahrer wartet${nachOffen ? '' : ' schon'}. Im Hotel suchst du dir aus, was du am Abend machst.</p><button class="${nachOffen ? '' : 'primary'}" data-a="anlageEnde">🚐 ${nachOffen ? 'Trotzdem schon ins Hotel fahren' : 'Ins Hotel fahren'} ›</button>`
+        unten = phase === 'nach' ? `${tagListe}<p>${nachOffen ? 'Du hast noch Aufgaben offen.' : 'Alles erledigt!'} Im Hotel suchst du dir aus, was du am Abend machst.</p><button class="${nachOffen ? '' : 'primary'}" data-a="nachHotel">🏨 ${nachOffen ? 'Trotzdem schon ins Hotel' : 'Ab ins Hotel'} ›</button>`
           : `<p class="dim klein">Du bist mit dem Fahrdienst angekommen. Erst nach dem Match geht es zurück ins Hotel.</p>${tagListe}`;   // am Morgen stehst du hier: Die Aufgabenliste bleibt zu sehen
       } else {
         // Alles, was man an diesem Ort machen kann: Aufgaben vom Team zuerst, dann Freiwilliges. Jedes ist ein Mini-Spiel.
@@ -776,7 +781,7 @@ function anlageZeigen() {
         unten = `<h3>${esc(ort.name)}</h3>${ergebnis || `<p>${ort.text}</p>`}` + (liste.length ? `<div class="spalte">${liste.map(zeile).join('')}</div>`
           : `<p class="dim">${phase === 'nach' ? 'Hier hat dein Team heute keine Aufgabe mehr für dich.' : 'Hier gibt es heute nichts zu tun.'}</p>`);
       }
-    } else if (anlageErgebnis && anlageErgebnis.ort === ort.id) {
+    } else if (anlageErgebnis && anlageErgebnis.ort === ort.id && !(G && ort.id === 'hotel')) {
       unten = `<h3>${esc(ort.name)}</h3><p>${anlageErgebnis.text}</p><p class="gold">${anlageErgebnis.bringt.join(' · ')}</p>`;
     }
   }
@@ -820,8 +825,8 @@ function anlageStart(ich, woher, ergebnis = null) {
     anlageZeigen();
   };
   game.anlage.start(woher, anlageGelaende());
-  // Der Glücksball: in der Karriere einer pro Turniertag, beim freien Herumlaufen immer einer
-  if (!anlageTag || (phaseJetzt() === 'vor' && !TT.ballGefunden(lebenC()))) game.anlage.ballLegen();
+  // Der Glücksball: in der Karriere einer pro Turniertag, beim freien Herumlaufen immer einer (nicht nach dem Match, nicht am Abend und nicht im Städtchen)
+  if (hotelWeg || (anlageTag && (anlageTag.abend || anlageTag.phase === 'nach'))) { /* heute kein Glücksball mehr */ } else if (!anlageTag || !TT.ballGefunden(lebenC())) game.anlage.ballLegen();
   game.anlage.wennBall = () => {
     const bringt = anlageTag ? TT.gluecksball(lebenC()) || [] : [];
     anlageMeldung = { text: '🟡 Du hast den goldenen Glücksball gefunden! ' + (anlageTag ? 'Mit so einem Glücksbringer in der Tasche gehst du ganz ruhig ins Match.' : 'In der Karriere bringt er dir Glück für das Match des Tages.'), bringt };
@@ -834,9 +839,9 @@ actions.anlageGeh = (v) => { game.anlage.geheZu(v); };
 actions.anlageListe = () => { anlageListe = !anlageListe; anlageZeigen(); };
 // Ein anderes Gelände ansehen (nur im Hauptmenü)
 actions.anlageWahlOrt = (v) => { if (anlageTag || !D.tournamentById(v)) return; anlageWo = v; anlageListe = false; anlageStart(career ? CA.mePlayer(career) : D.PLAYERS[0]); };
-function anlageSchluss() { anlageMeldung = null; game.anlage.ende(); anlageEl.classList.remove('on'); anlageEl.innerHTML = ''; }
+function anlageSchluss() { hotelSchluss(); anlageMeldung = null; game.anlage.ende(); anlageEl.classList.remove('on'); anlageEl.innerHTML = ''; }
 // Aus dem Hauptmenü: einfach nur herumlaufen (mit deinem Karriere-Spieler, sonst mit dem ersten Spieler der Liste)
-actions.anlage = () => { anlageTag = null; anlageListe = false; anlageStart(career ? CA.mePlayer(career) : D.PLAYERS[0]); };
+actions.anlage = () => { anlageTag = null; hotelWeg = null; anlageListe = false; anlageStart(career ? CA.mePlayer(career) : D.PLAYERS[0]); };
 // In der Karriere: der Tag vor dem Match. Wer schon auf der Anlage war und zurückkommt, macht dort weiter.
 actions.tagAnlage = () => {
   if (!mitLeben()) return;
@@ -907,6 +912,143 @@ actions.aufgabe = (v) => {
   });
 };
 actions.anlageMatch = () => { anlageSchluss(); actions.tourPlay(); };
+// Nach den Aufgaben nach dem Match: Am Fahrdienst geht es weiter mit dem Weg ins Hotel (Fahrt oder zu Fuß, siehe unten)
+actions.nachHotel = () => { if (!anlageTag || !lebenC().abendOffen) return; anlageTag = { def: anlageTag.def, abend: true }; anlageZeigen(); };
+
+// ---------------------------------------------------------------
+// Ins Hotel: mit dem Fahrdienst (große Turniere) oder zu Fuß durch das Städtchen (kleine Turniere)
+// ---------------------------------------------------------------
+// Die Fahrt selbst steht in anlage.js (hotelFahrt), das Hotel und die Strecke rechnet hotelfahrt.js aus,
+// das Städtchen für den Fußweg baut hotelweg.js. Hier sind nur die Knöpfe und Texte.
+let hotelWeg = null;         // läuft gerade der Weg ins Hotel? { art: 'fahrt' | 'fuss' | 'heim', phase, def, stadt, … }
+const HOTELWEG_KEY = 'powershot.hotelweg.v1';      // deine besten Zeiten zu Fuß, je Städtchen
+let hotelZeiten = {};
+try { hotelZeiten = JSON.parse(localStorage.getItem(HOTELWEG_KEY)) || {}; } catch (e) { hotelZeiten = {}; }
+const uhrText = (sek) => `${Math.floor(sek / 60)}:${String(Math.floor(sek % 60)).padStart(2, '0')}`;
+function hotelSchluss() { if (hotelWeg && hotelWeg.uhr) clearInterval(hotelWeg.uhr); hotelWeg = null; }
+// Der Knopf in der Turnier-Ansicht (Abend nach einem Sieg): erst ins Hotel fahren oder laufen
+function hotelKnopf(def) {
+  const art = hotelArt(GL.gelaendeFuer(def));
+  if (art === 'hier') return '<p class="dim klein">🏨 Dein Zimmer ist gleich hier im Hotel auf der Anlage.</p>';
+  if (art === 'heim') return '';
+  return `<p class="dim klein" style="margin-top:10px">Oder zuerst:</p><button class="primary" data-a="hotelAbend">${art === 'fahrt' ? '🚗 Mit dem Fahrdienst ins Hotel fahren' : '🚶 Zu Fuß zum Hotel <small>Hier gibt es keinen Fahrdienst – du musst den Weg selbst finden!</small>'}</button>`;
+}
+// Der Text am Wagen vom Fahrdienst (beim freien Herumlaufen und am Abend nach dem Match)
+function hotelAmWagen(G) {
+  const art = hotelArt(G), H = hotelFuer(G);
+  if (art === 'fahrt') return `<h3>Fahrdienst</h3><p>Der Fahrer wartet schon. Er bringt dich ins <b>${esc(H ? H.name : 'Hotel')}</b>${game.anlage.plan.hotel ? ' – schau zu, wie der Wagen über die Straße dorthin fährt.' : '.'}</p>
+    <button class="primary" data-a="hotelLos">🚗 Einsteigen und ins Hotel fahren</button>`;
+  if (art === 'hier') return '<h3>Fahrdienst</h3><p>Den brauchst du hier nicht: Dein Zimmer ist gleich im Hotel auf der Anlage. Bei solchen Turnieren wohnen, essen und spielen alle am selben Ort.</p>';
+  return `<h3>${art === 'heim' ? 'Vereinsbus' : 'Fahrdienst'}</h3><p>${art === 'heim' ? 'Der Bus fährt nur zu Auswärtsspielen. Nach Hause läufst du – das ist nicht weit.' : 'Der Fahrer hat schon Feierabend. Bei kleinen Turnieren gibt es abends keinen Fahrdienst: Zum Hotel läufst du selbst.'} <b>Findest du den Weg durch das Städtchen?</b></p>
+    <button class="primary" data-a="hotelLos">🚶 ${art === 'heim' ? 'Nach Hause laufen' : 'Zu Fuß zum Hotel'}</button>`;
+}
+// Das Fenster während der Fahrt, im Städtchen und im Hotel
+function hotelZeigen() {
+  const A = game.anlage, ort = A.amOrt, G = A.plan ? A.plan.g : null, W = hotelWeg, abend = !!(anlageTag && anlageTag.abend);
+  const kam = [['karte', '🗺️', 'Weiter weg / näher'], ['schilder', '🏷️', 'Beschriftungen an oder aus (Taste B)'], ['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg']];
+  const abendWahl = () => `<p class="dim">Was machst du heute Abend noch?</p><div class="row wahl">${Object.entries(TT.ABEND).map(([id, B]) => `<button data-a="hotelAbendWahl" data-v="${id}">${B.name} <small>${B.bringt}</small></button>`).join('')}</div>`;
+  let zeit = '', unten = '';
+  if (!W) {
+    // Am Abend nach dem Match, noch auf der Anlage: Der Weg führt zum Fahrdienst
+    zeit = `<span class="zeit">${esc(anlageTag.def.name)} · 🌙 Abend nach deinem Sieg</span>`;
+    unten = ort && ort.id === 'hotel' ? hotelAmWagen(G) : `<p>Geschafft für heute! ${ort ? `<b>${esc(ort.name)}</b> hat schon zu. ` : ''}Geh zum Fahrdienst – dort geht es ins Hotel.</p><button data-a="anlageGeh" data-v="hotel">Zum Fahrdienst laufen</button>`;
+  } else if (W.art === 'fahrt') {
+    const H = W.hotel;
+    zeit = `<span class="zeit">🚗 Fahrt ins Hotel · <span class="dim">${esc(H.name)}</span></span>`;
+    if (W.phase === 'da') {
+      unten = `<h3>🏨 ${esc(H.name)}</h3><p>${esc(H.text)} <span class="dim">(Der Name ist ausgedacht.)</span></p>${abend ? abendWahl() : '<button class="primary" data-a="hotelZurueck">🚗 Zurück zum Turniergelände</button>'}`;
+    } else {
+      unten = `<p>${A.fahrt && A.fahrt.phase === 'fahren' ? 'Lehn dich zurück: Der Fahrer bringt dich ins Hotel. An Einmündungen wartet er, bis die Straße frei ist.' : 'Du steigst ein …'}</p><button data-a="hotelSpringen">⏭ Fahrt überspringen</button>`;
+    }
+  } else {
+    // Zu Fuß durch das Städtchen
+    const S = W.stadt, rekord = hotelZeiten[S.name];
+    zeit = `<span class="zeit">🚶 ${esc(S.name)} · ⏱ <span id="hoteluhr">${uhrText(A.zeit || 0)}</span>${rekord ? ` <span class="dim">· Bestzeit ${uhrText(rekord)}</span>` : ''}</span>`;
+    if (W.phase === 'da') {
+      const E = W.ergebnis;
+      unten = `<h3>🏨 ${esc(S.ziel.name)} gefunden!</h3><p>${'⭐'.repeat(E.sterne)}${'☆'.repeat(3 - E.sterne)} Du hast <b>${uhrText(E.zeit)}</b> gebraucht${E.neu ? ' – <b class="gold">neue Bestzeit!</b>' : rekord ? ` (Bestzeit ${uhrText(rekord)})` : ''}.
+        <span class="dim">Der kürzeste Weg war ${Math.round(E.weg)} Meter lang.</span></p>${E.bringt.length ? `<p class="gold">${E.bringt.join(' · ')}</p>` : ''}
+        ${abend ? abendWahl() : `<div class="row"><button class="primary" data-a="hotelNochmal">🔁 Noch einmal laufen</button><button data-a="hotelZurueck">Zurück zum Tennisclub</button></div>`}`;
+    } else if (W.hinweis) {
+      unten = `<p><b>${esc(W.hinweis)}</b></p>`;
+    } else if (ort && anlageErgebnis && anlageErgebnis.ort === ort.id) {
+      unten = `<h3>${esc(ort.name)}</h3><p>${anlageErgebnis.text}</p><p class="gold">${anlageErgebnis.bringt.join(' · ')}</p>`;
+    } else if (ort && ort.info) {
+      unten = `<h3>${esc(ort.name)}</h3><p>${ort.text}</p>`;
+    } else {
+      unten = `<p>${S.heim ? 'Lauf nach Hause!' : `Dein Hotel heißt <b>${esc(S.ziel.name)}</b>.`} Die gelben <b>Wegweiser</b> zeigen in die Richtung, in der es liegt – aber manche Gassen sind gesperrt, dann musst du außen herum.
+        <span class="dim">Laufen: mit einem Finger ziehen oder W A S D. Wer schnell ist, bekommt drei Sterne${abend ? ' und geht früher ins Bett (+' + TT.HOTELWEG_FRISCHE + ' Frische)' : ''}.</span></p>`;
+    }
+  }
+  anlageEl.innerHTML = `<div class="oben"><button class="ghost" data-a="anlageEnde">‹ Zurück</button>${zeit}</div>
+    <div class="kam">${kam.map(([k, z, t]) => `<button data-kam="${k}"${k === 'schilder' && !A.schilderAn ? ' class="aus"' : ''} title="${t}" aria-label="${t}">${z}</button>`).join('')}</div>
+    <div class="panel">${unten}</div>`;
+  anlageEl.classList.add('on');
+}
+// Am Abend nach einem Sieg (Karriere und Saison): auf die Anlage, direkt neben den Fahrdienst
+actions.hotelAbend = () => {
+  if (!mitLeben() || !lebenC().abendOffen) return;
+  hotelWeg = null;
+  anlageTag = { def: ctxT.def, abend: true };
+  anlageStart(ichJetzt(), 'hotel');
+};
+// Einsteigen – oder loslaufen
+actions.hotelLos = () => {
+  const A = game.anlage, G = A.plan && A.plan.g, art = hotelArt(G);
+  if (!G || hotelWeg || art === 'hier') return;
+  const def = anlageTag ? anlageTag.def : D.tournamentById(anlageWo), ich = anlageTag ? ichJetzt() : (career ? CA.mePlayer(career) : D.PLAYERS[0]);
+  if (art === 'fahrt') {
+    hotelWeg = { art, def, hotel: hotelFuer(G), phase: 'fahrt' };
+    A.wennHotel = () => { if (hotelWeg) { hotelWeg.phase = 'da'; sound.coin(); anlageZeigen(); } };
+    // Gibt es hier keine Straße zum Hotel, kommt man ohne sichtbare Fahrt an
+    if (!A.hotelFahrt()) hotelWeg.phase = 'da';
+    else hotelWeg.uhr = setInterval(() => { if (hotelWeg && hotelWeg.phase === 'fahrt' && A.fahrt && A.fahrt.phase !== hotelWeg.gezeigt) { hotelWeg.gezeigt = A.fahrt.phase; anlageZeigen(); } }, 300);
+    anlageZeigen();
+    return;
+  }
+  // Zu Fuß: Das Städtchen wird als eigenes Gelände gebaut, du startest am Tor des Tennisclubs
+  const stadt = stadtGelaende(def, G);
+  hotelWeg = { art, def, stadt, phase: 'weg', ich };
+  anlageStart(ich, 'start');
+  const ziel = A.orte.find((o) => o.id === 'ziel');
+  hotelWeg.weg = ziel ? A.wegLaenge(ziel.tx, ziel.tz) : 100;
+  A.wennZuWeit = () => {
+    if (!hotelWeg) return;
+    hotelWeg.hinweis = 'So weit läuft deine Figur hier nicht von allein – den Weg musst du selbst finden! (Finger ziehen oder W A S D)';
+    anlageZeigen();
+    setTimeout(() => { if (hotelWeg && hotelWeg.hinweis) { hotelWeg.hinweis = null; anlageZeigen(); } }, 3500);
+  };
+  A.wennAngekommen = (zeit) => {
+    if (!hotelWeg || hotelWeg.phase === 'da') return;
+    const W = hotelWeg, sterne = sterneFuer(W.weg, zeit), alt = hotelZeiten[W.stadt.name], neu = !alt || zeit < alt;
+    if (neu) { hotelZeiten[W.stadt.name] = Math.round(zeit * 10) / 10; try { localStorage.setItem(HOTELWEG_KEY, JSON.stringify(hotelZeiten)); } catch (e) { /* ohne Speicher gibt es eben keine Bestzeit */ } }
+    W.ergebnis = { zeit, sterne, weg: W.weg, neu: neu && !!alt, bringt: anlageTag && anlageTag.abend ? TT.hotelweg(lebenC(), sterne) : [] };
+    W.phase = 'da';
+    sound.coin();
+    anlageZeigen();
+  };
+  // Die Stoppuhr oben einmal pro Sekunde neu schreiben
+  hotelWeg.uhr = setInterval(() => { const u = document.getElementById('hoteluhr'); if (u && hotelWeg && hotelWeg.phase === 'weg') u.textContent = uhrText(game.anlage.zeit || 0); }, 500);
+  anlageZeigen();
+};
+actions.hotelSpringen = () => { game.anlage.fahrtSpringen(); };
+// Zurück aufs Turniergelände (nur beim freien Herumlaufen)
+actions.hotelZurueck = () => {
+  if (!hotelWeg || (anlageTag && anlageTag.abend)) return;
+  const W = hotelWeg;
+  hotelSchluss();
+  if (W.art === 'fahrt') { game.anlage.fahrtZurueck(); anlageZeigen(); }
+  else anlageStart(W.ich, 'hotel');
+};
+actions.hotelNochmal = () => {
+  if (!hotelWeg || !hotelWeg.stadt) return;
+  const W = hotelWeg;
+  hotelSchluss();
+  anlageStart(W.ich, 'hotel');
+  actions.hotelLos();
+};
+// Im Hotel angekommen: Was machst du am Abend? (dieselbe Auswahl wie in der Turnier-Ansicht)
+actions.hotelAbendWahl = (v) => { anlageSchluss(); actions.abend(v); };
 actions.anlageEnde = () => { anlageSchluss(); if (anlageTag) renderTournament(); else actions.home(); };
 
 // ---------------------------------------------------------------
@@ -1959,9 +2101,9 @@ function startMatch(o) {
   if (lernen) hud.training(match.training);
   $('#hint').textContent = {
     touch: 'Links: laufen · Rechts: nach oben wischen = Schlag · unten = Stopp · Doppeltipp = Lob · zwei Finger hoch = ans Netz, runter = zurück',
-    wisch: 'Wischen = Schlag: ↑ hoher Topspin · ↗ Topspin · → gerade · ↘ langer Slice · ↓ kurzer Slice · früh = links, spät = rechts · schnell = hart · zwei Finger ↑ = Lob · Doppeltipp = Netz',
+    wisch: 'Wischen = Schlag: ↑ hoher Topspin · ↗ Topspin · → gerade · ↘ langer Slice · ↓ kurzer Slice · früh = cross, spät = Linie entlang · schnell = hart · zwei Finger ↑ = Lob · Doppeltipp = Netz',
     klassik: 'Mausrad/←→ zielen · Linke Taste halten = Kraft · Doppelklick = Lob · ↑↓ laufen',
-    controller: 'Schwingen oder A = Schlag · B Slice · X Lob · Y Stopp · früh = links, spät = rechts',
+    controller: 'Schwingen oder A = Schlag · B Slice · X Lob · Y Stopp · früh = cross, spät = Linie entlang',
     profi: 'WASD laufen · Leertaste Topspin · U gerade · O hoher Topspin · K Slice · L Lob · I Stopp · Richtung beim Treffen halten',
   }[settings.control] + (settings.kamera !== 'aus' ? ' · 📷 laufen mit der Kamera' : '');
   // Auf dem Handy blendet sich der Hinweis nach ein paar Sekunden aus (siehe style.css). Dafür die Klasse neu setzen.

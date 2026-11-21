@@ -1,7 +1,7 @@
 // Powershot – Steuerung. Fünf Arten:
 //   klassik : wie in der Python-Version (Mausrad/Pfeile zielen, linke Maustaste halten = Kraft)
 //   touch   : für iPad/Handy (links Joystick, rechts wischen; zwei Finger nach oben = ans Netz, nach unten = Grundlinie)
-//   wisch   : für iPad/Handy, nur wischen: WANN du wischst, bestimmt die Richtung (früh = links, spät = rechts),
+//   wisch   : für iPad/Handy, nur wischen: WANN du wischst, bestimmt die Richtung (früh = cross, spät = longline),
 //             WOHIN du wischst, die Schlagart, und WIE SCHNELL, die Härte. Doppelt tippen = ans Netz und zurück.
 //   profi   : Tastatur, selbst laufen, verschiedene Schläge, Richtung beim Treffen
 //   controller : Switch-Controller (Joy-Con, Pro Controller): Stick, Tasten und – in der iOS-App – Schwingen
@@ -39,6 +39,15 @@ const WISCH_SCHRAEG = 0.6;             // Aufschlag: so schräg gewischt (seitli
 const WISCH_STOPP = 0.15;              // nach unten und langsamer als diese Kraft (0 bis 1) gewischt = Stoppball statt kurzer Slice
 const TIPP_ZEIT = 0.3;                 // so kurz (Sekunden) liegt der Finger bei einem Tipp auf dem Bildschirm
 const TIPP_WEG = 18;                   // so wenig (Pixel) darf er sich dabei bewegen
+// Das Zeitfenster beim Wischen ist länger als beim Controller – ein Wisch dauert selbst schon einen Moment:
+//
+//   0,46 s vorher        0,23 s vorher        Ball ist da
+//     ganz cross  ─────────  Mitte  ─────────  ganz longline (die Linie entlang)
+//
+const WISCH_FRUEH = 0.46;              // so viele Sekunden vor dem Treffen = ganz cross
+const WISCH_MITTE = 0.23;              // so viele Sekunden vor dem Treffen = genau in die Mitte
+const WISCH_HALTBAR = 0.8;             // so lange "gilt" ein Wisch, bis der Ball da sein muss (danach verfällt er: zu früh)
+export const WISCH_SPAET = 0.18;       // so lange nach dem besten Moment darf man noch wischen (bleibt ganz longline), danach "Zu spät!"
 const DOPPEL_TIPP = 0.4;               // so schnell nacheinander (Sekunden) müssen zwei Tipps kommen
 
 // Aus der Wisch-Richtung wird die Schlagart. dx = nach rechts, dy = nach unten (in Pixeln, wie auf dem Bildschirm).
@@ -66,6 +75,9 @@ const SWING_PAUSE = 0.4;               // Sekunden Ruhe nach einem Schwung (sons
 const PAD_HALTBAR = 0.5;               // so lange "gilt" ein Schwung oder Tastendruck, bis der Ball da sein muss
 // --- Controller: Das Timing bestimmt die Richtung, wie beim echten Tennis. ---
 // Triffst du den Ball früh (noch vor dem Körper), geht er nach links. Triffst du ihn spät (neben dem Körper), nach rechts.
+// Das gilt, wenn der Ball RECHTS von dir ist (Vorhand beim Rechtshänder). Ist der Ball LINKS von dir (Rückhand),
+// ist es genau umgekehrt: früh = nach rechts, spät = nach links. Anders gesagt: früh = cross, spät = longline.
+// Auf welcher Seite der Ball ist, sagt das Match der Steuerung in "schlagSeite" (+1 = rechts von dir, -1 = links).
 // Das ganze Fenster ist kurz und liegt direkt vor dem Moment, in dem der Ball bei dir ankommt:
 //
 //   0,32 s vorher        0,16 s vorher        Ball ist da
@@ -79,9 +91,10 @@ const SCHWUNG_VERZUG = 0.08;           // iPhone oder Controller in der Hand
 const UHR_VERZUG = 0.04;               // Apple Watch (zusätzlich zur gemessenen Funkzeit)
 
 // Aus "so viele Sekunden vor dem Treffen" wird die Richtung: -1 = ganz links, 0 = Mitte, +1 = ganz rechts
-function richtungAusZeit(vorher) {
-  if (vorher >= TIMING_MITTE) return -clamp((vorher - TIMING_MITTE) / (TIMING_FRUEH - TIMING_MITTE), 0, 1);
-  return clamp((TIMING_MITTE - vorher) / TIMING_MITTE, 0, 1);
+// frueh und mitte: die beiden Zeiten aus dem Bild oben (beim Wischen sind sie länger, siehe WISCH_FRUEH und WISCH_MITTE)
+function richtungAusZeit(vorher, frueh = TIMING_FRUEH, mitte = TIMING_MITTE) {
+  if (vorher >= mitte) return -clamp((vorher - mitte) / (frueh - mitte), 0, 1);
+  return clamp((mitte - vorher) / mitte, 0, 1);
 }
 // Wann ist das passiert? Der Browser schreibt an jedes Finger-Ereignis die genaue Zeit (in Millisekunden).
 const zeitVon = (e) => (e.timeStamp != null ? e.timeStamp : performance.now()) / 1000;
@@ -106,6 +119,7 @@ export class Controls {
     this.stick = { id: null, x0: 0, y0: 0, x: 0, f: 0 };
     this.swipe = null;
     this.lastTap = -9;
+    this.schlagSeite = 1;         // Timing: Ist der Ball rechts (+1) oder links (-1) von dir? Setzt das Match vor jedem Schlag.
     this.tippZeit = -9;           // Wischen: wann zuletzt getippt wurde (für den Doppel-Tipp)
     this.lastClick = -9;
     this.time = 0;
@@ -303,9 +317,16 @@ export class Controls {
 
   // Aus dem Zeitpunkt des Schwungs wird die Richtung: -1 = ganz links (sehr früh), 0 = Mitte, +1 = ganz rechts (sehr spät).
   //   spaet = wie viele Sekunden nach dem besten Moment geschwungen wurde (0 = rechtzeitig)
+  // Das Ergebnis gilt für einen Ball rechts von dir. Ist der Ball links (Rückhand), dreht schlagSeite es um.
   timingZiel(spaet) {
-    if (spaet > 0) return 1;                               // nach dem Treffmoment: ganz rechts
-    return richtungAusZeit(this.time - this.padAt);        // so lange ist der Schwung schon her
+    const s = this.schlagSeite < 0 ? -1 : 1;
+    if (spaet > 0) return s;                               // nach dem Treffmoment: ganz longline
+    return s * this.zeitRichtung(this.time - this.padAt);  // so lange ist der Schwung schon her
+  }
+
+  // Aus "so viele Sekunden vor dem Treffen" wird die Richtung. Beim Wischen ist das Fenster länger.
+  zeitRichtung(vorher) {
+    return this.mode === 'wisch' ? richtungAusZeit(vorher, WISCH_FRUEH, WISCH_MITTE) : richtungAusZeit(vorher);
   }
 
   // Wie bei "profi": Die Richtung, in die der Stick beim Treffen zeigt, bestimmt das Ziel.
@@ -508,7 +529,7 @@ export class Controls {
     }
     this.wischLetzter = { name: c.name, kraft, finger };
     this.committed = c;
-    this.padAt = this.time - WISCH_VERZUG;      // ab hier läuft die Uhr für das Timing (früh = links, spät = rechts)
+    this.padAt = this.time - WISCH_VERZUG;      // ab hier läuft die Uhr für das Timing (früh = cross, spät = longline)
   }
 
   // Die Richtung kommt wie beim Controller aus dem Zeitpunkt des Wischens.
@@ -582,7 +603,7 @@ export class Controls {
       if (this.charging) this.power = Math.min(this.ctx === 'serve' ? 1.25 : 1, this.power + dt / 0.5);
     } else if (this.mode === 'controller' || this.mode === 'wisch') {
       // Zu früh geschwungen oder gewischt? Dann verfällt der Schlag wieder – wie beim echten Tennis muss das Timing stimmen.
-      if (this.committed && this.ctx === 'rally' && this.time - this.padAt > PAD_HALTBAR) this.committed = null;
+      if (this.committed && this.ctx === 'rally' && this.time - this.padAt > (this.mode === 'wisch' ? WISCH_HALTBAR : PAD_HALTBAR)) this.committed = null;
     }
   }
 
@@ -611,9 +632,10 @@ export class Controls {
       const wisch = this.mode === 'wisch';
       if (this.committed) return wisch ? this.wischRaw(this.committed) : this.padRaw(this.committed);
       // Noch nicht geschwungen: Die Ziellinie zeigt, wohin der Ball ginge, wenn du GENAU JETZT schwingst.
-      // Sie wandert von links (früh) über die Mitte nach rechts (spät).
+      // Sie wandert von cross (früh) über die Mitte nach longline (spät): bei der Vorhand von links nach rechts,
+      // bei der Rückhand von rechts nach links.
       if (this.ctx !== 'rally' || bisTreffen === null || bisTreffen > 1.0) return null;
-      const ziel = bisTreffen < 0 ? 1 : richtungAusZeit(bisTreffen);
+      const ziel = (this.schlagSeite < 0 ? -1 : 1) * (bisTreffen < 0 ? 1 : this.zeitRichtung(bisTreffen));
       return { type: 'drive', aimMode: 'abs', aim: ((!wisch && this.pad.x) || ziel) * 0.88, depth: 0.78, power: 0.6, committed: false };
     }
     return this.committed || this.live;

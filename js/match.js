@@ -11,6 +11,7 @@ import { ZUEGE, ZugZaehler, zielfeld, zielPunkt, lieblingsZuege, ZUG_REAKTION, Z
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const NOFX = new Proxy({}, { get: () => () => {} });
+const SPAET_WISCH = 0.18;    // Wischen: hier ist die Frist etwas länger (gleiche Zahl wie WISCH_SPAET in controls.js)
 const SPAET_FENSTER = 0.12;  // Controller: so lange (Sekunden) darf man nach dem besten Moment noch schlagen (= Ball geht nach rechts)
 const REACH = 1.4;          // so weit reicht man mit dem Schläger (Meter)
 const KAMERA_HILFE = 2.0;   // Kamera-Steuerung: So nah (Meter) musst du am Ball stehen, damit der Spieler den letzten Schritt allein macht
@@ -407,6 +408,8 @@ export class Match {
     let bisTreffen = null;
     if (p.spaetSeit != null) bisTreffen = -(this.sinceHit - p.spaetSeit);
     else if (p.plan) bisTreffen = p.plan.t - this.sinceHit;
+    // Für das Timing: Kommt der Ball rechts (+1) oder links (-1) von dir an? (früh = cross, spät = longline)
+    if (p.plan) this.controls.schlagSeite = (p.plan.stroke === 'bh' ? -1 : 1) * p.hand * p.dz;
     let raw = this.controls.peek(serving, bisTreffen);
     if (!raw) return null;
     if (raw.idle) raw = { ...raw, power: 0.85 };
@@ -885,8 +888,9 @@ export class Match {
 
     let intent;
     if (p.isHuman) {
+      if (this.controls) this.controls.schlagSeite = (fh ? 1 : -1) * p.hand * p.dz;      // Ball rechts (+1) oder links (-1) von dir
       let raw = this.controls ? this.controls.consume(spaet) : null;
-      if (!raw && pad && (p.spaetSeit == null || spaet < SPAET_FENSTER)) {
+      if (!raw && pad && (p.spaetSeit == null || spaet < (this.cfg.controlMode === 'wisch' ? SPAET_WISCH : SPAET_FENSTER))) {
         if (p.spaetSeit == null) p.spaetSeit = this.sinceHit;      // ab jetzt läuft die kurze Frist für "spät"
         return;
       }

@@ -15,6 +15,7 @@ import { frei } from './wege.js';
 import { modell, hausModell } from './gelaendemodelle.js';
 import { moebelBauen } from './moebel.js';
 import { umgebungBauen } from './umgebung.js';
+import { hotelBauen, wegweiserBauen, absperrungBauen, pensionSchmuck } from './hotelbau.js';
 
 const HALB = Math.PI / 2;
 
@@ -270,6 +271,7 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
   const autos = [], masten = [], stuehle = [], baenke = [], fahnenMasten = [], fahnen = [], laternen = [], gitterTeile = [], wiesen = [];
   // Straßen: weiße Striche [x, z, breit, tief], Bordsteine, Schranken, und die Fahrbahnen, auf denen draußen Autos fahren
   const striche = [], gelbe = [], bordsteine = [], fahrbahnen = [], wartende = [];
+  let dienst = null;          // der Wagen vom Fahrdienst – anlage.js lässt ihn bei der Fahrt ins Hotel losfahren
   const ASPHALT_DUNKEL = 0x5c5d62;
   const strasseMalen = (el, laengs, mitte = true) => {
     // Randlinien und ein gestrichelter Mittelstreifen
@@ -371,7 +373,9 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
     } else if (el.a === 'haus') {
       // ---- Haus: Kasten mit Fenstern, Dach und Tür ----
       const glas = el.dach === 'glas';
-      const hm = M(hausModell(el, g.stil));
+      // Das Ziel im Städtchen (Pension oder Zuhause) bauen wir selbst: Ein fertiges Haus würde auf 24 m Breite gezogen komisch aussehen.
+      const hm = el.ort === 'ziel' ? null : M(hausModell(el, g.stil));
+      if (el.ort === 'ziel') G.add(pensionSchmuck(el, { mat, schatten }));
       if (hm) {
         // Ein fertiges Haus im Stil des Landes, in die Maße des Lageplans eingepasst. Die Vorderseite zeigt zur ersten Tür.
         hoehe = el.h * (el.dach === 'sattel' ? 1.3 : 1.08);
@@ -518,7 +522,8 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
         const [ax, az] = el.auto;
         bordsteine.push([el.x, el.z + el.t / 2 + 0.1, el.b, 0.2]);
         striche.push([el.x, el.z - el.t / 2 + 0.2, el.b, 0.12]);
-        for (const [dx, dz, b, t] of [[0, -1.25, 13.4, 0.12], [-6.7, 0, 0.12, 2.5], [6.7, 0, 0.12, 2.5]]) gelbe.push([ax - 3.4 + dx, az + dz, b, t]);
+        const blick = (plan.teile.find((e) => e.a === 'auto') || {}).blick || 1;                  // der zweite Wagen wartet hinter dem ersten
+        for (const [dx, dz, b, t] of [[0, -1.25, 13.4, 0.12], [-6.7, 0, 0.12, 2.5], [6.7, 0, 0.12, 2.5]]) gelbe.push([ax - blick * 3.4 + dx, az + dz, b, t]);
         // Zebrastreifen: Hier gehen die Besucher über die Vorfahrt
         const zx = ax + (el.x + el.b / 2 - ax > 9 ? 7.5 : -9.5);
         if (Math.abs(zx - el.x) < el.b / 2 - 1.5) for (let i = 0; i < 5; i++) striche.push([zx + (i - 2) * 0.9, el.z, 0.5, el.t - 0.5]);
@@ -536,8 +541,10 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
         neu(new THREE.BoxGeometry(1.6, 2.4, 1.6), mat(0xe8e6de), el.x + (quer ? 0 : halb + 1), 1.2, el.z + (quer ? halb + 1 : 0), true);
         neu(new THREE.BoxGeometry(1.9, 0.14, 1.9), mat(0x3a4048), el.x + (quer ? 0 : halb + 1), 2.47, el.z + (quer ? halb + 1 : 0), true);
         neu(new THREE.BoxGeometry(quer ? 1.62 : 1.1, 0.8, quer ? 1.1 : 1.62), mat(0x8ab4d0, { rau: 0.2 }), el.x + (quer ? 0 : halb + 1), 1.6, el.z + (quer ? halb + 1 : 0));
+      } else if (el.art === 'hotelweg') {
+        flach(el.x, el.z, el.b, el.t, ASPHALT_DUNKEL, 3);                                         // die Vorfahrt vor dem Hotel
       } else if (el.art === 'wagen') {
-        wartende.push([el.x, el.z]);
+        wartende.push([el.x, el.z, el.blick || 1]);
       } else if (el.art === 'warten') {
         // Wartehäuschen: Glasdach auf vier Pfosten, Rückwand aus Glas, eine Bank und ein Schild
         for (const sx of [-1, 1]) for (const sz of [-1, 1]) neu(new THREE.BoxGeometry(0.1, 2.4, 0.1), mat(0x3a4048, { metall: 0.4, rau: 0.5 }), el.x + sx * (el.b / 2 - 0.1), 1.2, el.z + sz * (el.t / 2 - 0.1), true);
@@ -550,13 +557,28 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
     } else if (el.a === 'auto') {
       // Das Auto vom Fahrdienst: bei den großen Turnieren eine schwarze Limousine, sonst ein großer Geländewagen oder ein Kleinbus
       const am = M(g.klein ? (g.stufe >= 2 ? 'auto_suv' : 'auto_van') : 'auto_limousine');
-      if (am) haupt = stueck(am, el.x, el.z, HALB);
+      if (am) dienst = haupt = stueck(am, el.x, el.z, HALB * (el.blick || 1));
       else {
-      haupt = neu(new THREE.BoxGeometry(el.b, 0.8, el.t), mat(0xe8e8ee), el.x, 0.75, el.z, true);
-      neu(new THREE.BoxGeometry(el.b * 0.55, 0.65, el.t * 0.9), mat(0x9ab8d8), el.x, 1.45, el.z, true);
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) neu(new THREE.CylinderGeometry(0.36, 0.36, 0.25, 14).rotateX(HALB), mat(0x1a1a1a), el.x + sx * el.b * 0.3, 0.36, el.z + sz * el.t * 0.5);
+        // Ohne Modell: zwei Klötze und vier Räder. Sie hängen an einer Gruppe, damit der Wagen als Ganzes fahren kann (vorn = +z).
+        dienst = new THREE.Group();
+        dienst.position.set(el.x, 0, el.z); dienst.rotation.y = HALB * (el.blick || 1);
+        G.add(dienst);
+        haupt = neu(new THREE.BoxGeometry(el.t, 0.8, el.b), mat(0xe8e8ee), 0, 0.75, 0, true);
+        const teile = [haupt, neu(new THREE.BoxGeometry(el.t * 0.9, 0.65, el.b * 0.55), mat(0x9ab8d8), 0, 1.45, 0, true)];
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) teile.push(neu(new THREE.CylinderGeometry(0.36, 0.36, 0.25, 14).rotateZ(HALB), mat(0x1a1a1a), sx * el.t * 0.5, 0.36, sz * el.b * 0.3));
+        for (const t of teile) dienst.add(t);
       }
       hoehe = 1.6;
+    } else if (el.a === 'hotel') {
+      // ---- Das Spieler-Hotel draußen an der Straße (hotelbau.js) ----
+      const hb = hotelBauen(el, { mat, bilder, schatten });
+      G.add(hb.gruppe);
+      for (const [x, z] of hb.palmen) baeume.palme.push([x, 0, z, x * 7 + z, 1.1]);
+      hoehe = hb.hoehe;
+    } else if (el.a === 'wegweiser') {
+      G.add(wegweiserBauen(el, { mat, schatten }));
+    } else if (el.a === 'absperrung') {
+      G.add(absperrungBauen(el, { mat, schatten }));
     } else if (el.a === 'zaun') {
       // Autogramm-Zaun mit drei wartenden Kindern
       haupt = neu(new THREE.BoxGeometry(el.b, 1.0, 0.08), mat(0x3a4a5a), el.x, 0.5, el.z, true);
@@ -707,8 +729,8 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
   };
   streifen(striche, 0xeeeeea, 0.2); streifen(gelbe, 0xf0c832, 0.2); streifen(bordsteine, 0xb8b6ae, 0.09, 0.18);
   const dienstM = M(g.klein ? 'auto_van' : 'auto_suv');
-  for (const [x, z] of wartende) {
-    if (dienstM) stueck(dienstM, x, z, HALB);
+  for (const [x, z, blick] of wartende) {
+    if (dienstM) stueck(dienstM, x, z, HALB * blick);
     else { neu(new THREE.BoxGeometry(4.4, 0.8, 1.9), mat(0x22242a, { rau: 0.4 }), x, 0.75, z, true); neu(new THREE.BoxGeometry(2.6, 0.6, 1.7), mat(0x39424e, { rau: 0.3 }), x - 0.2, 1.4, z, true); }
   }
   // Fahrende Autos: Auf jeder Straße draußen sind ein paar unterwegs, auf jeder Spur in ihre Richtung (bewegt werden sie in anlage.js)
@@ -766,12 +788,18 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
 
   bilder.fenster.userData.weg = bilder.publikum.userData.weg = true;
   fahrerSetzen(fahrer, 0);
-  return { gruppe: G, klick, boden, bilder, gewollt, raeume, fahrer };
+  return { gruppe: G, klick, boden, bilder, gewollt, raeume, fahrer, dienst };
 }
 
 // Die Autos auf den Straßen draußen ein Stück weiterfahren lassen. Am Ende der Straße tauchen sie am Anfang wieder auf.
-export function fahrerSetzen(fahrer, dt) {
+// vor = { x, z } der Wagen vom Fahrdienst, wenn er gerade auf der Straße fährt: Wer dicht hinter ihm ist, bremst und wartet.
+export function fahrerSetzen(fahrer, dt, vor = null) {
   for (const f of fahrer) {
+    if (vor) {
+      const p = f.wagen.position, r = f.hin ? 1 : -1, laengs = f.laengs === 'x';
+      const voraus = ((laengs ? vor.x - p.x : vor.z - p.z)) * r, daneben = Math.abs(laengs ? vor.z - p.z : vor.x - p.x);
+      if (voraus > 0 && voraus < 10 && daneben < 1.7) continue;
+    }
     f.weg = (f.weg + f.tempo * dt) % f.lang;
     const l = f.mitte + (f.hin ? 1 : -1) * (f.weg - f.lang / 2);
     if (f.laengs === 'x') { f.wagen.position.set(l, 0, f.quer); f.wagen.rotation.y = f.hin ? HALB : -HALB; }

@@ -136,7 +136,7 @@ Einstellbar unter „Einstellungen“. Auf Geräten mit Touchscreen ist „Touch
 
 Geschlagen wird nur mit einem Wisch. Drei Dinge zählen:
 
-- **Wann** du wischst = Richtung, wie bei der Uhr-Steuerung: früh = nach links, spät = nach rechts. Die Ziellinie auf dem Platz wandert mit.
+- **Wann** du wischst = Richtung, wie bei der Uhr-Steuerung: früh = cross (quer über den Platz), spät = longline (die Linie entlang). Die Ziellinie auf dem Platz wandert mit: bei der Vorhand von links nach rechts, bei der Rückhand von rechts nach links.
 - **Wohin** du wischst = Schlagart (links oder rechts herum ist egal):
   ↑ hoher Topspin · ↗ normaler Topspin · → gerader, flacher Schlag · ↘ langer Slice · ↓ kurzer Slice (ganz langsam gewischt = Stoppball).
 - **Wie schnell** du wischst = Härte.

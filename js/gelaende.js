@@ -20,11 +20,13 @@
 //   modell   ein einzelnes fertiges 3D-Modell als Schmuck (z. B. eine Yacht): modell = Name der Datei in assets/gelaende/, dreh in Grad, gr = Größe
 //   Stadien, Häuser und Türme dürfen mit „modell“ ein eigenes 3D-Modell nennen; „stil“ beim Gelände sagt, wie die übrigen Häuser aussehen (england, mittelmeer, wueste, usa, asien, alpen, europa, modern).
 //   dazu: huegel, berge, meer, kugel, bogen, tuerme, statuen, obelisk, leinwand, schirme, zelte, glasdach, auto, zaun
+//   hotel    das Spieler-Hotel draußen an der Straße – das stellt das Spiel selbst hin (hotelfahrt.js); das Gelände nennt nur Art und Namen
 // Ein Baustein mit „ort“ ist eine Tür, an der man etwas tun kann (court, training, kraft, physio, essen, saiten, presse, hotel, fans).
 // Ein Baustein mit „info“ ist eine Sehenswürdigkeit: Wer hingeht, bekommt den Text zu lesen.
 
 import { kleinesGelaende } from './gelaendeklein.js';
 import { gitterBauen, frei, weg } from './wege.js';
+import { hotelPlanen } from './hotelfahrt.js';
 
 // So groß ist ein Tennisplatz auf dem Gelände (mit Auslauf) und so viel Abstand ist zum nächsten
 export const PLATZ_L = 13, PLATZ_B = 7, LUECKE_B = 1.2, LUECKE_L = 1.5;
@@ -47,6 +49,7 @@ export const GELAENDE = {
   // =====================================================================================
   ao: {
     um: { n: 'stadt skyline', o: 'park vorort huegel:14', s: 'park wald', w: 'stadt skyline:1.4' },
+    hotel: { art: 'turm', name: 'Hotel Yarra Tower' },        // hierhin bringt dich der Fahrdienst (der Name ist ausgedacht)
     stil: 'modern', name: 'Melbourne Park', stadt: 'Melbourne, Australien',
     rand: { x0: -106, x1: 110, z0: -48, z1: 48 }, umland: 0x6f9a5a, boden: PFLASTER, feld: [0x2f6fc4, 0x1f4f9c],
     teile: [
@@ -82,6 +85,7 @@ export const GELAENDE = {
   // =====================================================================================
   rg: {
     um: { n: 'stadt', o: 'stadt skyline:0.6', s: 'wald huegel:18', w: 'wald huegel:22' },
+    hotel: { art: 'grand', name: 'Grand Hôtel du Bois' },        // hierhin bringt dich der Fahrdienst (der Name ist ausgedacht)
     stil: 'europa', name: 'Stade Roland Garros', stadt: 'Paris, Frankreich',
     rand: { x0: -110, x1: 100, z0: -33, z1: 33 }, umland: 0x5a8a4a, boden: 0xd8cdb8, feld: [0xcc6a3c, 0xbc5e36],
     teile: [
@@ -113,6 +117,7 @@ export const GELAENDE = {
   // =====================================================================================
   wim: {
     um: { n: 'vorort huegel:16', o: 'park wald huegel:20', s: 'vorort huegel:24', w: 'vorort wald huegel:30' },
+    hotel: { art: 'grand', name: 'The Village Grand' },        // hierhin bringt dich der Fahrdienst (der Name ist ausgedacht)
     stil: 'england', name: 'All England Club', stadt: 'London, England',
     rand: { x0: -56, x1: 52, z0: -82, z1: 76 }, umland: 0x4f8a45, boden: 0xb8b4a4, feld: [0x4a9a3c, 0x3f8a34],
     teile: [
@@ -146,6 +151,7 @@ export const GELAENDE = {
   // =====================================================================================
   uso: {
     um: { n: 'parkplatz vorort', o: 'park wald', s: 'park wald', w: 'parkplatz stadt skyline:1.5' },
+    hotel: { art: 'turm', name: 'Hotel Skyline Queens' },        // hierhin bringt dich der Fahrdienst (der Name ist ausgedacht)
     stil: 'usa', name: 'National Tennis Center', stadt: 'New York, USA',
     rand: { x0: -96, x1: 98, z0: -70, z1: 70 }, umland: 0x5a8a4a, boden: 0xb8b8b4, feld: [0x2f5fb0, 0x3f8a4a],
     teile: [
@@ -177,6 +183,7 @@ export const GELAENDE = {
   // =====================================================================================
   iw: {
     um: { n: 'wueste fels:170', o: 'parkplatz wueste fels:60', s: 'vorort wueste fels:210', w: 'wueste fels:190' },
+    hotel: { art: 'resort', name: 'Desert Palm Resort' },        // hierhin bringt dich der Fahrdienst (der Name ist ausgedacht)
     stil: 'wueste', name: 'Indian Wells Tennis Garden', stadt: 'Indian Wells, USA',
     rand: { x0: -92, x1: 94, z0: -74, z1: 72 }, umland: 0xd8c098, boden: 0xd8ccb0, feld: [0x5a4a9c, 0x3f8a5a],
     teile: [
@@ -207,6 +214,7 @@ export const GELAENDE = {
   // =====================================================================================
   mia: {
     um: { n: 'parkplatz vorort', o: 'parkplatz vorort', s: 'parkplatz vorort skyline:0.5', w: 'parkplatz vorort' },
+    hotel: { art: 'turm', name: 'Ocean Tower Hotel' },        // hierhin bringt dich der Fahrdienst (der Name ist ausgedacht)
     stil: 'usa', name: 'Hard Rock Stadium', stadt: 'Miami, USA',
     rand: { x0: -90, x1: 90, z0: -74, z1: 74 }, umland: 0x8a8a8c, boden: 0xb4b4b0, feld: [0x4a3a8c, 0x2a8a9a],
     teile: [
@@ -233,6 +241,7 @@ export const GELAENDE = {
   // =====================================================================================
   mc: {
     um: { n: 'vorort berge:190 ab:95', o: 'vorort berge:120 ab:120', s: 'meer', w: 'stadt berge:150 ab:210' },
+    hotel: { art: 'grand', name: 'Grand Hôtel Riviera' },        // hierhin bringt dich der Fahrdienst (der Name ist ausgedacht)
     stil: 'mittelmeer', name: 'Monte-Carlo Country Club', stadt: 'Roquebrune-Cap-Martin, Frankreich (direkt neben Monaco)',
     rand: { x0: -72, x1: 72, z0: -50, z1: 46 }, umland: 0x8a9a6a, boden: 0xe0cfa8, feld: [0xc8643a, 0xb85a34], kamW: Math.PI,      // kamW: Die Kamera schaut am Anfang nach Süden, aufs Meer
     teile: [
@@ -263,6 +272,7 @@ export const GELAENDE = {
   // =====================================================================================
   mad: {
     um: { n: 'stadt skyline:0.8 berge:45', o: 'park vorort', s: 'felder vorort huegel:16', w: 'stadt' },
+    hotel: { art: 'turm', name: 'Hotel Torre del Sol' },        // hierhin bringt dich der Fahrdienst (der Name ist ausgedacht)
     stil: 'modern', name: 'Caja Mágica', stadt: 'Madrid, Spanien',
     rand: { x0: -86, x1: 86, z0: -60, z1: 64 }, umland: 0x9a9a6a, boden: 0xc8c4bc, feld: [0xc96a40, 0xb85e38],
     teile: [
@@ -289,6 +299,7 @@ export const GELAENDE = {
   // =====================================================================================
   rom: {
     um: { n: 'wald vorort huegel:35', o: 'stadt', s: 'stadt huegel:14', w: 'wald waldberge:60' },
+    hotel: { art: 'grand', name: 'Grand Hotel Foro' },        // hierhin bringt dich der Fahrdienst (der Name ist ausgedacht)
     stil: 'mittelmeer', name: 'Foro Italico', stadt: 'Rom, Italien',
     rand: { x0: -82, x1: 86, z0: -68, z1: 62 }, umland: 0x6a9a52, boden: 0xd4ccb8, feld: [0xc4603a, 0xb45632],
     teile: [
@@ -323,6 +334,7 @@ export const GELAENDE = {
   // =====================================================================================
   can: {
     um: { n: 'vorort', o: 'stadt', s: 'park stadt skyline:0.8 huegel:40', w: 'park vorort' },
+    hotel: { art: 'turm', name: 'Maple Tower Hotel' },        // hierhin bringt dich der Fahrdienst (der Name ist ausgedacht)
     stil: 'usa', name: 'Stade IGA im Jarry-Park', stadt: 'Montreal, Kanada',
     rand: { x0: -78, x1: 78, z0: -56, z1: 56 }, umland: 0x5a9a4c, boden: 0xc4c0b8, feld: [0x2a66b8, 0x3a7a9a],
     teile: [
@@ -348,6 +360,7 @@ export const GELAENDE = {
   // =====================================================================================
   cin: {
     um: { n: 'parkplatz wald huegel:22', o: 'park wald huegel:26', s: 'parkplatz vorort huegel:18', w: 'wald vorort huegel:24' },
+    hotel: { art: 'grand', name: 'Ohio Grand Hotel' },        // hierhin bringt dich der Fahrdienst (der Name ist ausgedacht)
     stil: 'usa', name: 'Lindner Family Tennis Center', stadt: 'Mason bei Cincinnati, USA',
     rand: { x0: -88, x1: 88, z0: -70, z1: 70 }, umland: 0x5c9a4c, boden: 0xc8c4b8, feld: [0x2a5aa8, 0x2a8a6a],
     teile: [
@@ -376,6 +389,7 @@ export const GELAENDE = {
   // =====================================================================================
   sha: {
     um: { n: 'park stadt skyline:1.2', o: 'felder vorort skyline:0.8', s: 'park felder', w: 'felder stadt' },
+    hotel: { art: 'turm', name: 'Hotel Pearl Tower' },        // hierhin bringt dich der Fahrdienst (der Name ist ausgedacht)
     stil: 'asien', name: 'Qizhong Tennis Center', stadt: 'Shanghai, China',
     rand: { x0: -82, x1: 82, z0: -66, z1: 66 }, umland: 0x4a8a44, boden: 0xc8c8c0, feld: [0x3a4aa8, 0x2a6a8a],
     teile: [
@@ -402,6 +416,7 @@ export const GELAENDE = {
   // =====================================================================================
   par: {
     um: { n: 'stadt skyline:1.3', o: 'stadt skyline:1.8', s: 'stadt skyline', w: 'stadt huegel:20' },
+    hotel: { art: 'turm', name: 'Hôtel Tour Lumière' },        // hierhin bringt dich der Fahrdienst (der Name ist ausgedacht)
     stil: 'modern', name: 'Arena in La Défense', stadt: 'Nanterre bei Paris, Frankreich',
     rand: { x0: -72, x1: 74, z0: -52, z1: 54 }, umland: 0x8a8a90, boden: 0xc4c4c8, feld: [0x2a3a6a, 0x1a1a22],
     teile: [
@@ -427,6 +442,7 @@ export const GELAENDE = {
   // =====================================================================================
   fin: {
     um: { n: 'stadt alpen:240', o: 'stadt huegel:55', s: 'stadt vorort', w: 'stadt alpen:200' },
+    hotel: { art: 'grand', name: 'Grand Hotel Torino' },        // hierhin bringt dich der Fahrdienst (der Name ist ausgedacht)
     stil: 'modern', name: 'Arena von Turin', stadt: 'Turin, Italien',
     rand: { x0: -70, x1: 72, z0: -50, z1: 52 }, umland: 0x6a9a5a, boden: 0xc8c4bc, feld: [0x1f5fb8, 0x0f1a3a],
     teile: [
@@ -591,7 +607,9 @@ function strassenFuer(g, teile, fest) {
     const neu = alt ? null : (quer ? { a: 'strasse', art: 'aussen', laengs: 'z', x: draussen, z: (r.z0 + r.z1) / 2, b: STRASSE_BREIT, t: lang } : { a: 'strasse', art: 'aussen', laengs: 'x', x: (r.x0 + r.x1) / 2, z: draussen, b: lang, t: STRASSE_BREIT });
     const imWeg = stuecke.filter((f) => f.art !== 'schranke').some((f) => trifft(f, dinge)) || (neu && (trifft(neu, dinge, 1) || trifft(neu, wasser, 1)));
     if (neu) { if (quer) neu.t = 760; else neu.b = 760; }           // gezeichnet wird die Straße viel länger, bis in die Ferne
-    wege.push({ seite, weit: Math.abs((quer ? auto.x : auto.z) - rand) + nr * 6, imWeg, stuecke: neu ? [neu, ...stuecke] : stuecke });
+    // „raus“ merkt sich, wie der Wagen vom Gelände herunterkommt – das braucht später die Fahrt ins Hotel (hotelfahrt.js)
+    const raus = { quer, vz, draussen, bz, strasse: neu || alt, blick: quer ? vz : re >= 10 ? 1 : -1, zufahrt: { 1: re >= 10 ? auto.x + re - ZUFAHRT_BREIT / 2 : null, [-1]: li >= 10 ? auto.x - li + ZUFAHRT_BREIT / 2 : null } };
+    wege.push({ seite, weit: Math.abs((quer ? auto.x : auto.z) - rand) + nr * 6, imWeg, raus, stuecke: neu ? [neu, ...stuecke] : stuecke });
   }
   wege.sort((p, q) => (p.imWeg - q.imWeg) || (p.weit - q.weit));
   let liste = wege[0].stuecke;
@@ -599,10 +617,13 @@ function strassenFuer(g, teile, fest) {
   if (wege[0].imWeg) liste = [kasten(auto.x - 9, bz - BUCHT_BREIT / 2, auto.x + 9, bz + BUCHT_BREIT / 2, { art: 'bucht', laengs: 'x', kurz: true })];
   const bucht = liste.find((f) => f.art === 'bucht');
   bucht.auto = [auto.x, auto.z];
+  if (!wege[0].imWeg) bucht.raus = wege[0].raus;
+  // Der Wagen schaut in die Richtung, in die er losfahren wird (+1 = nach Osten, −1 = nach Westen)
+  const blick = auto.blick = bucht.raus ? bucht.raus.blick : 1;
   // Ein zweiter Wagen wartet dahinter, und daneben steht ein Wartehäuschen – wenn dafür Platz ist
   const frei = (f) => !trifft(f, dinge, 0.8) && Math.abs(f.x - auto.x) < 30;
-  const wagen = { a: 'strasse', art: 'wagen', sperre: true, x: auto.x - 7.2, z: auto.z, b: 4.6, t: 2 };
-  if (frei(wagen) && wagen.x - 2.5 > bucht.x - bucht.b / 2) liste.push(wagen);
+  const wagen = { a: 'strasse', art: 'wagen', sperre: true, x: auto.x - blick * 7.2, z: auto.z, b: 4.6, t: 2, blick };
+  if (frei(wagen) && Math.abs(wagen.x - bucht.x) + 2.5 < bucht.b / 2) liste.push(wagen);
   const haus = { a: 'strasse', art: 'warten', sperre: true, x: auto.x + 5.6, z: auto.z + 3.4, b: 4.2, t: 1.5, h: 2.6 };
   if (frei(haus)) liste.push(haus);
   return liste;
@@ -635,11 +656,15 @@ export function planAus(g, id = g.name) {
     else if (el.a === 'bogen') zu({ x: el.x, z: el.z, b: el.b, t: el.t });
     else if (el.a === 'tuerme') for (const [x, z, b, t, h] of el.p) zu({ x, z, b, t, h });
     else if (el.a === 'obelisk') zu({ x: el.x, z: el.z, b: 2.4, t: 2.4 });
-    else if (el.a === 'hecke') zu({ x: el.x, z: el.z, b: el.b, t: el.t });
+    else if (el.a === 'hecke' || el.a === 'absperrung') zu({ x: el.x, z: el.z, b: el.b, t: el.t });
+    else if (el.a === 'wegweiser') zu({ x: el.x, z: el.z, b: 0.5, t: 0.5 });
     else if (el.a === 'leinwand' && el.b > 1) { const quer = el.dreh === 90 || el.dreh === 270; zu({ x: el.x, z: el.z, b: quer ? 1 : el.b, t: quer ? el.b : 1, h: el.h + 2 }); }
   });
   // 1b. Straßen für den Fahrdienst: eine Vorfahrt mit Haltebucht am Auto, eine Zufahrt zum Rand und draußen eine Straße
   const strassen = strassenFuer(g, teile, fest);
+  // 1c. Das Hotel: Bei Turnieren mit Fahrdienst steht es draußen an der Straße, mit eigener Vorfahrt (hotelfahrt.js)
+  const hotel = hotelPlanen(g, teile, strassen);
+  if (hotel) { teile.push(hotel.teil, ...hotel.flaechen); strassen.push(...hotel.wege); fest.push({ x: hotel.teil.x, z: hotel.teil.z, b: hotel.teil.b + 8, t: hotel.teil.t + 8, h: hotel.teil.h }); }
   for (const st of strassen) { teile.push(st); if (st.sperre) sperren.push({ x: st.x, z: st.z, b: st.b, t: st.t, h: st.h || 0 }); }
   const aufStrasse = (x, z, luft = 1.2) => strassen.some((st) => !st.sperre && (st.rund ? Math.hypot(x - st.x, z - st.z) < st.b / 2 + luft : Math.abs(x - st.x) < st.b / 2 + luft && Math.abs(z - st.z) < st.t / 2 + luft));
   const inFest = (x, z, luft = 1.2) => fest.some((s) => {
@@ -731,7 +756,7 @@ export function planAus(g, id = g.name) {
       for (const [x, zz] of liste) sperren.push({ x, z: zz, b: 4, t: 4 });
     }
   });
-  return { id, g, teile, sperren, orte, punkte, raeume };
+  return { id, g, teile, sperren, orte, punkte, raeume, hotel };
 }
 
 // Die neun Orte, die jedes Gelände braucht (dort passiert am Turniertag etwas)

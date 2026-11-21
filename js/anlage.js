@@ -19,6 +19,8 @@ import { baueGelaende, gluecksballBauen, fahrerSetzen, schildBauen, pfeileBauen 
 import { Besucher } from './besucher.js';
 import { gitterBauen, frei, weg, naechsteFreie, hoeheBei } from './wege.js';
 import { ladeModelle, fehltNoch } from './gelaendemodelle.js';
+import { streckeBauen, ortAuf, TEMPO_KURVE } from './hotelfahrt.js';
+import { TIPP_WEIT } from './hotelweg.js';
 
 // ---- Zahlen zum Einstellen ----
 const TEMPO = 3.4;            // so schnell läuft die Figur (Meter pro Sekunde)
@@ -64,6 +66,11 @@ const SCHILD_OBEN = 68, SCHILD_RECHTS = 74;      // oben liegt die Leiste mit �
 const FREI_NAH = 30, FREI_HOCH = 24, FREI_RAND = 160;
 const DOPPEL_ZEIT = 380, DOPPEL_WEIT = 44;         // Doppel-Tipp: höchstens so viele Millisekunden und Bildpunkte auseinander
 const SCHILDER_MERKEN = 'powershot.schilder.v1';
+// Fahrt ins Hotel: so stark gibt der Fahrer Gas und bremst (Meter pro Sekunde, jede Sekunde), so weit hinter dem Wagen fährt die Kamera mit
+const GAS = 2.6, BREMSE = 5, FAHRT_KAMERA = { d: 23, e: 0.46, seite: 0.5 };
+const WARTEN_HOECHSTENS = 6;      // länger als so viele Sekunden wartet der Fahrer an einer Einmündung nicht auf eine Lücke
+const STADT_FERN = 42;            // im Städtchen (zu Fuß zum Hotel) darf die Kamera nur so weit weg – sonst sähe man das Hotel sofort
+const ZIEL_SICHTBAR = 26;         // erst so nah am Hotel erscheint dort das Schild „Dein Hotel“
 
 function flachMin(d) {
   const hoch = 30 * Math.max(0, Math.min(1, (d - 25) / 35));
@@ -171,7 +178,7 @@ export class Anlage {
   // Die Ansicht um (dx, dy) Bildpunkte verschieben – wie eine Landkarte, die man mit dem Finger zieht.
   // Beim ersten Mal löst sich die Kamera von der Figur („freie Kamera“).
   schieben(dx, dy) {
-    if (!this.plan) return;                              // nur auf den großen Geländen mit Lageplan
+    if (!this.plan || this.zuFuss() || this.fahrt) return;      // nur auf den Geländen mit Lageplan – und nicht im Städtchen (dort soll man den Weg ja suchen)
     const k = this.kam, g = this.game, r = this.plan.g.rand;
     if (!this.frei) {
       this.frei = { x: this.blick.x, z: this.blick.z };
@@ -200,14 +207,15 @@ export class Anlage {
   kamGrenzen() {
     const k = this.kam;
     if (this.frei) k.zd = Math.max(FREI_NAH, k.zd);
-    k.zd = Math.max(NAH_MIN, Math.min(this.plan ? this.weit * FERN_MAL : 90, k.zd));
+    k.zd = Math.max(NAH_MIN, Math.min(this.zuFuss() ? STADT_FERN : this.plan ? this.weit * FERN_MAL : 90, k.zd));
     k.ze = Math.max(NEIG_MIN, flachMin(k.zd), Math.min(NEIG_MAX, k.ze));
     if (this.drinnen && !this.frei) { k.zd = Math.min(k.zd, 16); k.ze = Math.max(k.ze, 0.75); }      // im Haus nicht zu weit weg und nicht zu flach, sonst sieht man nur Wand
   }
 
   // 🗺️ Übersicht: einmal drücken = von weit oben auf die ganze Anlage, noch einmal = zurück zur Figur
   uebersicht() {
-    const fern = this.plan ? this.weit : KAM_WEIT.d;
+    if (this.fahrt) return;                                // während der Fahrt bleibt die Kamera beim Wagen
+    const fern = this.zuFuss() ? STADT_FERN : this.plan ? this.weit : KAM_WEIT.d;
     if (this.frei) { this.zurFigur(); this.kam.zd = KAM_START.d; }
     const k = this.kam, weit = k.zd > fern * 0.6;
     k.zd = weit ? KAM_START.d : fern;
@@ -261,7 +269,7 @@ export class Anlage {
     const g = this.game, plan = this.plan;
     if (this.bau) { this.wegraeumen(this.bau.gruppe); this.drinnen = null; }
     plan.namen = [];
-    const namen = Object.fromEntries(ORTE.concat([ZAUN]).map((o) => [o.id, { name: o.name, text: o.text }]));
+    const namen = { ...Object.fromEntries(ORTE.concat([ZAUN]).map((o) => [o.id, { name: o.name, text: o.text }])), ...(plan.g.orteNamen || {}) };
     const bau = this.bau = baueGelaende(plan, this.gitter, { schatten: g.quality !== 'niedrig', wenig: g.quality === 'niedrig', namen });
     this.gruppe.add(bau.gruppe);
     this.klick = bau.klick;
@@ -317,6 +325,8 @@ export class Anlage {
     this.an = true;
     this.amOrt = null;
     this.pfad = null;
+    this.fahrt = null; this.kamZiel = null; this.schauHoch = 0;      // Fahrt ins Hotel
+    this.zeit = 0; this.uhrAn = false; this.angekommen = false;      // Stoppuhr für den Fußweg zum Hotel
     this.gelaendeId = gelaende;
     if (g.stadium.group) g.stadium.group.visible = false;      // das Stadion macht Pause
     const plan = typeof gelaende === 'string' ? planVon(gelaende) : gelaende ? planAus(gelaende) : null;      // Kürzel eines großen Turniers oder ein fertiges Gelände
@@ -452,6 +462,12 @@ export class Anlage {
     if (this.gitter) {
       this.pfad = weg(this.gitter, this.p.x, this.p.z, x, z);
       if (!this.pfad) { this.ziel = null; return; }
+      if (this.zuFuss()) {
+        // Im Städtchen läuft die Figur nur kurze Stücke von allein. Den langen Weg zum Hotel muss man selbst finden!
+        let lang = 0, px = this.p.x, pz = this.p.z;
+        for (const q of this.pfad) { lang += Math.hypot(q.x - px, q.z - pz); px = q.x; pz = q.z; }
+        if (lang > TIPP_WEIT) { this.ziel = null; this.pfad = null; if (this.wennZuWeit) this.wennZuWeit(); return; }
+      }
       const letzter = this.pfad[this.pfad.length - 1];
       this.ziel.x = letzter.x; this.ziel.z = letzter.z;
     }
@@ -477,6 +493,14 @@ export class Anlage {
     if (stelle) this.zielSetzen(stelle.x, stelle.z);
   }
 
+  // Wie viele Meter sind es von der Figur bis zu dieser Stelle, wenn man um alle Häuser herumläuft? (für die Soll-Zeit zum Hotel)
+  wegLaenge(x, z) {
+    const w = this.gitter ? weg(this.gitter, this.p.x, this.p.z, x, z) : null;
+    let lang = 0, px = this.p.x, pz = this.p.z;
+    for (const q of w || [{ x, z }]) { lang += Math.hypot(q.x - px, q.z - pz); px = q.x; pz = q.z; }
+    return lang;
+  }
+
   // Zu einem Ort laufen (z. B. vom Knopf im Menü)
   geheZu(id) {
     const ort = this.orte.find((o) => o.id === id);
@@ -484,6 +508,7 @@ export class Anlage {
   }
 
   update(dt) {
+    if (this.fahrt) { this.fahrtWeiter(dt); return; }      // Fahrt ins Hotel: Da steuert niemand, der Wagen fährt von allein
     const g = this.game, p = this.p, t = this.tasten, k = this.kam;
     // --- Selbst steuern: Tasten oder ein Finger als Steuerknüppel ---
     let sx = (t.KeyD || t.ArrowRight ? 1 : 0) - (t.KeyA || t.ArrowLeft ? 1 : 0);
@@ -582,12 +607,163 @@ export class Anlage {
     for (const o of this.orte) if (Math.hypot(p.x - o.tx, p.z - o.tz) < TUER_NAH && tempo < 0.6) nah = o;
     if (nah !== this.amOrt) { this.amOrt = nah; if (this.wennDa) this.wennDa(nah); }
     if (this.plan) this.drinnenPruefen();
+    if (this.zuFuss()) {
+      // Zu Fuß zum Hotel: Die Stoppuhr läuft ab dem ersten Schritt, und das Schild am Hotel erscheint erst, wenn man nah dran ist
+      const z = this.orte.find((o) => o.id === 'ziel');
+      if (tempo > 0.3) this.uhrAn = true;
+      if (this.uhrAn && !this.angekommen) this.zeit += dt;
+      if (z) {
+        if (z.schild) z.schild.userData.weg = !!this.drinnen || Math.hypot(p.x - z.tx, p.z - z.tz) > ZIEL_SICHTBAR;
+        if (nah === z && !this.angekommen) {
+          this.angekommen = true;
+          // Geschafft! Die Kamera geht ein Stück zurück und zeigt das Hotel.
+          const k = this.kam;
+          // (schräg die Gasse entlang – gegenüber stehen ja Häuser im Weg)
+          const soll = Math.atan2(z.tx - z.wx, z.tz - z.wz) + (z.tx > 0 ? -1.3 : 1.3);
+          k.zd = 21; k.ze = 0.34; k.zw += Math.atan2(Math.sin(soll - k.zw), Math.cos(soll - k.zw));
+          if (this.wennAngekommen) this.wennAngekommen(this.zeit);
+        }
+      }
+    }
+    this.kamera(dt);
+  }
+
+  // Ist das hier das Städtchen, durch das man zu Fuß zum Hotel läuft? (hotelweg.js)
+  zuFuss() { return !!(this.plan && this.plan.g.zuFuss); }
+
+  // ---------------------------------------------------------------
+  // Fahrt ins Hotel (Turniere mit Fahrdienst): einsteigen, der Wagen fährt über die Straße, vor dem Hotel aussteigen.
+  // Wo das Hotel steht und welchen Weg der Wagen nimmt, hat hotelfahrt.js schon ausgerechnet (plan.hotel).
+  // ---------------------------------------------------------------
+  // Losfahren. Gibt false zurück, wenn es hier keine sichtbare Fahrt gibt (dann zeigt app.js nur ein Fenster).
+  hotelFahrt() {
+    const h = this.plan && this.plan.hotel;
+    if (!h || this.fahrt) return false;
+    if (this.frei) this.zurFigur();
+    this.ziel = null; this.pfad = null; this.p.vx = this.p.vz = 0;
+    // phase: 'hin' = zur Wagentür gehen · 'ein' = einsteigen · 'fahren' · 'aus' = aussteigen und zur Hoteltür gehen · 'da'
+    this.fahrt = { h, strecke: streckeBauen(h.start, h.mittel), s: 0, v: 0, w: h.start.w, phase: 'hin', t: 0, ort: { x: h.start.x, z: h.start.z }, vorher: { d: this.kam.zd, e: this.kam.ze } };
+    for (const halt of this.fahrt.strecke.halte) { halt.gewartet = 0; halt.durch = false; }
+    return true;
+  }
+  // Die Fahrt abkürzen: gleich vor dem Hotel ankommen
+  fahrtSpringen() {
+    const f = this.fahrt;
+    if (!f || f.phase === 'da') return;
+    f.s = f.strecke.lang; f.v = 0; f.w = ortAuf(f.strecke, f.s).w;
+    Object.assign(this.p, { x: f.h.tuer.x, z: f.h.tuer.z });
+    f.phase = 'aus'; f.t = 0; f.sprung = true;
+  }
+  // Zurück aufs Gelände: Der Wagen steht wieder an der Haltebucht, die Figur daneben
+  fahrtZurueck() {
+    const f = this.fahrt, ort = this.orte.find((o) => o.id === 'hotel');
+    if (!f) return;
+    this.fahrt = null; this.kamZiel = null; this.schauHoch = 0;
+    this.wagenSetzen(f.h.start.x, f.h.start.z, f.h.start.w);
+    if (ort) Object.assign(this.p, { x: ort.tx, z: ort.tz, vx: 0, vz: 0 });
+    Object.assign(this.kam, { zd: KAM_START.d, ze: KAM_START.e, zw: (this.plan.g.kamW || 0) });
+    if (this.game.avatars[0]) this.game.avatars[0].group.visible = true;
+    this.kamera(1);
+  }
+  wagenSetzen(x, z, w) {
+    const wagen = this.bau && this.bau.dienst;
+    if (wagen) { wagen.position.set(x, 0, z); wagen.rotation.y = w; }
+  }
+  // Steht dem Wagen an dieser Einmündung jemand im Weg? nur = 'alle' (einbiegen) oder 'gegen' (nur der Gegenverkehr, beim Abbiegen)
+  haltBesetzt(halt, w) {
+    const rx = Math.sin(w), rz = Math.cos(w);
+    for (const fa of this.bau.fahrer) {
+      const q = fa.wagen.position, r = fa.hin ? 1 : -1, fx = fa.laengs === 'x' ? r : 0, fz = fa.laengs === 'x' ? 0 : r;
+      const bis = (halt.x - q.x) * fx + (halt.z - q.z) * fz;                 // so weit hat das Auto noch bis zur Einmündung (negativ = schon vorbei)
+      const daneben = Math.abs((halt.x - q.x) * fz - (halt.z - q.z) * fx);
+      if (daneben > 6 || bis < -5 || bis > 22) continue;
+      if (halt.nur === 'gegen' && fx * rx + fz * rz > -0.5) continue;         // fährt in meine Richtung: der stört beim Abbiegen nicht
+      return true;
+    }
+    return false;
+  }
+  fahrtWeiter(dt) {
+    const g = this.game, f = this.fahrt, h = f.h, p = this.p, k = this.kam, av = g.avatars[0];
+    dt = Math.min(dt, 0.1);
+    f.t += dt;
+    // Die Figur geht ein Stück von allein: zur Wagentür oder zur Hoteltür
+    const geh = (zx, zz, tempo) => {
+      const dx = zx - p.x, dz = zz - p.z, weit = Math.hypot(dx, dz);
+      if (weit < 0.2) { p.vx = p.vz = 0; return true; }
+      const v = Math.min(tempo, weit * 3 + 0.5);
+      p.vx = dx / weit * v; p.vz = dz / weit * v; p.x += p.vx * dt; p.z += p.vz * dt;
+      p.blick = Math.atan2(p.vx, p.vz);
+      return false;
+    };
+    let sichtbar = true, vor = null;
+    if (f.phase === 'hin') {
+      if (geh(h.start.x, h.start.z + 1.5, 2.4) || f.t > 6) { f.phase = 'ein'; f.t = 0; p.blick = Math.PI; }
+    } else if (f.phase === 'ein') {
+      p.vx = p.vz = 0;
+      sichtbar = f.t < 0.45;                                 // Tür auf, einsteigen, Tür zu – die Figur verschwindet im Wagen
+      if (f.t > 1.1) { f.phase = 'fahren'; f.t = 0; k.zd = FAHRT_KAMERA.d; k.ze = FAHRT_KAMERA.e; }
+    } else if (f.phase === 'fahren') {
+      sichtbar = false;
+      const st = f.strecke, da = ortAuf(st, f.s), rest = st.lang - f.s;
+      let soll = Math.min(da.tempo || TEMPO_KURVE, Math.sqrt(2 * 2.2 * Math.max(0, rest)) + 0.3);
+      // Vorausschauen: Kommt eine Kurve, rechtzeitig vom Gas gehen
+      for (const voraus of [4, 8, 13, 19]) { const dann = ortAuf(st, f.s + voraus).tempo || TEMPO_KURVE; soll = Math.min(soll, Math.sqrt(dann * dann + 2 * 2.4 * voraus)); }
+      // Einmündungen: anhalten, wenn gerade ein Auto kommt
+      for (const halt of st.halte) {
+        const bis = halt.s - f.s;
+        if (halt.durch || bis > 26) continue;
+        if (bis < -0.4 || halt.gewartet > WARTEN_HOECHSTENS || !this.haltBesetzt(halt, da.w)) { if (bis < 0.8) halt.durch = true; continue; }
+        soll = Math.min(soll, Math.sqrt(2 * 3 * Math.max(0, bis - 0.3)));
+        if (f.v < 0.4) halt.gewartet += dt;
+      }
+      // Fährt jemand dicht vor mir? Dann nicht auffahren.
+      const rx = Math.sin(da.w), rz = Math.cos(da.w);
+      for (const fa of this.bau.fahrer) {
+        const q = fa.wagen.position, voraus = (q.x - da.x) * rx + (q.z - da.z) * rz, daneben = Math.abs((q.x - da.x) * rz - (q.z - da.z) * rx);
+        if (voraus > 0 && voraus < 17 && daneben < 1.7) soll = Math.min(soll, voraus < 8 ? 0 : fa.tempo);
+      }
+      f.v += Math.max(-BREMSE * dt, Math.min(GAS * dt, soll - f.v));
+      f.s = Math.min(st.lang, f.s + Math.max(0, f.v) * dt);
+      const jetzt = ortAuf(st, f.s), diff = Math.atan2(Math.sin(jetzt.w - f.w), Math.cos(jetzt.w - f.w));
+      f.w += diff * Math.min(1, dt * 7);                     // der Wagen dreht weich in die neue Richtung
+      f.ort = { x: jetzt.x, z: jetzt.z };
+      vor = f.ort;
+      // Die Kamera fährt schräg hinter dem Wagen her
+      const kw = f.w + Math.PI + FAHRT_KAMERA.seite, kd = Math.atan2(Math.sin(kw - k.zw), Math.cos(kw - k.zw));
+      k.zw += kd * Math.min(1, dt * 1.3);
+      if (rest < 0.2 && f.v < 0.4) {
+        // Angekommen: aussteigen. Die Kamera geht weit zurück und schaut am Hotel hoch.
+        f.phase = 'aus'; f.t = 0;
+        Object.assign(p, { x: h.aus.x, z: h.aus.z, vx: 0, vz: 0 });
+      }
+    } else if (f.phase === 'aus') {
+      const teil = h.teil, hoch = teil.h > 40;
+      this.schauHoch = teil.h * (hoch ? 0.45 : 0.4);
+      k.zd = Math.max(40, hoch ? teil.h * 1.9 : teil.breit * 1.25); k.ze = 0.16;
+      // von der Straße aus auf die Vorderseite schauen
+      const kw = Math.atan2(h.aus.x - h.tuer.x, h.aus.z - h.tuer.z) + 0.35, kd = Math.atan2(Math.sin(kw - k.zw), Math.cos(kw - k.zw));
+      k.zw += kd * Math.min(1, dt * (f.sprung ? 30 : 1.6));
+      sichtbar = f.t > 0.5 || !!f.sprung;
+      if (sichtbar && (geh(h.tuer.x, h.tuer.z, 2.2) || f.t > 8)) { f.phase = 'da'; f.t = 0; p.vx = p.vz = 0; if (this.wennHotel) this.wennHotel(); }
+    } else p.vx = p.vz = 0;
+    if (f.phase === 'aus' || f.phase === 'da') { const e = ortAuf(f.strecke, f.strecke.lang); f.ort = { x: e.x, z: e.z }; if (f.sprung) f.w = e.w; }
+    this.wagenSetzen(f.ort.x, f.ort.z, f.w);
+    this.kamZiel = f.phase === 'fahren' || f.phase === 'ein' ? f.ort : f.phase === 'hin' ? null : h.tuer;
+    if (av) {
+      av.group.visible = sichtbar;
+      const tempo = Math.hypot(p.vx, p.vz);
+      av.update(dt, { x: p.x, z: p.z, vx: p.vx, vz: p.vz, walk: true, jog: 0, face: Math.PI - p.blick, faceFest: true, ohneSchlaeger: true });
+      if (tempo < 0.01 && f.phase === 'da') p.blick = Math.atan2(h.aus.x - h.tuer.x, h.aus.z - h.tuer.z);      // vor dem Hotel dreht sich die Figur zur Kamera
+    }
+    if (g.avatars[1]) g.avatars[1].group.visible = false;
+    if (this.besucher) this.besucher.bewege(dt);
+    if (this.bau) fahrerSetzen(this.bau.fahrer, dt, vor);    // die anderen Autos fahren weiter – und bremsen hinter dem Fahrdienst
     this.kamera(dt);
   }
 
   // Die Kamera kreist um die Figur: Knöpfe und Tasten drehen und zoomen, dann fährt sie weich an ihre neue Stelle
   kamera(dt) {
-    const g = this.game, p = this.p, k = this.kam, t = this.tasten;
+    const g = this.game, p = this.kamZiel || this.p, k = this.kam, t = this.tasten;      // kamZiel: bei der Fahrt ins Hotel folgt die Kamera dem Wagen
     const knopf = this.kamTaste;
     this.zweiFinger();
     if (knopf === 'links' || t.KeyQ) k.zw += dt * 1.6; else if (knopf === 'rechts' || t.KeyR) k.zw -= dt * 1.6;
@@ -611,12 +787,12 @@ export class Anlage {
     }
     // In der Übersicht (weit weg) schaut die Kamera auf die Mitte der Anlage statt auf die Figur
     const ab = this.plan ? this.weit * 0.45 : 22, bis = this.plan ? this.weit * 0.4 : 16, zx = this.plan ? this.mitte.x : 0, zz = this.plan ? this.mitte.z : 0;
-    const fern = Math.max(0, Math.min(1, (k.d - ab) / bis));
+    const fern = this.fahrt ? 0 : Math.max(0, Math.min(1, (k.d - ab) / bis));
     let mx = p.x + (zx - p.x) * fern, mz = p.z + (zz - p.z) * fern + (this.plan ? fern * this.weit * 0.1 : 0);     // etwas nach unten schauen: Unten im Bild liegt das Fenster mit dem Text
     if (this.frei) { mx = this.frei.x; mz = this.frei.z; }                  // freie Kamera: schaut auf ihre eigene Stelle
     this.blick.x = mx; this.blick.z = mz;
     const von = new THREE.Vector3(mx + Math.sin(k.w) * c * d, 0.5 + Math.sin(e) * d, mz + Math.cos(k.w) * c * d);
-    const nach = new THREE.Vector3(mx, 0.9 + Math.max(0, 0.6 - e) * 2.2 * Math.min(1, d / 15), mz);      // flache Kamera schaut etwas höher (ganz nah an der Figur nicht – sonst sähe man nur Himmel)
+    const nach = new THREE.Vector3(mx, Math.max(this.schauHoch || 0, 0.9 + Math.max(0, 0.6 - e) * 2.2 * Math.min(1, d / 15)), mz);      // flache Kamera schaut etwas höher (ganz nah an der Figur nicht – sonst sähe man nur Himmel)
     // Die Schilder: aus der Ferne groß (sonst kann man sie nicht lesen), aus der Nähe klein
     // (auf den großen Geländen wachsen sie in der Übersicht immer weiter mit)
     if (this.plan) {
@@ -731,6 +907,7 @@ export class Anlage {
       g.camera.near = this.alt.nah; g.camera.far = this.alt.fern; g.camera.updateProjectionMatrix();
     }
     this.plan = null; this.gitter = null; this.sonne = null; this.pfad = null; this.namen = []; this.ball = null;
+    this.fahrt = null; this.kamZiel = null; this.schauHoch = 0;
     this.an = false; this.frei = null; this.drei = null; this.letzterTipp = null;
     this.finger = {};
     this.knueppel = null;

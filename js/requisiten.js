@@ -14,7 +14,7 @@ const LISTE = {
   schiedsrichter: ['schiedsrichter.glb', 2.75, Math.PI],
   bank:           ['bank.glb', 2.3, -Math.PI / 2],
   ballkind:       ['ballkind.glb', 1.5, -Math.PI / 2],
-  linienrichter:  ['linienrichter.glb', 1.55, -Math.PI / 2],
+  linienrichter:  ['linienrichter.glb', 1.55, -Math.PI * 3 / 4],     // das Modell steht in seiner Datei schräg (45 Grad) – hier wird es gerade gedreht
   ballmaschine:   ['ballmaschine.glb', 1.4, 0],
   pokal_silber:   ['pokal_silber.glb', 0.6, 0],
   pokal_gold:     ['pokal_gold.glb', 0.6, 0],
