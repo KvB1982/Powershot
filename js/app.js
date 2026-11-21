@@ -47,7 +47,7 @@ const SET_KEY = 'powershot.einstellungen.v1';
 const touchDevice = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
 const settings = Object.assign({
   control: touchDevice ? 'touch' : 'klassik', assist: 'voll', difficulty: 'mittel', length: 'kurz',
-  sound: true, volume: 0.8, voice: true, quality: 'hoch', figures: 'echt',
+  sound: true, volume: 0.8, umgebung: 1, voice: true, quality: 'hoch', figures: 'echt',
   kamera: 'aus', kameraRaum: 'mittel', kameraTauschen: false,
   spielzuege: 'aus',       // taktische Spielzüge im Match: 'aus' oder 'an'
   blick: 'tv',             // Blick auf den Platz im Match: 'tv' (wie im Fernsehen) oder 'nah' (dicht hinter dir)
@@ -68,6 +68,7 @@ const ASSIST_NAMES = { voll: 'Voll (läuft von allein)', seitlich: 'Nur seitlich
 const sound = new Sound();
 sound.voice = settings.voice;
 sound.volume = settings.volume;
+sound.umgebung = settings.umgebung;      // Publikum und Umgebung: 1 normal, 0.5 leise, 0 aus
 sound.enabled = settings.sound;
 const game = new Game3D($('#view'), sound);
 // Ein Show-Schlag wurde gespielt (nur möglich mit eigener Aufnahme, siehe showschlaege.js): Name einblenden, in der Karriere mitzählen
@@ -107,7 +108,7 @@ document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-a]');
   if (!el) return;
   sound.unlock();
-  sound.click();
+  if (el.dataset.a === 'set') sound.schalter(); else if (/^\s*‹|Zurück/.test(el.textContent)) sound.zurueck(); else sound.click();
   const fn = actions[el.dataset.a];
   if (fn) fn(el.dataset.v, el);
 });
@@ -230,6 +231,9 @@ actions.settings = (v) => {
     <div class="panel">
       ${optionRow('Ton', 'sound', { true: 'An', false: 'Aus' })}
       ${optionRow('Lautstärke', 'volume', { 0.4: 'Leise', 0.8: 'Normal', 1.2: 'Laut' })}
+      ${optionRow('Publikum und Umgebung', 'umgebung', { 1: 'Normal', 0.5: 'Leise', 0: 'Aus' })}
+      <p class="dim" style="margin:6px 0 0;font-size:13px">Applaus, Stadion und die Geräusche auf dem Turniergelände. Schläge und Knöpfe hörst du weiter.
+        Auf iPad und iPhone bleibt alles still, solange der Schalter „Stumm“ an ist.</p>
       ${optionRow('Schiedsrichter spricht', 'voice', { true: 'Ja', false: 'Nein' })}
       ${optionRow('Grafik', 'quality', { hoch: 'Schön', niedrig: 'Schnell (ältere Geräte)' })}
       ${optionRow('Spielerfiguren', 'figures', { echt: 'Realistisch', einfach: 'Einfach' })}
@@ -245,11 +249,12 @@ actions.set = (v) => {
   const [key, raw] = v.split(':');
   let val = raw;
   if (raw === 'true' || raw === 'false') val = raw === 'true';
-  else if (key === 'volume') val = parseFloat(raw);
+  else if (key === 'volume' || key === 'umgebung') val = parseFloat(raw);
   settings[key] = val;
   saveSettings();
   sound.voice = settings.voice;
   sound.setVolume(settings.volume);
+  sound.setUmgebung(settings.umgebung);
   sound.setEnabled(settings.sound);
   game.setQuality(settings.quality);
   game.blick = settings.blick;
@@ -522,7 +527,7 @@ actions.wissenAntwort = (v) => {
   const stimmt = R.wahl === F.richtig;
   if (stimmt) R.richtig++;
   LE.eintragen(lernStand, F.id, stimmt); lernSichern();
-  sound.ui && sound.ui();
+  if (stimmt) sound.richtig(); else sound.falsch();
   lernFrage();
 };
 actions.wissenWeiter = () => {
@@ -806,7 +811,7 @@ function quizMerken(ids) {
   if (quizGesehen.length > QZ.ANZAHL - 10) quizGesehen = ids.slice();       // fast alle durch: wieder von vorn
   try { localStorage.setItem(QUIZ_KEY, JSON.stringify(quizGesehen)); } catch (e) { /* voller Speicher: dann wiederholen sich Fragen eben eher */ }
 }
-MS.klaenge({ gut: () => sound.coin(), tipp: () => sound.click() });
+MS.klaenge({ gut: () => sound.richtig(), tipp: () => sound.tipp(), schlecht: () => sound.falsch(), fertig: () => sound.geschafft(), stift: () => sound.stift(), plopp: () => sound.plopp() });
 MS.setzeBuehne(new MiniBuehne(game.renderer));      // die Mini-Spiele bekommen ihr Bild in 3D (minibuehne.js)
 // Die Liste „Aufgaben vom Team“ (wie das Aufgabenbuch im Reitturnier). mitWeg = mit Knöpfen „Hinlaufen“
 function aufgabenHtml(phase, mitWeg = true) {
@@ -938,6 +943,7 @@ function anlageStart(ich, woher, ergebnis = null) {
     if (ort && ort.info && G && !stempelVon(G).includes(ort.name)) {
       stempel[G.name] = [...stempelVon(G), ort.name];
       try { localStorage.setItem(STEMPEL_KEY, JSON.stringify(stempel)); } catch (e) { /* voller Speicher: dann eben ohne Stempel */ }
+      sound.stern();
       anlageErgebnis = { ort: ort.id, text: ort.text, bringt: ['📒 Neuer Stempel im Heft!', ...(anlageTag ? TT.entdeckt(lebenC()) : [])] };
     }
     anlageZeigen();
@@ -946,6 +952,7 @@ function anlageStart(ich, woher, ergebnis = null) {
   // Der Glücksball: in der Karriere einer pro Turniertag, beim freien Herumlaufen immer einer (nicht nach dem Match, nicht am Abend und nicht im Städtchen)
   if (hotelWeg || (anlageTag && (anlageTag.abend || anlageTag.phase === 'nach'))) { /* heute kein Glücksball mehr */ } else if (!anlageTag || !TT.ballGefunden(lebenC())) game.anlage.ballLegen();
   game.anlage.wennBall = () => {
+    sound.stern();
     const bringt = anlageTag ? TT.gluecksball(lebenC()) || [] : [];
     anlageMeldung = { text: '🟡 Du hast den goldenen Glücksball gefunden! ' + (anlageTag ? 'Mit so einem Glücksbringer in der Tasche gehst du ganz ruhig ins Match.' : 'In der Karriere bringt er dir Glück für das Match des Tages.'), bringt };
     anlageZeigen();
@@ -1288,6 +1295,7 @@ actions.ehrungRede = (v) => {
   ehrungZeigen();
 };
 actions.ehrungFoto = () => {
+  sound.kamera();
   ehrung.foto = game.ehrung.foto();
   ehrung.fertig = true;
   sound.click();
@@ -1347,7 +1355,7 @@ function wocheZeigen(s) {
   for (const t of s.neueTeile || []) lines.push(`<b class="gold">🎁 Sonderstück verdient: ${esc(t.name)}!</b> Du bekommst es für ${esc(t.wofuer)}. Es liegt unter „Ausrüstung“ in deiner Sammlung.`);
   for (const g of s.neueSponsoren) lines.push(`<b class="gold">Neuer Sponsor: ${esc(g.name)}!</b> ${esc(g.text)} (${money(g.geld)} pro Turnier)`);
   if (s.seasonOver) lines.push(`<b>Ein neues Tennisjahr beginnt: ${career.season}!</b> Im ATP Race starten alle wieder bei 0 Punkten. In der Weltrangliste behältst du deine Punkte – aber jede Woche fallen die Punkte weg, die genau ein Jahr alt sind. Du hast wieder ${CA.WILDCARDS_PRO_SAISON} Wildcards.`);
-  if (s.netto > 0) sound.coin();
+  if (s.netto > 0) sound.kasse();
   showInfo(s.name, lines.join('<br>'), 'career');
 }
 
@@ -1530,7 +1538,7 @@ actions.planLeeren = (v, el) => {
   if (!planLeerArmed) { planLeerArmed = true; el.textContent = 'Wirklich leeren? Nochmal tippen'; setTimeout(() => { planLeerArmed = false; }, 4000); return; }
   planLeerArmed = false; PL.leeren(career); keepScroll(renderCareer);
 };
-actions.planKauf = (v) => { if (CA.buy(career, v)) sound.coin(); keepScroll(renderCareer); };
+actions.planKauf = (v) => { if (CA.buy(career, v)) sound.kasse(); keepScroll(renderCareer); };
 // Vom Turnier-Angebot direkt zu den Schuhen im Shop
 actions.schuheKaufen = () => { shopCat = 'Schuhe'; careerTab = 'shop'; renderCareer(); };
 
@@ -1795,10 +1803,10 @@ function renderCareer() {
 }
 actions.anprobe = (v) => { anprobeId = v || null; keepScroll(renderCareer); };
 actions.ranglisteTab = (v) => { ranglisteTab = v; keepScroll(renderCareer); };
-actions.ausbau = (v) => { if (CA.ausbauKaufen(career, v)) sound.coin(); keepScroll(renderCareer); };
-actions.technik = (v) => { if (CA.technikLernen(career, v)) sound.coin(); keepScroll(renderCareer); };
+actions.ausbau = (v) => { if (CA.ausbauKaufen(career, v)) sound.kasse(); keepScroll(renderCareer); };
+actions.technik = (v) => { if (CA.technikLernen(career, v)) sound.kasse(); keepScroll(renderCareer); };
 actions.skill = (v) => { CA.raiseSkill(career, v); keepScroll(renderCareer); };
-actions.buy = (v) => { if (CA.buy(career, v)) sound.coin(); keepScroll(renderCareer); };
+actions.buy = (v) => { if (CA.buy(career, v)) sound.kasse(); keepScroll(renderCareer); };
 actions.equip = (v) => { CA.equip(career, v); keepScroll(renderCareer); };
 actions.shopCat = (v) => { shopCat = v; keepScroll(renderCareer); };
 actions.careerReise = (v) => { CA.setReise(career, v); keepScroll(renderCareer); };
@@ -2499,6 +2507,29 @@ actions.resultNext = () => { const f = pendingEnd; pendingEnd = null; enterMenu(
 // ---------------------------------------------------------------
 // Spielschleife
 // ---------------------------------------------------------------
+// Geräusche auf dem Turniergelände: Stimmen und Vögel im Hintergrund, Schritte der eigenen Figur, Wagentür und Motor vom Fahrdienst.
+const SCHRITT_GEHEN = 0.75, SCHRITT_JOGGEN = 1.15;      // so viele Meter liegen zwischen zwei Schritten
+const ton = { weg: 0, fahrt: '' };
+function gelaendeTon(dt) {
+  const A = game.anlage, an = A.an && !match;
+  sound.gelaende(an ? (A.zuFuss && A.zuFuss() ? 0.6 : 1) : 0);          // im Städtchen ist weniger los
+  if (!an) { ton.fahrt = ''; return; }
+  // Fahrt ins Hotel: Tür zu, dann fährt der Wagen los
+  const phase = A.fahrt ? A.fahrt.phase : '';
+  if (phase !== ton.fahrt) {
+    if (phase === 'fahren') { sound.autotuer(); sound.auto(); }
+    else if (phase === 'aus' && ton.fahrt === 'fahren') sound.autotuer();
+    ton.fahrt = phase;
+  }
+  if (phase === 'fahren') return;
+  // Schritte: nach jedem Stück Weg einer (schnell = joggen = längere Schritte)
+  const tempo = Math.hypot(A.p.vx || 0, A.p.vz || 0);
+  if (tempo < 0.3) { ton.weg = 0.5; return; }
+  const joggt = tempo > 2.4;
+  ton.weg += tempo * dt;
+  if (ton.weg >= (joggt ? SCHRITT_JOGGEN : SCHRITT_GEHEN)) { ton.weg = 0; sound.schritt(joggt); }
+}
+
 let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
@@ -2511,6 +2542,7 @@ function loop(now) {
     match.update(dt);
   }
   game.frame(match && paused ? 0 : dt);
+  gelaendeTon(dt);
   hudFrame(dt);
   kameraFrame();
   requestAnimationFrame(loop);
@@ -2521,13 +2553,15 @@ function step(n = 60) {
   for (let i = 0; i < n; i++) {
     if (match && !paused) { controls.update(1 / 60); match.update(1 / 60); }
     game.frame(1 / 60);
+    gelaendeTon(1 / 60);
     hudFrame(1 / 60);
   }
 }
 // iPad/iPhone: Wechselt man zu einer anderen App oder sperrt den Bildschirm, macht das Spiel Pause.
 // Kommt man zurück, wird der Ton wieder aufgeweckt (iOS hält ihn sonst an).
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { if (match && !paused) togglePause(); } else if (sound.ctx) sound.unlock();
+  if (document.hidden) { if (match && !paused) togglePause(); if (sound.ctx) sound.ctx.suspend(); }      // im Hintergrund ist das Spiel still
+  else if (sound.ctx) sound.unlock();
 });
 
 // ---------------------------------------------------------------

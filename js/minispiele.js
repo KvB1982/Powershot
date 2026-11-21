@@ -30,7 +30,7 @@ const P2 = (a, b, t) => [misch(a[0], b[0], t), misch(a[1], b[1], t)];
 
 // ---------- Das Fenster ----------
 let el = null, bild = null, g = null, textEl = null, knopfEl = null, infoEl = null;
-let spiel = null, laeuft = false, zuletzt = 0, fertigRuf = null, klang = { gut() {}, tipp() {} };
+let spiel = null, laeuft = false, zuletzt = 0, fertigRuf = null, klang = { gut() {}, tipp() {}, schlecht() {}, fertig() {}, stift() {}, plopp() {} };
 let farbe = '#37c3ff';                   // Trikotfarbe der eigenen Figur
 export function klaenge(k) { klang = { ...klang, ...k }; }
 // Die 3D-Bühne (minibuehne.js). app.js gibt sie hier herein; ohne sie (oder solange die Spielermodelle nicht geladen sind)
@@ -101,7 +101,7 @@ function ende(note, satz, dazu = {}) {
   if (!laeuft) return;
   laeuft = false;
   note = begrenzen(note, 0, 1);
-  if (note >= 0.4) klang.gut();
+  if (note >= 0.7) klang.fertig(); else if (note >= 0.4) klang.gut();      // gut geschafft: kleine Melodie
   el.classList.add('fertig');
   text(`<div class="sterne">${sterne(note)}</div><p>${satz}</p>`);
   knoepfe([['Weiter ›', 'primary']], () => schluss({ note, ...dazu }));
@@ -221,7 +221,7 @@ SPIELE.nachmachen = () => {
     if (dran !== 'du' || pause > 0) return;
     meine = i; meineT = 0; klang.tipp();
     if (i === folge[nr]) { richtig++; nr++; if (nr >= folge.length) { pause = 0.9; falsch = 0; } }
-    else { falsch = 1; pause = 1.1; }
+    else { falsch = 1; pause = 1.1; klang.schlecht(); }
   };
   return {
     titel: 'Warmmachen', malen: true, get zustand() { return { dran, folge, nr, pause }; },
@@ -499,7 +499,7 @@ SPIELE.buffet = (opt) => {
     unten(x, y) {
       // Etwas vom Band nehmen …
       const e = band.find((b) => Math.hypot(x - b.x, y - 262) < 50);
-      if (e && teller.length < TELLER) { band.splice(band.indexOf(e), 1); teller.push(e.essen); klang.tipp(); knopf(); return; }
+      if (e && teller.length < TELLER) { band.splice(band.indexOf(e), 1); teller.push(e.essen); klang.plopp(); knopf(); return; }
       // … oder etwas vom Teller zurücklegen
       const i = Math.floor((x - (W / 2 - TELLER * 45)) / 90);
       if (y > 400 && i >= 0 && i < teller.length) { teller.splice(i, 1); klang.tipp(); knopf(); }
@@ -569,7 +569,7 @@ SPIELE.bespannen = (opt) => {
     if (oben === drueber(reihe, nr)) {
       klang.tipp(); nr++;
       if (nr >= LAENGS) { gemacht[reihe] = LAENGS; reihe++; nr = 0; if (reihe >= QUER) { teil = 'spannen'; spannStart(); } }
-    } else { fehler++; rot = 0.35; }
+    } else { fehler++; rot = 0.35; klang.schlecht(); }
   };
   const spannStart = () => { kg = 8; haelt = false; spannT = 0; tempo = 0.8 + Math.random() * 0.6; knoepfe([['🔧 Hebel ziehen (gedrückt halten)', 'halten']], null); };
   let druck = false;                                             // ist der Hebel gerade gedrückt? (auch schon in der kurzen Pause)
@@ -678,7 +678,7 @@ SPIELE.autogramm = () => {
     const S = sachen[nr], pkt = striche.flat(), innen = pkt.filter((p) => drin(S, p[0], p[1])).length / Math.max(1, pkt.length);
     const p = innen >= 0.93 ? 1 : innen >= 0.7 ? 0.5 : 0;
     punkte += p; gesichter.push(p === 1 ? '😀' : p ? '🙂' : '😕');
-    if (p) klang.gut();
+    if (p) klang.gut(); else klang.schlecht();
     wechsel = 0.55;
   };
   return {
@@ -686,7 +686,7 @@ SPIELE.autogramm = () => {
     hilfe: `${AUTO_KINDER} Fans halten dir etwas hin. <b>Unterschreibe mit dem Finger</b> (oder mit gedrückter Maustaste) im <b>weißen Feld</b> – so, wie du wirklich unterschreiben würdest. Bleib im Feld! Wenn du kurz absetzt, ist die Unterschrift fertig und der nächste Fan ist dran. Du hast ${AUTO_ZEIT} Sekunden.`,
     start() {},
     szene: () => ({ sache: SACHEN.indexOf(sachen[Math.min(nr, AUTO_KINDER - 1)]), nr, schieb: wechsel > 0 ? -(0.55 - wechsel) * 1700 : 0 }),
-    unten(x, y) { if (wechsel <= 0) { malt = true; striche.push([[x, y]]); still = 0; } },
+    unten(x, y) { if (wechsel <= 0) { if (!striche.length) klang.stift(); malt = true; striche.push([[x, y]]); still = 0; } },
     zieh(x, y, drueckt) { if (malt && drueckt && wechsel <= 0) { striche[striche.length - 1].push([x, y]); still = 0; } },
     hoch() { malt = false; },
     bild(dt) {
@@ -783,7 +783,7 @@ SPIELE.quiz = (opt) => {
     beantwortet = true;
     const F = fragen[nr], ok = i === F.richtig;
     stimmte = ok;
-    if (ok) { richtig++; klang.gut(); }
+    if (ok) { richtig++; klang.gut(); } else klang.schlecht();
     [...knopfEl.children].forEach((b, k) => { b.disabled = true; if (k === F.richtig) b.classList.add('richtig'); else if (k === i) b.classList.add('falsch'); });
     text(`<p class="dim">${THEMEN[F.thema]} · Frage ${nr + 1} von ${fragen.length}</p><h3>${F.frage}</h3><p><b class="${ok ? 'plus' : 'minus'}">${ok ? '✓ Richtig!' : i < 0 ? '⏰ Zeit um!' : '✗ Leider falsch.'}</b> ${F.erkl}</p>`);
     const weiter = document.createElement('button');

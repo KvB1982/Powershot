@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Powershot – Geräusche anhören</title>
+<style>
+  body { font: 16px/1.45 system-ui, sans-serif; margin: 0; padding: 16px; background: #10202c; color: #e8eef2; }
+  h1 { margin: 0 0 4px; } h2 { margin: 26px 0 8px; color: #f6d24a; }
+  p { max-width: 60em; } .dim { color: #9fb2bf; font-size: 14px; }
+  table { border-collapse: collapse; width: 100%; max-width: 70em; }
+  td { padding: 5px 8px; border-bottom: 1px solid #25394a; vertical-align: middle; }
+  button { font: inherit; padding: 7px 12px; margin: 2px; border: 0; border-radius: 8px; background: #2e7dd1; color: #fff; cursor: pointer; }
+  button:active { background: #f6d24a; color: #000; }
+  a { color: #8ecbff; } code { color: #c8e6a0; }
+  .reihe { display: flex; flex-wrap: wrap; gap: 4px; max-width: 70em; }
+</style>
+</head>
+<body>
+<h1>🔊 Geräusche anhören</h1>
+<p class="dim">Hier kannst du jedes Geräusch von Powershot Tennis einzeln anhören. Gefällt dir eins nicht? Merk dir den Dateinamen –
+dann kann man es austauschen oder in <code>js/audio.js</code> (Tabelle <code>KLAENGE</code>) leiser stellen. Woher alles kommt: <a href="../sounds/QUELLEN.md">sounds/QUELLEN.md</a>.</p>
+
+<h2>So klingt es im Spiel</h2>
+<p class="dim">Diese Knöpfe benutzen denselben Code wie das Spiel: Jedes Mal kommt eine andere Aufnahme, harte Schläge sind lauter, jeder Belag klingt anders.</p>
+<div class="reihe" id="spiel"></div>
+
+<h2>Alle Dateien einzeln</h2>
+<table id="liste"></table>
+
+<script type="module">
+import { Sound } from '../js/audio.js';
+const sound = new Sound();
+// Jeder Knopf: Name → was beim Drücken passiert
+const KNOEPFE = {
+  'Schlag leicht': () => sound.hit(0.3, 'drive'), 'Schlag hart': () => sound.hit(1, 'drive'), 'Topspin': () => sound.hit(0.7, 'topspin'),
+  'Slice': () => sound.hit(0.5, 'slice'), 'Stoppball': () => sound.hit(0.3, 'drop'), 'Aufschlag': () => sound.hit(1, 'serve'), 'Schmetterball': () => sound.hit(0.9, 'smash'),
+  'Aufprall Hartplatz': () => sound.bounce(20, 'hard'), 'Aufprall Sand': () => sound.bounce(20, 'clay'), 'Aufprall Rasen': () => sound.bounce(20, 'grass'), 'Aufprall Halle': () => sound.bounce(20, 'indoor'),
+  'Netz': () => sound.net(), 'Schuhe quietschen': () => sound.bremsen('hard'), 'Rutschen auf Sand': () => sound.bremsen('clay'),
+  'Applaus kurz': () => sound.applause(0.45), 'Applaus mittel': () => sound.applause(0.75), 'Applaus lang': () => sound.applause(0.9), 'Sieg: Applaus und Jubel': () => sound.applause(1, true),
+  'Publikum erschrickt': () => sound.ooh(), 'Publikum staunt': () => sound.staunen(),
+  'Stadion an': () => sound.setCrowd(0.06), 'Stadion aus': () => sound.setCrowd(0),
+  'Gelände an': () => sound.gelaende(1), 'Gelände aus': () => sound.gelaende(0), 'Schritt gehen': () => sound.schritt(false), 'Schritt joggen': () => sound.schritt(true),
+  'Wagentür': () => sound.autotuer(), 'Wagen fährt los': () => sound.auto(), 'Fotoapparat': () => sound.kamera(),
+  'Knopf': () => sound.click(), 'Zurück': () => sound.zurueck(), 'Umschalten': () => sound.schalter(), 'Antippen': () => sound.tipp(), 'Ablegen': () => sound.plopp(),
+  'Richtig': () => sound.richtig(), 'Falsch': () => sound.falsch(), 'Stern': () => sound.stern(), 'Geschafft': () => sound.geschafft(), 'Sieg-Melodie': () => sound.sieg(),
+  'Kasse': () => sound.kasse(), 'Stift': () => sound.stift(), 'Schiedsrichter': () => sound.say('Spiel, Satz und Sieg'),
+};
+const spiel = document.querySelector('#spiel');
+for (const [name, tun] of Object.entries(KNOEPFE)) {
+  const b = document.createElement('button');
+  b.textContent = name;
+  b.onclick = () => { sound.unlock(); tun(); };       // der Ton darf erst nach dem ersten Tippen starten (Browser-Regel)
+  spiel.append(b);
+}
+window.__sound = sound;
+
+// Die Liste aller Dateien mit Quelle
+const quellen = await (await fetch('../sounds/quellen.json')).json();
+const liste = document.querySelector('#liste');
+let spieler = null;
+for (const q of quellen) {
+  const tr = document.createElement('tr');
+  const knopf = document.createElement('button');
+  knopf.textContent = '▶';
+  knopf.onclick = () => { if (spieler) spieler.pause(); spieler = new Audio('../' + q.datei); spieler.play(); };
+  const td = (inhalt) => { const z = document.createElement('td'); z.append(inhalt); tr.append(z); return z; };
+  td(knopf);
+  td(q.datei.replace('sounds/', '')).style.fontFamily = 'monospace';
+  td(q.was);
+  td(`${q.sek} s`);
+  const a = document.createElement('a'); a.href = q.url; a.textContent = `${q.titel} (${q.von})`; a.target = '_blank';
+  td(a).className = 'dim';
+  liste.append(tr);
+}
+</script>
+</body>
+</html>
