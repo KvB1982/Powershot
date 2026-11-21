@@ -621,7 +621,7 @@ table.erklaer td:first-child { white-space: nowrap; }
 #einlaufKarte td:last-child { font-weight: 700; text-align: right; }
 #einlaufKarte p { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--line); color: var(--text); font-size: clamp(11px, 1.5vw, 15px); font-style: italic; }
 #einlaufSkip { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: calc(7vh + 12px); background: rgba(10, 16, 32, 0.8); }
-#einlaufTipp { position: absolute; left: 0; right: 0; bottom: calc(3.5vh - 9px); z-index: 1; text-align: center; color: #fff; opacity: 0.7; font-size: 13px;
+#einlaufTipp { position: absolute; left: 0; right: 0; bottom: calc(max(7vh, env(safe-area-inset-bottom, 0px)) + 10px); z-index: 1; text-align: center; color: #fff; opacity: 0.7; font-size: 13px;
   text-shadow: 0 1px 4px #000; pointer-events: none; }
 @media (max-height: 480px) {
   #einlaufKarte { padding: 9px 12px 8px; width: min(380px, 48vw); }
