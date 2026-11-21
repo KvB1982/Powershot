@@ -4,7 +4,7 @@
 // Angaben als [vor, seite, hoch] in Metern aus Sicht der Figur (seite: + = Schlaghand).
 
 import * as THREE from 'three';
-import { figureReady, makeFigure, REST, BONES, HAND } from './figur.js';
+import { figureReady, makeFigure, REST, BONES, HAND, restFor } from './figur.js';
 import { requisit } from './requisiten.js';
 import { mocapClip, mocapFrame, mocapLoop, mocapLauf, mocapStufe, mocapWeg, mocapMix, mocapGang, mocapRunde } from './mocap.js';
 import { SHOW, showFuer } from './showschlaege.js';
@@ -168,9 +168,11 @@ function boneFrames(J) {
 }
 
 // Die Ruhe-Pose (T-Pose) des Modells und ihre Umkehr-Matrizen
-let restInverses = null;
-function getRestInverses() {
-  if (restInverses) return restInverses;
+// (Menschen aus MakeHuman stehen ein wenig anders in der T-Pose als die alten Modelle – deshalb gibt es die Matrizen je Bauplan "R")
+const restInverses = new Map();
+function getRestInverses(R = REST) {
+  if (restInverses.has(R)) return restInverses.get(R);
+  const REST = R;
   const J = {
     hip: REST.hip, neck: REST.neck,
     shR: REST.sh, shL: mirror(REST.sh), elR: REST.elbow, elL: mirror(REST.elbow), handR: REST.grip, handL: mirror(REST.grip),
@@ -179,11 +181,12 @@ function getRestInverses() {
   };
   const F = boneFrames(J);
   const G = (p) => new THREE.Vector3(p[1], p[2], -p[0]);
-  restInverses = BONES.map((name) => {
+  const inv = BONES.map((name) => {
     const fr = F[name];
     return new THREE.Matrix4().makeBasis(G(fr.ex), G(fr.ey), G(fr.ez)).setPosition(G(fr.o)).invert();
   });
-  return restInverses;
+  restInverses.set(R, inv);
+  return inv;
 }
 
 const PRE_SWING = 0.22;      // so viele Sekunden vor dem Treffpunkt beginnt der Schwung nach vorn
@@ -367,7 +370,7 @@ export class Avatar {
   build(look) {
     const M = this.m = {};
     if (this.real) {
-      const fig = makeFigure(look, this.hand, getRestInverses());
+      const fig = makeFigure(look, this.hand, getRestInverses(restFor(look)));
       this.bones = fig.bones;
       this.group.add(fig.mesh, ...fig.bones);
       this.buildRacket(look);

@@ -7,6 +7,12 @@
 // "geriggt": Jeder Punkt der Oberfläche bekommt Gewichte, die sagen, welchen Knochen er folgt
 // (z. B. 70 % Oberarm, 30 % Unterarm am Ellbogen). Die Knochen bewegt dann avatar.js.
 // Außerdem färbt ein kleines Shader-Stück Hemd, Hose, Haut und Haare je Spieler um.
+//
+// Neu: Menschen aus MakeHuman (assets/mensch_a.glb …), gebaut mit tools/mensch/mensch.py – so wie die Leute im
+// Schwester-Spiel Police Quest. Gibt es für einen Buchstaben so eine Datei, nimmt das Spiel sie statt des alten Modells.
+// Diese Menschen bringen ihre Gewichte schon mit (aus MakeHuman, viel sauberer als unsere Rechnung unten) und
+// haben ein Bild mit festen Feldern (FELDER): daran erkennt der Shader Haut, Hemd, Hose und Haare.
+// Mit ?altefiguren in der Adresse sieht man zum Vergleich die alten Modelle.
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -36,6 +42,15 @@ export const HAND = {
   daumen: [0.775, 0.045],        // Wurzel des Daumens: [zur Seite, nach vorn]
   daumenKnick: [0.798, 0.078],   // Gelenk in der Mitte des Daumens
 };
+
+// Menschen aus MakeHuman: Bei ihnen sitzt die Schulter ein Stück weiter vorn als beim alten Modell (so sind echte
+// Menschen gebaut). Der ganze Arm ist deshalb in der T-Pose um SCHULTER_VOR nach vorn geschoben.
+const SCHULTER_VOR = 0.07;
+const nachVorn = (p) => [p[0] + SCHULTER_VOR, p[1], p[2]];
+export const REST_MENSCH = { ...REST, sh: nachVorn(REST.sh), elbow: nachVorn(REST.elbow), grip: nachVorn(REST.grip) };
+// Welche Buchstaben gibt es schon als Mensch aus MakeHuman? (Dateien assets/mensch_<Buchstabe>.glb)
+export const MENSCHEN = [];
+const ALTE_FIGUREN = typeof location !== 'undefined' && /[?&]altefiguren/.test(location.search);
 
 const ss = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -116,8 +131,40 @@ export function modelKey(look) {
 }
 
 export function loadFigure() {
-  if (!loading) loading = Promise.all(MODELS.map((k) => loadOne(k, `assets/spieler_${k}.glb`)));
+  if (!loading) loading = Promise.all(MODELS.map((k) => (MENSCHEN.includes(k) && !ALTE_FIGUREN
+    ? loadMensch(k, `assets/mensch_${k}.glb`).catch(() => loadOne(k, `assets/spieler_${k}.glb`))      // klappt der Mensch nicht, kommt das alte Modell
+    : loadOne(k, `assets/spieler_${k}.glb`))));
   return loading;
+}
+
+// Die T-Pose, in der dieses Modell gebaut ist (avatar.js rechnet daraus die Knochen in Ruhe)
+export function restFor(look) {
+  const m = models[modelKey(look)];
+  return m && m.mensch ? REST_MENSCH : REST;
+}
+
+// Einen Menschen aus MakeHuman laden. Die Datei ist schon fertig fürs Spiel: richtig gedreht, in Metern,
+// und jeder Punkt kennt seine vier Knochen (_skini = Nummern in BONES, _skinw = Gewichte).
+function loadMensch(key, url) {
+  return new GLTFLoader().loadAsync(url).then((gltf) => {
+    let src = null;
+    gltf.scene.traverse((o) => { if (o.isMesh && !src) src = o; });
+    const geo = src.geometry.clone();
+    const ni = geo.getAttribute('_skini'), nw = geo.getAttribute('_skinw'), n = geo.attributes.position.count;
+    const idx = new Uint16Array(n * 4), wt = new Float32Array(n * 4);
+    for (let i = 0; i < n * 4; i++) { idx[i] = Math.round(ni.array[i]); wt[i] = nw.array[i]; }
+    geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(idx, 4));
+    geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(wt, 4));
+    geo.deleteAttribute('_skini'); geo.deleteAttribute('_skinw');
+    geo.userData.shared = true;
+    const flip = geo.clone();
+    const ix = flip.index.array;
+    for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; }
+    flip.userData.shared = true;
+    const map = src.material.map;
+    if (map) map.anisotropy = 4;
+    models[key] = { geo: { 1: geo, '-1': flip }, map, mensch: true };
+  });
 }
 
 function loadOne(key, url) {
@@ -149,6 +196,7 @@ const REF_SKIN = new THREE.Color(0xad8068);
 // Muster der Kleidung (look.pattern): 0 = einfarbig, 1 = Bruststreifen, 2 = farbige Ärmel,
 // 3 = Seitenstreifen, 4 = Schulterpartie in zweiter Farbe. Die zweite Farbe ist look.trim.
 function material(model, look, hand) {
+  if (model.mensch) return materialMensch(model, look);
   const mat = new THREE.MeshStandardMaterial({ map: model.map, normalMap: model.normalMap, roughness: 0.78, metalness: 0 });
   if (hand < 0) mat.normalScale.set(-1, 1);
   const skin = new THREE.Color(look.skin ?? 0xe2b48c);
@@ -188,6 +236,52 @@ function material(model, look, hand) {
           c = mix(c, c * uSkin, skin);
           c = mix(c, c / 0.68 * tint, cloth);
           c = mix(c, uHair * (0.45 + mx * 9.0), hair);
+          diffuseColor.rgb = c;
+        }`);
+  };
+  return mat;
+}
+
+// Material für einen Menschen aus MakeHuman. Im Bild hat jedes Teil sein festes Feld (wie in tools/mensch/mensch.py, FELDER):
+//   linke Hälfte = Haut · rechts oben = Hemd und Hose · rechts unten links = Haare · der Rest = Schuhe, Augen, Brauen, Wimpern, Extras
+// Kleidung und Haare sind im Bild grau, Haut hat einen mittleren Ton – die Farben des Spielers malt der Shader darüber.
+function materialMensch(model, look) {
+  const mat = new THREE.MeshStandardMaterial({ map: model.map, roughness: 0.8, metalness: 0, alphaTest: 0.45, side: THREE.DoubleSide });
+  const skin = new THREE.Color(look.skin ?? 0xe2b48c);
+  const u = {
+    uShirt: { value: new THREE.Color(look.shirt ?? 0xffffff) },
+    uShorts: { value: new THREE.Color(look.shorts ?? 0xffffff) },
+    uHair: { value: new THREE.Color(look.hair ?? 0x2b1d14) },
+    uTrim: { value: new THREE.Color(look.trim ?? look.shorts ?? 0xffffff) },
+    uShoes: { value: new THREE.Color(look.shoes ?? 0xffffff) },
+    uPattern: { value: look.pattern || 0 },
+    uSkin: { value: new THREE.Vector3(skin.r / REF_SKIN.r, skin.g / REF_SKIN.g, skin.b / REF_SKIN.b).clampScalar(0.25, 1.7) },
+  };
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRest;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRest = position;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRest;\nuniform vec3 uShirt, uShorts, uHair, uSkin, uTrim, uShoes;\nuniform int uPattern;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        {
+          vec3 c = diffuseColor.rgb;
+          vec2 f = vec2(vMapUv.x, 1.0 - vMapUv.y);      // Stelle im Bild, von unten links gezählt
+          float h = vRest.y, ax = abs(vRest.x);
+          if (f.x < 0.5) c *= uSkin;                                    // Haut
+          else if (f.y >= 0.5) {                                        // Hemd (links) und Hose (rechts)
+            float shirt = step(f.x, 0.75);
+            float trim = 0.0;
+            if (uPattern == 1) trim = shirt * step(1.17, h) * (1.0 - step(1.26, h)) * (1.0 - step(0.21, ax));
+            else if (uPattern == 2) trim = shirt * step(0.215, ax) + (1.0 - shirt) * step(0.155, ax);
+            else if (uPattern == 3) trim = shirt * step(0.125, ax) * (1.0 - step(1.30, h)) + (1.0 - shirt) * step(0.155, ax);
+            else if (uPattern == 4) trim = shirt * smoothstep(1.24, 1.28, h);
+            c = c / 0.68 * mix(mix(uShorts, uShirt, shirt), uTrim, trim);
+          }
+          else if (f.x < 0.75) c = c / 0.68 * uHair * 1.6;             // Haare
+          else if (f.y >= 0.25 && f.x < 0.875) c = c / 0.68 * uShoes;  // Schuhe
+          else if (f.y < 0.125 && f.x >= 0.8125 && f.x < 0.875) c = c / 0.68 * uHair * 1.2;   // Augenbrauen
           diffuseColor.rgb = c;
         }`);
   };
