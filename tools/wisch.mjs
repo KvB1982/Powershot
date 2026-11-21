@@ -46,14 +46,23 @@ pruefe('schnell > mittel > langsam', schnell > mittel && mittel > langsam, [schn
 { const c = neu('rally'); wisch(c, EINER, 0, 120, 600); const r = c.peek(false, 0.16); pruefe('ganz langsam nach unten = Stoppball', r && r.type === 'drop', r && r.type); }
 { const c = neu('rally'); wisch(c, EINER, 0, 250, 60); const r = c.peek(false, 0.16); pruefe('kurzer Slice ist nie hart', r && r.type === 'slice' && r.power <= 0.6, r && r.power.toFixed(2)); }
 
-console.log('Richtung aus dem Zeitpunkt (früh = links, spät = rechts):');
-for (const [name, warten, test] of [['0,30 s vor dem Treffen', 0.30, (a) => a < -0.6], ['0,16 s vorher', 0.16, (a) => Math.abs(a) < 0.25], ['0,02 s vorher', 0.02, (a) => a > 0.6]]) {
-  const c = neu('rally'); wisch(c, EINER, 150, -150, 100);
-  c.time += warten - 0.05;                 // 0,05 s rechnet die Steuerung selbst zurück (WISCH_VERZUG)
-  const r = c.consume(0);
-  pruefe(name, r && test(r.aim), r && 'Ziel ' + r.aim.toFixed(2));
+console.log('Richtung aus dem Zeitpunkt (früh = cross, spät = longline):');
+// seite: +1 = Ball rechts von dir (Vorhand beim Rechtshänder), -1 = Ball links von dir (Rückhand)
+for (const [seite, wo] of [[1, 'Vorhand'], [-1, 'Rückhand']]) {
+  for (const [name, warten, soll] of [['0,44 s vor dem Treffen', 0.44, -1], ['0,23 s vorher', 0.23, 0], ['0,03 s vorher', 0.03, 1]]) {
+    const c = neu('rally'); wisch(c, EINER, 150, -150, 100);
+    c.time += warten - 0.05;                 // 0,05 s rechnet die Steuerung selbst zurück (WISCH_VERZUG)
+    c.schlagSeite = seite;
+    const r = c.consume(0);
+    const ok = r && (soll === 0 ? Math.abs(r.aim) < 0.2 : Math.sign(r.aim) === soll * seite && Math.abs(r.aim) > 0.6);
+    pruefe(`${wo}, ${name}`, ok, r && `Ziel ${r.aim.toFixed(2)} (${r.aim < -0.2 ? 'links' : r.aim > 0.2 ? 'rechts' : 'Mitte'})`);
+  }
+  { const c = neu('rally'); wisch(c, EINER, 150, -150, 100); c.schlagSeite = seite; const r = c.consume(0.1); pruefe(`${wo}, zu spät gewischt = ganz longline`, r && Math.sign(r.aim) === seite, r && 'Ziel ' + r.aim.toFixed(2)); }
+  { const c = neu('rally'); c.schlagSeite = seite; const a = c.peek(false, 0.44).aim, b = c.peek(false, 0.03).aim;
+    pruefe(`${wo}: Ziellinie läuft von ${seite > 0 ? 'links nach rechts' : 'rechts nach links'}`, Math.sign(b - a) === seite, `${a.toFixed(2)} → ${b.toFixed(2)}`); }
 }
-{ const c = neu('rally'); wisch(c, EINER, 150, -150, 100); c.update(0.6); pruefe('viel zu früh gewischt verfällt', c.consume(0) === null); }
+{ const c = neu('rally'); wisch(c, EINER, 150, -150, 100); c.update(0.7); pruefe('0,7 s zu früh gewischt gilt noch (ganz cross)', !!c.consume(0)); }
+{ const c = neu('rally'); wisch(c, EINER, 150, -150, 100); c.update(0.9); pruefe('viel zu früh gewischt (0,9 s) verfällt', c.consume(0) === null); }
 
 console.log('Zwei Finger im Ballwechsel:');
 { const c = neu('rally'); wisch(c, ZWEI, 0, -180, 120); const r = c.peek(false, 0.16); pruefe('nach oben = Lob', r && r.type === 'lob', r && r.type); pruefe('… und nicht „ans Netz“', c.takeNetz() === null); }

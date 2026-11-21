@@ -199,7 +199,7 @@ actions.settings = (v) => {
     <div class="panel">
       ${optionRow('Steuerung', 'control', CONTROL_NAMES)}
       ${settings.control === 'wisch' ? `<p class="dim" style="margin:6px 0 0;font-size:13px">👆 <b>Wischen:</b> Du schlägst nur mit einem Wisch.
-        <b>Wann</b> du wischst, bestimmt die Richtung: früh = nach links, spät = nach rechts (die Ziellinie auf dem Platz wandert mit).
+        <b>Wann</b> du wischst, bestimmt die Richtung: früh = cross (quer über den Platz), spät = longline (die Linie entlang). Die Ziellinie auf dem Platz wandert mit – bei der Vorhand von links nach rechts, bei der Rückhand von rechts nach links.
         <b>Wohin</b> du wischst, bestimmt den Schlag: ↑ hoher Topspin · ↗ Topspin · → gerader, flacher Schlag · ↘ langer Slice · ↓ kurzer Slice (ganz langsam = Stoppball).
         <b>Wie schnell</b> du wischst, bestimmt die Härte. Zwei Finger nach oben = Lob. Doppelt tippen = ans Netz und zurück.<br>
         <b>Aufschlag:</b> ↑ gerade · ↓ Slice · zwei Finger ↑ Kick · zwei Finger ↓ von unten. Schräg wischen = Richtung.
@@ -390,7 +390,7 @@ const HELP = `
     <li><b>iPhone als Schläger fürs iPad</b> (in der App): Auf dem iPad „Controller / iPhone-Schläger“ wählen.
       Auf dem iPhone Powershot öffnen → Einstellungen → „Dieses Gerät als Schläger … benutzen“. Die Geräte finden sich von selbst.</li>
     <li><b>iPhone als Schläger</b> (in der App): Halte das iPhone fest in der Hand und schwing es wie einen Schläger.
-      <b>Timing = Richtung:</b> früh schwingen = Ball nach links, genau richtig = Mitte, spät = nach rechts.
+      <b>Timing = Richtung:</b> früh schwingen = cross (Vorhand: nach links, Rückhand: nach rechts), genau richtig = Mitte, spät = die Linie entlang.
       Aufschlag und Schmetterball (hoher Ball): von oben nach unten schwingen.
       Lass am besten die Laufhilfe auf „Voll“. Achtung: gut festhalten, am besten mit Hülle!</li></ul></div>
   <div class="panel help"><h3>Laufen mit der Kamera (Webcam oder Kamera vom iPad)</h3><ul>
@@ -478,7 +478,7 @@ actions.training = (v) => {
 const ZUG_TIPP = {
   touch: { aufschlag: 'nach oben wischen – schräg wischen = Richtung', drive: 'nach oben wischen – schräg = Richtung, länger = tiefer',
     slice: 'zur Seite wischen', drop: 'nach unten wischen', lob: 'doppelt tippen', netz: 'mit zwei Fingern nach oben wischen' },
-  wisch: { aufschlag: 'nach oben wischen – schräg wischen = Richtung', drive: 'schräg nach oben wischen – früh wischen = links, spät = rechts',
+  wisch: { aufschlag: 'nach oben wischen – schräg wischen = Richtung', drive: 'schräg nach oben wischen – früh wischen = cross, spät = die Linie entlang',
     slice: 'schräg nach unten wischen (ganz nach unten = kurzer Slice)', drop: 'ganz langsam nach unten wischen', lob: 'mit zwei Fingern nach oben wischen', netz: 'doppelt tippen' },
   klassik: { aufschlag: 'Mausrad zielt, linke Maustaste halten und loslassen', drive: 'Mausrad zielt, linke Maustaste halten = Kraft (mehr Kraft = tiefer)',
     slice: 'geht mit der Maus nicht – nimm die Steuerung „Profi“ oder „Touch“', drop: 'geht mit der Maus nicht – nimm die Steuerung „Profi“ oder „Touch“',
@@ -1931,9 +1931,9 @@ function startMatch(o) {
   if (lernen) hud.training(match.training);
   $('#hint').textContent = {
     touch: 'Links: laufen · Rechts: nach oben wischen = Schlag · unten = Stopp · Doppeltipp = Lob · zwei Finger hoch = ans Netz, runter = zurück',
-    wisch: 'Wischen = Schlag: ↑ hoher Topspin · ↗ Topspin · → gerade · ↘ langer Slice · ↓ kurzer Slice · früh = links, spät = rechts · schnell = hart · zwei Finger ↑ = Lob · Doppeltipp = Netz',
+    wisch: 'Wischen = Schlag: ↑ hoher Topspin · ↗ Topspin · → gerade · ↘ langer Slice · ↓ kurzer Slice · früh = cross, spät = Linie entlang · schnell = hart · zwei Finger ↑ = Lob · Doppeltipp = Netz',
     klassik: 'Mausrad/←→ zielen · Linke Taste halten = Kraft · Doppelklick = Lob · ↑↓ laufen',
-    controller: 'Schwingen oder A = Schlag · B Slice · X Lob · Y Stopp · früh = links, spät = rechts',
+    controller: 'Schwingen oder A = Schlag · B Slice · X Lob · Y Stopp · früh = cross, spät = Linie entlang',
     profi: 'WASD laufen · Leertaste Topspin · U gerade · O hoher Topspin · K Slice · L Lob · I Stopp · Richtung beim Treffen halten',
   }[settings.control] + (settings.kamera !== 'aus' ? ' · 📷 laufen mit der Kamera' : '');
   // Auf dem Handy blendet sich der Hinweis nach ein paar Sekunden aus (siehe style.css). Dafür die Klasse neu setzen.
