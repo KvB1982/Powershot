@@ -100,7 +100,17 @@ let season = SE.loadSeason();
 if (season) PS.einrichten(season);     // das Profileben dazu (auch für alte Spielstände)
 let menuVenue = 'ao';
 
-function show(html) { screen.innerHTML = `<div class="wrap">${html}</div>`; screen.classList.add('on'); screen.scrollTop = 0; }
+function show(html) { screen.innerHTML = `<div class="wrap">${html}</div>`; screen.classList.add('on'); screen.scrollTop = 0; reiterPruefen(); }
+// Lange Reiter-Leisten (Karriere, Saison): den gewählten Reiter ins Bild schieben und am Rand zeigen, dass es weitergeht
+function reiterPruefen() {
+  for (const t of screen.querySelectorAll('.tabs')) {
+    const rand = () => { t.classList.toggle('mehrR', t.scrollLeft + t.clientWidth < t.scrollWidth - 4); t.classList.toggle('mehrL', t.scrollLeft > 4); };
+    const sel = t.querySelector('.sel');
+    if (sel) t.scrollLeft = Math.max(0, sel.offsetLeft - t.offsetLeft - (t.clientWidth - sel.offsetWidth) / 2);
+    t.addEventListener('scroll', rand, { passive: true });
+    rand();
+  }
+}
 function hide() { screen.classList.remove('on'); screen.innerHTML = ''; }
 
 const actions = {};
@@ -353,7 +363,7 @@ actions.ersteLos = (v) => {
   const lehrling = D.PLAYERS[D.PLAYERS.length - 1];
   const opp = L.mode === 'match' ? lehrling : { ...D.PLAYERS[59], name: 'Trainer', short: 'Trainer' };
   startMatch({
-    me, opp, def: D.tournamentById(free.venue), mode: L.mode, balls: L.balls, title: 'Erste Schritte', difficulty: 'leicht', length: 'kurz',
+    me, opp, def: D.tournamentById(free.venue), mode: L.mode, balls: L.balls, title: 'Erste Schritte', difficulty: 'leicht', length: 'kurz', ohneHilfe: L.mode !== 'match',
     hinweis: `Lektion ${i + 1}: ${L.ziel}`,
     onEnd: (res) => {
       if (res.aborted) return actions.erste();
@@ -613,9 +623,49 @@ const HELP = `
 let helpBack = 'home';
 // Das Schlagbuch: alle Schlagarten mit Bildern (die Seiten selbst baut js/schlagbuch.js). v = Kürzel des gewählten Schlags
 let schlagWahl = 'vorhand-topspin';
+// „So spielst du ihn“: jede Schlagart des Schlagbuchs mit jeder Steuerung (null = geht mit dieser Steuerung nicht)
+const NICHT = null;
+const SPIEL_TIPP = {
+  klassik: { drive: 'Linke Maustaste halten und loslassen. Die Maus (oder das Mausrad) zielt.', flach: NICHT, slice: NICHT, drop: NICHT, lob: 'Doppelklick oder rechte Maustaste.',
+    volley: 'Mit ↑ ans Netz laufen, dann ganz normal schlagen – am Netz wird daraus von selbst ein Volley.', smash: 'Kommt der Ball hoch über deinen Kopf, wird dein normaler Schlag von selbst ein Schmetterball.',
+    gerade: 'Taste 1 (oder unten anklicken), dann Maustaste halten und loslassen.', asl: 'Taste 2, dann Maustaste halten und loslassen.', kick: 'Taste 3, dann Maustaste halten und loslassen.', unten: 'Taste 4, dann Maustaste halten und loslassen.' },
+  profi: { drive: 'Leertaste oder J. Die Pfeiltasten beim Treffen bestimmen das Ziel. Taste O = noch höherer Topspin.', flach: 'Taste U.', slice: 'Taste K.', drop: 'Taste I.', lob: 'Taste L.',
+    volley: 'Mit W oder ↑ ans Netz laufen, dann Leertaste – am Netz wird daraus von selbst ein Volley.', smash: 'Kommt der Ball hoch über deinen Kopf, wird die Leertaste von selbst ein Schmetterball.',
+    gerade: 'Beim Aufschlag Taste J (oder Leertaste beim ersten Aufschlag).', asl: 'Beim Aufschlag Taste K.', kick: 'Beim Aufschlag Taste L (oder Leertaste beim zweiten Aufschlag).', unten: 'Beim Aufschlag Taste I.' },
+  touch: { drive: 'Nach oben wischen. Schräg wischen = Richtung, länger = tiefer.', flach: NICHT, slice: 'Zur Seite wischen.', drop: 'Nach unten wischen.', lob: 'Doppelt tippen.',
+    volley: 'Mit zwei Fingern nach oben wischen = ans Netz. Dann normal schlagen – am Netz wird daraus von selbst ein Volley.', smash: 'Kommt der Ball hoch über deinen Kopf, wird dein Wisch nach oben von selbst ein Schmetterball.',
+    gerade: 'Vor dem Aufschlag unten „Gerade“ antippen, dann nach oben wischen.', asl: 'Unten „Slice“ antippen, dann nach oben wischen.', kick: 'Unten „Kick“ antippen, dann nach oben wischen.', unten: 'Unten „Von unten“ antippen, dann nach oben wischen.' },
+  wisch: { drive: 'Schräg nach oben wischen ↗. Steil nach oben ↑ = noch höherer Topspin.', flach: 'Waagerecht zur Seite wischen →.', slice: 'Schräg nach unten wischen ↘ (ganz nach unten ↓ = kurzer Slice).', drop: 'Ganz langsam nach unten wischen.', lob: 'Mit zwei Fingern nach oben wischen.',
+    volley: 'Doppelt tippen = ans Netz. Dann normal wischen – am Netz wird daraus von selbst ein Volley.', smash: 'Kommt der Ball hoch über deinen Kopf, wird dein Wisch von selbst ein Schmetterball.',
+    gerade: 'Beim Aufschlag nach oben wischen ↑.', asl: 'Beim Aufschlag nach unten wischen ↓.', kick: 'Beim Aufschlag mit zwei Fingern nach oben wischen.', unten: 'Beim Aufschlag mit zwei Fingern nach unten wischen.' },
+  controller: { drive: 'Schwingen oder Taste A.', flach: NICHT, slice: 'Taste B – oder von oben nach unten schwingen.', drop: 'Taste Y.', lob: 'Taste X.',
+    volley: 'Ans Netz (Doppelklopfen oder Netz-Taste), dann schwingen – am Netz wird daraus von selbst ein Volley.', smash: 'Kommt der Ball hoch über deinen Kopf: von oben nach unten schwingen.',
+    gerade: 'Beim Aufschlag schwingen oder A (erster Aufschlag).', asl: 'Beim Aufschlag Taste B.', kick: 'Beim Aufschlag Taste X.', unten: 'Beim Aufschlag Taste Y.' },
+};
+const SPIEL_SONDER = {
+  'aufschlag-gerade': 'gerade', 'aufschlag-slice': 'asl', 'aufschlag-kick': 'kick', 'aufschlag-unten': 'unten',
+  halbvolley: 'Den Halbvolley gibt es im Spiel nicht als eigenen Schlag. Stehst du am Netz und der Ball springt kurz vor dir auf, schlägst du ihn ganz normal.',
+  'stopp-volley': 'Den Stopp-Volley gibt es im Spiel noch nicht als eigenen Schlag. Am Netz kommt immer der normale Volley.',
+  'slice-lob': 'Im Spiel gibt es einen Lob – er hat Topspin. Den Slice-Lob kannst du nur mit der Uhr aufnehmen.',
+  tweener: 'Der Tweener ist ein Show-Schlag. Er kommt im Spiel erst, wenn es dafür eine eigene Bewegungs-Aufnahme gibt.',
+  doppelklopfen: 'Mit der Apple Watch: zweimal kurz die Hände aneinander klopfen = ans Netz laufen und wieder zurück.',
+  'kein-schlag': 'Das brauchst du nur beim Aufnehmen mit der Uhr.',
+};
+function soSpielstDu(sch) {
+  const T = SPIEL_TIPP[settings.control] || SPIEL_TIPP.touch, name = CONTROL_NAMES[settings.control];
+  const sonder = SPIEL_SONDER[sch.k];
+  if (sonder && !T[sonder]) return `<b>Im Spiel:</b> ${sonder}`;
+  const art = sonder || sch.spiel;
+  if (!(art in T)) return '';
+  if (T[art] === NICHT) {
+    const geht = Object.keys(SPIEL_TIPP).filter((k) => SPIEL_TIPP[k][art]).map((k) => '„' + CONTROL_NAMES[k] + '“').join(', ');
+    return `<b>So spielst du ihn:</b> Mit deiner Steuerung „${name}“ geht dieser Schlag nicht. Er geht mit ${geht} (Einstellungen → Steuerung).`;
+  }
+  return `<b>So spielst du ihn mit deiner Steuerung „${name}“:</b> ${T[art]}`;
+}
 actions.schlagbuch = (v) => {
   if (v) schlagWahl = v;
-  show(`<div class="bar">${back('home')}<h2>Schlagarten</h2><button data-a="uhrAufnahme">⌚ Mit der Uhr aufnehmen – so geht's</button></div>${schlagbuchHtml(schlagWahl)}`);
+  show(`<div class="bar">${back('home')}<h2>Schlagarten</h2><button data-a="uhrAufnahme">⌚ Mit der Uhr aufnehmen – so geht's</button></div>${schlagbuchHtml(schlagWahl, soSpielstDu)}`);
 };
 actions.uhrAufnahme = () => show(`<div class="bar">${back('schlagbuch')}<h2>⌚ Schläge mit der Uhr aufnehmen</h2></div>${uhrHtml()}`);
 
@@ -1032,6 +1082,9 @@ const ANLAGE_KLEIN = ['Halle', 'Hamburg', 'London', 'Dubai', 'Tokio', 'Basel', '
   .map((stadt) => KT.KLEINE_TURNIERE.find((t) => t.city === stadt)).filter(Boolean).concat([KT.LIGA]);
 let anlageErgebnis = null;   // was die letzte Tätigkeit gebracht hat: { ort, text, bringt }
 let anlageMeldung = null;    // was nach einem Zufall (Ereignis) passiert ist: { text, bringt }
+// Der Kasten unten auf dem Gelände lässt sich klein machen, damit man mehr vom Gelände sieht
+let anlageKlein = false;
+actions.anlagePanel = () => { anlageKlein = !anlageKlein; anlageZeigen(); };
 function anlageZeigen() {
   if (hotelWeg || (anlageTag && anlageTag.abend)) return hotelZeigen();      // Fahrt oder Fußweg ins Hotel: eigenes Fenster (weiter unten)
   const A = game.anlage, ort = A.amOrt;
@@ -1064,7 +1117,10 @@ function anlageZeigen() {
         : `<p class="dim">${G.klein ? 'Dieses Gelände ist ausgedacht und nur an den echten Ort angelehnt.' : 'Dieses Gelände ist dem echten nachempfunden.'} Lauf herum und sieh dir alles an – an den blauen Kreisen ℹ️ erfährst du etwas über den Ort. ${hilfe}</p>`;
     }
     const hab = stempelVon(G), infos = A.orte.filter((o) => o.info);
-    const knopf = (o) => `<button data-a="anlageGeh" data-v="${o.id}">${o.info ? (hab.includes(o.name) ? '✅ ' : 'ℹ️ ') : ''}${esc(o.name)}</button>`;
+    // Am Turniertag: Orte, die es bei so kleinen Turnieren noch nicht gibt (Kraftraum, Physio …), bekommen ein Schloss
+    const zu = (o) => { if (!anlageTag || o.info || o.id === 'court' || o.id === 'hotel') return false; const hier = TA.AUFGABEN_IDS.filter((id) => TA.AUFGABEN[id].ort === o.id); return hier.length > 0 && !hier.some((id) => TA.gibtEs(id, anlageTag.def)); };
+    const knopf = (o) => (zu(o) ? `<button class="zu" data-a="anlageGeh" data-v="${o.id}" title="Das gibt es erst bei größeren Turnieren">🔒 ${esc(o.name)}</button>`
+      : `<button data-a="anlageGeh" data-v="${o.id}">${o.info ? (hab.includes(o.name) ? '✅ ' : 'ℹ️ ') : ''}${esc(o.name)}</button>`);
     wohin = `<div class="wohin"><span class="dim">Hinlaufen:</span> ${A.orte.filter((o) => !o.info && o.id !== 'hotel').map(knopf).join('')}${infos.map(knopf).join('')}</div>
       <p class="dim klein">📒 Stempelheft: ${infos.filter((o) => hab.includes(o.name)).length} von ${infos.length} Orten entdeckt${infos.length && infos.every((o) => hab.includes(o.name)) ? ' – alle gefunden! ⭐' : ''}${A.ball ? ' · 🟡 Irgendwo liegt heute ein goldener Glücksball …' : ''}</p>`;
   }
@@ -1105,7 +1161,7 @@ function anlageZeigen() {
   }
   anlageEl.innerHTML = `<div class="oben"><button class="ghost" data-a="anlageEnde">‹ Zurück</button>${zeit}</div>
     <div class="kam">${kam.map(([k, z, t]) => `<button data-kam="${k}"${(k === 'schilder' && !game.anlage.schilderAn) || (k === 'figur' && !game.anlage.frei) ? ' class="aus"' : ''} title="${t}" aria-label="${t}">${z}</button>`).join('')}</div>
-    <div class="panel">${unten}${anlageListe && !anlageTag ? '' : wohin}</div>`;
+    <div class="panel${anlageKlein ? ' klein' : ''}"><button class="klappe" data-a="anlagePanel" title="Kasten klein oder groß machen">${anlageKlein ? '▴ Aufklappen' : '▾ Kleiner'}</button>${unten}${anlageListe && !anlageTag ? '' : wohin}</div>`;
   anlageEl.classList.add('on');
 }
 // Taste B schaltet die Beschriftungen auch – dann den Knopf 🏷️ mit umfärben
@@ -1790,7 +1846,16 @@ function renderCareer() {
     if (c.koerper) tipps.push(`<b class="minus">🩹 Beschwerden (${esc(c.koerper.teil)}).</b> Eine Woche Pause oder der Physio auf der Anlage heilt das. Wer weiterspielt, riskiert eine Verletzung.`);
     else if (c.serie >= AB.SERIE_LANG - 1) tipps.push(`Du spielst schon ${c.serie} Wochen ohne Pause. Dein Körper braucht bald eine freie Woche.`);
     if (stufe >= 0 && !c.vertrag.schlaeger) tipps.push('Eine Schläger-Marke würde dich ausrüsten! Schau unter „Team & Sponsoren“.');
-    body = `
+    // „Dein nächster Schritt“: genau EIN Vorschlag, damit man am Anfang nicht vor acht Reitern steht und nicht weiß, wohin
+    const schritt = c.verletzung ? null
+      : c.skillPoints ? ['Verteile deine ' + c.skillPoints + ' Fähigkeitspunkte', 'Damit wird dein Spieler stärker. Für den Anfang lohnen sich Vorhand, Rückhand und Beinarbeit.', 'skills', 'Zu den Fähigkeiten ›']
+        : !CA.traegt(c, 'Schläger') && c.money >= 150 ? ['Sieh dich im Shop um', 'Du spielst noch mit dem alten Vereinsschläger. Ein besserer Schläger hilft bei jedem Schlag.', 'shop', 'Zur Ausrüstung ›']
+          : ['Such dir ein Turnier für diese Woche aus', 'Unten steht, wo du diese Woche spielen darfst. Für den Anfang: ein ITF-Turnier oder ein Liga-Spiel. Punkte bringen dich in der Weltrangliste nach oben.', '', ''];
+    const anfang = rk > 600 && !c.titles;
+    const schrittHtml = schritt ? `<div class="panel schritt"><b>👉 Dein nächster Schritt: ${schritt[0]}</b><br><span class="dim">${schritt[1]}</span>
+      ${schritt[2] ? ` <button class="primary" data-a="career" data-v="${schritt[2]}">${schritt[3]}</button>` : ''}
+      ${anfang ? '<br><small class="dim">Die Reiter „Saison-Planer“, „Team & Sponsoren“ und „Profi-Service“ werden erst später wichtig. Du kannst sie am Anfang einfach liegen lassen.</small>' : ''}</div>` : '';
+    body = `${schrittHtml}
       <div class="panel"><div class="kpi">
         <div><b>${rk}.</b><span>Weltrangliste · ${CA.meinePunkte(c).punkte.toLocaleString('de-DE')} Punkte</span></div>
         <div><b>${raceIch.points ? raceIch.rank + '.' : '–'}</b><span>ATP Race ${c.season} · ${raceIch.points.toLocaleString('de-DE')} Punkte</span></div>
@@ -1943,6 +2008,7 @@ function renderCareer() {
     const anprobe = `<div class="panel anprobe"><canvas id="anprobe" width="320" height="400"></canvas>
       <div><h3 style="margin-top:0">Anprobe</h3><p>${probeTeil ? `Du probierst an: <b>${esc(probeTeil.name)}</b>${c.owned.includes(probeTeil.id) ? '' : ' <span class="dim">(gehört dir noch nicht)</span>'}` : 'So sieht dein Spieler gerade aus.'}</p>
       <p class="dim klein">Tippe bei einem Schläger, Schuh, Outfit oder einer Kappe auf „Anprobieren“. Die Figur zeigt nur Farben und Formen – echte Marken-Logos gibt es im Spiel nicht.</p>
+      <p class="klein">Was die Pluspunkte bedeuten: <b>Kraft</b> = deine Schläge werden härter · <b>Präzision</b> = sie landen genauer dort, wohin du zielst · <b>Tempo</b> = du läufst schneller.</p>
       ${probeTeil ? '<button class="ghost" data-a="anprobe" data-v="">Wieder meine eigenen Sachen zeigen</button>' : ''}</div></div>`;
     const marken = [...new Set(teile.map((s) => s.marke))];
     // Schläger nach Marke sortiert anzeigen, alles andere in einer Liste
@@ -2478,6 +2544,7 @@ function startMatch(o) {
   match = new Match({
     players: [o.me, o.opp], human: 0, surface: o.def.surface, difficulty: o.difficulty || settings.difficulty,
     sets: lernen ? 3 : len.sets, games: lernen ? 99 : len.games, mode, balls: o.balls, assist: settings.assist, controlMode: settings.control,
+    ohneHilfe: !!o.ohneHilfe,
     finale: !!o.finale,      // im Endspiel heißt der Matchball "Championship Point"
     lernen, changeover: lernen ? false : undefined,
     spielzuege: mitZuegen ? { an: true, stufen: SZ.gelernte(zugSpeicher) } : null,

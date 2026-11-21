@@ -567,3 +567,20 @@ table.erklaer td:first-child { white-space: nowrap; }
 .neufigur { display: flex; gap: 16px; align-items: center; }
 .neufigur canvas { width: 128px; height: 160px; border-radius: 12px; flex: none; }
 @media (max-height: 500px) { h3.gruppe { max-width: 640px; margin: 8px auto 4px; font-size: 12px; } #helpBtn { top: max(12px, env(safe-area-inset-top)); } }
+
+/* Gelände: Kasten unten zum Einklappen, Schloss an Orten ohne Angebot */
+#anlage .panel { position: relative; }
+#anlage .panel .klappe { position: sticky; top: 0; float: right; margin: 0 0 4px 8px; padding: 4px 10px; min-height: 0; font-size: 13px; z-index: 2; }
+#anlage .panel.klein { max-height: 54px; overflow: hidden; }
+#anlage .wohin button.zu { opacity: 0.55; }
+/* Reiter-Leiste: Schatten am Rand zeigt, dass es rechts oder links weitergeht */
+.tabs.mehrR { box-shadow: inset -26px 0 18px -16px rgba(232, 240, 74, 0.55); }
+.tabs.mehrL { box-shadow: inset 26px 0 18px -16px rgba(232, 240, 74, 0.55); }
+.tabs.mehrL.mehrR { box-shadow: inset 26px 0 18px -16px rgba(232, 240, 74, 0.55), inset -26px 0 18px -16px rgba(232, 240, 74, 0.55); }
+
+/* Karriere: Kasten „Dein nächster Schritt“ */
+.panel.schritt { border-color: var(--accent2); }
+.panel.schritt button { margin-top: 8px; }
+
+/* Schlagbuch: „So spielst du ihn“ */
+.sb-wie { background: rgba(55, 195, 255, 0.1); border-left: 3px solid var(--accent2); padding: 8px 12px; border-radius: 8px; }

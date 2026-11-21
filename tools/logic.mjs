@@ -23,7 +23,7 @@ function karriere(siegChance, saisons, laut, stur) {
   const c = CA.newCareer({ name: 'Max Test', look: {} });
   if (CA.myRank(c) !== 2000) throw new Error('Start muss Platz 2000 sein');
   let liga = 0, minGeld = c.money, verletzt = 0, wehweh = 0;
-  while (c.season < 2026 + saisons) {
+  while (c.season < 2027 + saisons) {
     const platz = CA.myRank(c);
     // Ausrüstung und Team wie ein vernünftiger Spieler
     if (!c.equipped['Schläger'] && c.money > 1500) CA.buy(c, 'r_12');

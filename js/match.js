@@ -908,7 +908,7 @@ export class Match {
       }
       // Stufe "Leicht": Wer gar nicht schlägt, bekommt den Ball trotzdem zurück – aber nur als schwachen, kurzen Ball.
       p.hilfe = false;
-      if (!raw && this.diff.autoReturn) {
+      if (!raw && this.diff.autoReturn && !this.cfg.ohneHilfe) {      // ohneHilfe: in den Lektionen „Erste Schritte“ soll man selbst schlagen
         raw = { ...HILFS_SCHLAG }; p.hilfe = true; this.hilfsZahl = (this.hilfsZahl || 0) + 1;
         if (!this.hilfeGesagt) { this.hilfeGesagt = true; this.fx.message('Hilfs-Schlag! Schlag selbst, sonst greift der Gegner an.', 'warn'); }
       }
