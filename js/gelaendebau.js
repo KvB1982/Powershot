@@ -186,6 +186,7 @@ function dielenBild() {
   return t;
 }
 
+const BODEN_METER = { gras: 6, pflaster: 4, asphalt: 9, kopfstein: 3 };   // so breit ist ein Bodenbild in Metern, bevor es sich wiederholt
 const NAH_BAEUME = 26;         // so viele Bäume (die nächsten an den Türen) sind echte Modelle, die übrigen flache Bilder
 // Bild eines Baums für die Ferne: [Breite, Höhe] der Bildtafel, wenn der Baum 1 hoch ist
 const FLACH = { laub: [0.98, 1.47], palme: [0.7, 1.05], pinie: [0.98, 1.47], zypresse: [0.667, 1], fichte: [0.667, 1] };
@@ -238,9 +239,22 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
     G.add(m);
     return m;
   };
+  // Welches Bodenbild passt zu dieser Farbe? Grün = Gras, dunkles Grau = Asphalt, alles andere Helle = Pflaster
+  // (im Städtchen Kopfsteinpflaster). Die Bilder sind grau, die Farbe kommt weiter aus dem Lageplan.
+  // Sind die Bilder noch nicht geladen (oder Qualität „niedrig“), bleibt das gesprenkelte Bild von früher.
+  const bodenBild = (farbe, b, t, nurGras = false) => {
+    const hsl = new THREE.Color(farbe).getHSL({}, THREE.SRGBColorSpace);
+    const blau = hsl.s > 0.16 && hsl.h >= 0.47 && hsl.h < 0.75;         // Wasser und blaue Flächen bleiben, wie sie sind
+    const art = hsl.s > 0.16 && hsl.h > 0.17 && hsl.h < 0.47 ? 'gras' : hsl.s < 0.2 && hsl.l < 0.52 ? 'asphalt' : blau ? null : (g.zuFuss ? 'kopfstein' : 'pflaster');
+    const fertig = art && (art === 'gras' || !nurGras) && M('boden_' + art);      // nurGras: Schnee und Wüste im Umland sind kein Pflaster
+    const bild = (fertig || bilder.koern).clone(); bild.needsUpdate = true;
+    const meter = fertig ? BODEN_METER[art] : 7;                       // so viele Meter ist das Bild in echt breit
+    bild.repeat.set(Math.max(1, b / meter), Math.max(1, t / meter));
+    return bild;
+  };
   // Eine flache Fläche auf dem Boden. e = Ebene (höhere liegen über niedrigeren)
   const flach = (x, z, b, t, farbe, e = 1, rund = false, o = {}) => {
-    if (!o.bild && !o.durch && Math.max(b, t) < 900) { const bild = bilder.koern.clone(); bild.needsUpdate = true; bild.repeat.set(Math.max(1, b / 7), Math.max(1, t / 7)); o = { ...o, bild }; }
+    if (!o.bild && !o.durch && Math.max(b, t) < 900) o = { ...o, bild: o.glatt ? Object.assign(bilder.koern.clone(), { needsUpdate: true }) : bodenBild(farbe, b, t) };
     const geo = rund ? new THREE.CircleGeometry(0.5, 40).rotateX(-HALB).scale(b, 1, t) : new THREE.PlaneGeometry(b, t).rotateX(-HALB);
     const m = neu(geo, mat(farbe, o), x, 0.05 * e, z);
     Object.assign(m.material, { polygonOffset: true, polygonOffsetFactor: (5 - e) * 2, polygonOffsetUnits: (5 - e) * 30 });
@@ -261,14 +275,14 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
 
   // ---- Boden: weit draußen das Umland, darauf das Gelände ----
   const r = g.rand, mx = (r.x0 + r.x1) / 2, mz = (r.z0 + r.z1) / 2;
-  const umBild = bilder.koern.clone(); umBild.needsUpdate = true; umBild.repeat.set(300, 300);
+  const umBild = bodenBild(g.umland, 2400, 2400, true);
   const boden = neu(new THREE.PlaneGeometry(2400, 2400).rotateX(-HALB), mat(g.umland, { bild: umBild }), mx, 0, mz);
   Object.assign(boden.material, { polygonOffset: true, polygonOffsetFactor: 12, polygonOffsetUnits: 200 });
   flach(mx, mz, r.x1 - r.x0 + 6, r.z1 - r.z0 + 6, g.boden, 0.8);
 
   const plaetze = {};        // Farbe → Liste aller Plätze dieser Farbe
   const netze = [], baeume = { laub: [], palme: [], pinie: [], zypresse: [] }, statuen = [], schirme = {}, zelte = [];
-  const autos = [], masten = [], stuehle = [], baenke = [], fahnenMasten = [], fahnen = [], laternen = [], gitterTeile = [], wiesen = [];
+  const autos = [], masten = [], stuehle = [], baenke = [], fahnenMasten = [], fahnen = [], laternen = [], gitterTeile = [], wiesen = [], kuebel = [], tonnen = [], bistros = [];
   // Straßen: weiße Striche [x, z, breit, tief], Bordsteine, Schranken, und die Fahrbahnen, auf denen draußen Autos fahren
   const striche = [], gelbe = [], bordsteine = [], fahrbahnen = [], wartende = [];
   let dienst = null;          // der Wagen vom Fahrdienst – anlage.js lässt ihn bei der Fahrt ins Hotel losfahren
@@ -401,12 +415,18 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
       }
       for (const o of tueren) if (!o.info) tuerBauen(o);
       // Laternen neben den Türen
-      for (const o of tueren) if (!o.info) { const quer = o.seite === 'o' || o.seite === 'w'; laternen.push([o.wx + (quer ? (o.seite === 'o' ? 0.5 : -0.5) : -2.3), 0, o.wz + (quer ? -2.3 : (o.seite === 's' ? 0.5 : -0.5)), WAND_DREH[o.seite]]); }
+      for (const o of tueren) if (!o.info) { const quer = o.seite === 'o' || o.seite === 'w'; laternen.push([o.wx + (quer ? (o.seite === 'o' ? 0.5 : -0.5) : -2.3), 0, o.wz + (quer ? -2.3 : (o.seite === 's' ? 0.5 : -0.5)), WAND_DREH[o.seite]]);
+        // … und auf der anderen Seite der Tür ein Blumenkübel, im Städtchen und bei kleinen Vereinen steht bei der Laterne noch eine Mülltonne
+        kuebel.push([o.wx + (quer ? (o.seite === 'o' ? 0.6 : -0.6) : 2.3), 0, o.wz + (quer ? 2.3 : (o.seite === 's' ? 0.6 : -0.6)), (o.wx * 3 + o.wz) % 6.28]);
+        if (g.zuFuss || (g.klein && g.stufe <= 1)) tonnen.push([o.wx + (quer ? (o.seite === 'o' ? 0.6 : -0.6) : -3.3), 0, o.wz + (quer ? -3.3 : (o.seite === 's' ? 0.6 : -0.6)), WAND_DREH[o.seite] + HALB]);
+        // Vor dem Restaurant stehen zwei kleine Tische mit Stühlen (kleine Vereine haben dort schon ihre Schirm-Tische)
+        if (o.id === 'essen' && !g.klein) for (const s of [-1, 1]) bistros.push([o.wx + (quer ? (o.seite === 'o' ? 1.6 : -1.6) : s * 5), 0, o.wz + (quer ? s * 5 : (o.seite === 's' ? 1.6 : -1.6)), WAND_DREH[o.seite] + HALB]);
+      }
     } else if (el.a === 'plaetze') {
       // ---- Mehrere Tennisplätze nebeneinander (gezeichnet werden sie weiter unten alle auf einmal) ----
       const feld = el.feld || g.feld, key = feld[0] + '_' + feld[1];
       (plaetze[key] = plaetze[key] || { feld, liste: [] });
-      haupt = flach(el.x, el.z, el.b + 1.4, el.t + 1.4, dunkler(feld[1], 0.72), 3);
+      haupt = flach(el.x, el.z, el.b + 1.4, el.t + 1.4, dunkler(feld[1], 0.72), 3, false, { glatt: true });
       for (let i = 0; i < el.nx; i++) for (let k = 0; k < el.nz; k++) {
         const x = el.x + (i - (el.nx - 1) / 2) * el.lx, z = el.z + (k - (el.nz - 1) / 2) * el.lz;
         plaetze[key].liste.push([x, 0.2, z, el.quer ? HALB : 0]);
@@ -424,7 +444,7 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
       }
       hoehe = 1.2;
     } else if (el.a === 'flaeche') {
-      flach(el.x, el.z, el.b, el.t, el.farbe, el.e || 1, el.rund, el.wasser ? { rau: 0.2, metall: 0.15 } : {});
+      flach(el.x, el.z, el.b, el.t, el.farbe, el.e || 1, el.rund, el.wasser ? { rau: 0.2, metall: 0.15, glatt: true } : {});
       if (el.strasse) { strasseMalen(el, el.strasse); fahrbahnen.push({ laengs: el.strasse, x: el.x, z: el.z, breit: Math.min(el.b, el.t) }); }
       if (el.e === 2 && !el.wasser && !el.rund && (el.farbe === 0x5c9a4c || el.farbe === 0x4f8a45) && Math.min(el.b, el.t) >= 10) wiesen.push(el);
       if (el.modell) { const bm = M(el.modell); if (bm) stueck(bm, el.x, el.z, 0, (el.gr || 1)); }
@@ -440,15 +460,17 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
     } else if (el.a === 'autos') {
       for (const [x, z, f] of plan.punkte.get(nr) || []) autos.push([x, 0, z, 0, 1, f]);
     } else if (el.a === 'hecke') {
-      neu(new THREE.BoxGeometry(el.b, 1.2, el.t), mat(0x2f6a34), el.x, 0.6, el.z, true);
+      const laub = M('boden_gras') ? Object.assign(M('boden_gras').clone(), { needsUpdate: true }) : null;      // das Gras-Bild, dunkelgrün gefärbt, sieht aus wie Blätter
+      if (laub) laub.repeat.set(Math.max(1, Math.max(el.b, el.t) / 2.5), 0.5);
+      neu(new THREE.BoxGeometry(el.b, 1.2, el.t), mat(laub ? 0x3c8240 : 0x2f6a34, { bild: laub }), el.x, 0.6, el.z, true);
     } else if (el.a === 'fahnen') {
       // Fahnenmasten in einer Reihe, jede Fahne hat ihre Farbe
       for (let i = 0; i < el.n; i++) { fahnenMasten.push([el.x + i * 1.6, 0, el.z]); fahnen.push([el.x + i * 1.6 + 0.62, 5.3, el.z, 0, 1, el.farben[i % el.farben.length]]); }
     } else if (el.a === 'huegel') {
       haupt = neu(new THREE.SphereGeometry(0.5, 24, 10, 0, Math.PI * 2, 0, HALB).scale(el.b, el.h * 2, el.t), mat(el.farbe), el.x, 0, el.z, true);
     } else if (el.a === 'meer') {
-      flach(mx, el.ab + 600, 2400, 1200, 0x2a7ab8, 0.9, false, { rau: 0.18, metall: 0.2 });
-      flach(mx, el.ab + 1.5, 2400, 3, 0xe8dcc0, 0.95);                                    // heller Strand-Streifen
+      flach(mx, el.ab + 600, 2400, 1200, 0x2a7ab8, 0.9, false, { rau: 0.18, metall: 0.2, glatt: true });
+      flach(mx, el.ab + 1.5, 2400, 3, 0xe8dcc0, 0.95, false, { glatt: true });                                    // heller Strand-Streifen
     } else if (el.a === 'kugel') {
       if (el.voll) { neu(new THREE.CylinderGeometry(el.r * 1.3, el.r * 1.5, 0.6, 20), mat(0xe8e4dc), el.x, 0.3, el.z); haupt = neu(new THREE.SphereGeometry(el.r, 20, 14), mat(0xf4f0e8, { rau: 0.4 }), el.x, el.r + 0.6, el.z, true); }
       else if (M('mal_weltkugel')) {
@@ -757,32 +779,41 @@ export function baueGelaende(plan, gitter, { schatten = true, namen = {}, wenig 
     viele(new THREE.CylinderGeometry(0.09, 0.14, 9, 5).translate(0, 4.5, 0), mat(0x9a9ea6), masten);
     viele(new THREE.BoxGeometry(1.3, 0.5, 0.5).translate(0, 9.1, 0), mat(0xf4f4e8), masten);
   }
-  const latM = M('laterne'), gitM = M('absperrgitter');
+  // In alten Städten (England, Europa, Alpen, Mittelmeer) und im Städtchen steht eine alte Laterne aus Gusseisen
+  const altStadt = g.zuFuss || ['england', 'europa', 'alpen', 'mittelmeer'].includes(g.stil);
+  const latM = (altStadt && M('laterne_alt')) || M('laterne'), gitM = M('absperrgitter');
   if (latM) vieleM(latM, laternen, false);
+  const kuebelM = M('pflanzkuebel'), tonneM = M('muelltonne'), bistroM = M('bistro');
+  if (kuebelM) vieleM(kuebelM, kuebel);
+  if (tonneM) vieleM(tonneM, tonnen);
+  if (bistroM) vieleM(bistroM, bistros);
   if (gitM) vieleM(gitM, gitterTeile);
   // ---- Leben auf den Wiesen: Picknick-Gruppen und Liegestühle (nur wo rundherum genug Platz zum Vorbeilaufen bleibt) ----
   const pickM = M('picknick'), liegeM = M('liegestuhl');
   if (pickM && liegeM) {
     let zw = 99;
     const zf = () => { zw = (zw * 16807) % 2147483647; return zw / 2147483647; };
-    const pick = [], liege = [];
+    const pick = [], liege = [], tische = [], tischM = M('picknicktisch');
     for (const el of wiesen) {
       const n = Math.min(7, Math.round(el.b * el.t / 90));
       for (let i = 0, versuch = 0; i < n && versuch < 60; versuch++) {
         const x = el.x + (zf() - 0.5) * (el.b - 5), z = el.z + (zf() - 0.5) * (el.t - 5);
-        let platz = pick.concat(liege).every((p) => Math.hypot(p[0] - x, p[2] - z) > 4.5) && plan.orte.every((o) => Math.hypot(o.tx - x, o.tz - z) > 5);
+        let platz = pick.concat(liege, tische).every((p) => Math.hypot(p[0] - x, p[2] - z) > 4.5) && plan.orte.every((o) => Math.hypot(o.tx - x, o.tz - z) > 5);
         for (let dx = -3; dx <= 3 && platz; dx++) for (let dz = -3; dz <= 3; dz++) if (!frei(gitter, x + dx, z + dz)) { platz = false; break; }
         if (!platz) continue;
-        (i % 2 ? liege : pick).push([x, 0.06, z, zf() * 6.28]);
+        (tischM && i % 3 === 2 ? tische : i % 2 ? liege : pick).push([x, 0.06, z, zf() * 6.28]);      // jeder dritte Fleck: ein leerer Picknick-Tisch
         // Die Stelle im Wege-Gitter sperren, damit niemand durch die Picknick-Decke läuft
         for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { const ix = Math.floor((x + dx * 0.8 - gitter.x0) / gitter.zelle), iz = Math.floor((z + dz * 0.8 - gitter.z0) / gitter.zelle); if (ix >= 0 && iz >= 0 && ix < gitter.nx && iz < gitter.nz) gitter.zu[iz * gitter.nx + ix] = 1; }
         i++;
       }
     }
-    vieleM(pickM, pick); vieleM(liegeM, liege);
+    vieleM(pickM, pick); vieleM(liegeM, liege); if (tischM) vieleM(tischM, tische);
   }
   viele(new THREE.BoxGeometry(0.5, 1.5, 0.5).translate(0, 0.75, 0), mat(0x2a5a3a), stuehle);
-  viele(new THREE.BoxGeometry(0.4, 0.42, 1.3).translate(0, 0.21, 0), mat(0xe8e4d8), baenke);
+  // Bänke für die Spieler: bei kleinen Turnieren weiße Plastikstühle wie in jedem Tennisverein, sonst eine schlichte Bank
+  const stuhlM = g.klein && g.stufe <= 1 ? M('plastikstuhl') : null;
+  if (stuhlM) vieleM(stuhlM, baenke.map(([x, y, z, quer]) => [x, y, z, quer ? Math.PI : -HALB]));
+  else viele(new THREE.BoxGeometry(0.4, 0.42, 1.3).translate(0, 0.21, 0), mat(0xe8e4d8), baenke);
   viele(new THREE.CylinderGeometry(0.05, 0.06, 6, 5).translate(0, 3, 0), mat(0xd8d8d8), fahnenMasten);
   farbig(viele(new THREE.BoxGeometry(1.2, 0.8, 0.04), mat(0xffffff, { beide: true }), fahnen), fahnen);
 

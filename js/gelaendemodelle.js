@@ -1,6 +1,8 @@
 // Powershot – die fertigen 3D-Modelle für die Turniergelände (Ordner assets/gelaende/).
 //
 // Die Modelle kommen aus 3D AI Studio: Bäume, Autos, Häuser für jedes Land, berühmte Stadien, Möbel.
+// Ein paar Kleinteile und die Bodenbilder kommen von Poly Haven (polyhaven.com, frei nutzbar, Lizenz CC0) –
+// welche das sind und wo sie herkommen, steht in assets/gelaende/QUELLEN.md.
 // Sie werden erst geladen, wenn ein Gelände sie braucht – und nur die, die dort wirklich vorkommen.
 // Bis sie da sind, zeigt das Gelände seine einfachen Formen (Klötze, Kugeln). Danach wird es neu gebaut.
 //
@@ -23,6 +25,8 @@ export const MODELLE = {
   auto_limousine: { l: 5.2 }, auto_suv: { l: 4.8 }, auto_van: { l: 5.1 }, auto_kompakt: { l: 3.9, dreh: -V }, auto_kombi: { l: 4.7, dreh: -V },
   // Fan-Dorf und Kleinteile
   zelt: { l: 4.2, beide: true }, stand: { h: 2.7, dreh: -V }, schirmtisch: { h: 2.7, beide: true }, laterne: { h: 4.2 }, flutlicht: { h: 10, beide: true }, absperrgitter: { l: 2, beide: true },
+  // Von Poly Haven (CC0): Blumenkübel, alte Laterne, Bistro-Tisch mit zwei Stühlen, Picknick-Tisch, Mülltonne, Plastikstuhl
+  pflanzkuebel: { h: 1.05 }, laterne_alt: { h: 3.9 }, bistro: { l: 1.84 }, picknicktisch: { l: 3 }, muelltonne: { h: 0.95 }, plastikstuhl: { h: 0.88 },
   mal_statue_rom: { h: 2.9 }, mal_statue_rom2: { h: 2.9 }, mal_brunnen: { l: 8 }, mal_yacht: { l: 30, dreh: V },
   // Möbel für drinnen (in den Dateien zeigt die Vorderseite nach +x)
   innen_kraft: { h: 2.2, dreh: -V }, innen_laufband: { h: 1.6, dreh: -V }, innen_liege: { l: 2, dreh: -V }, innen_bespann: { h: 1.5, dreh: -V }, innen_tisch: { l: 2, dreh: -V }, innen_buffet: { l: 2.6, dreh: -V }, innen_empfang: { l: 3, dreh: -V },
@@ -78,6 +82,9 @@ function ladeEins(name) {
   if (name.endsWith('_flach')) {
     // Ein Bild von einem Baum (für Bäume weit hinten: zwei gekreuzte Bildtafeln statt 6000 Dreiecken)
     p = new THREE.TextureLoader().loadAsync(ORDNER + name + '.webp').then((bild) => { bild.colorSpace = THREE.SRGBColorSpace; fertig.set(name, bild); });
+  } else if (name.startsWith('boden_')) {
+    // Ein Bild für den Boden (Gras, Pflaster, Asphalt, Kopfsteinpflaster). Es ist grau – die Farbe gibt das Gelände dazu.
+    p = new THREE.TextureLoader().loadAsync(ORDNER + name + '.jpg').then((bild) => { bild.colorSpace = THREE.SRGBColorSpace; bild.wrapS = bild.wrapT = THREE.RepeatWrapping; bild.anisotropy = 4; fertig.set(name, bild); });
   } else {
     lader = lader || new GLTFLoader();
     p = lader.loadAsync(ORDNER + name + '.glb').then((gltf) => {
