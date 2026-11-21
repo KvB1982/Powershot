@@ -22,11 +22,14 @@ import { Anlage } from './anlage.js';
 //   nah: wie früher. Die Kamera schwebt dicht hinter dir und schaut mit einem weiten Winkel. Du bist groß,
 //        der Gegner winzig, und der Platz wirkt sehr lang.
 // winkel = Blickwinkel in der Breite (Grad), hoch/hinten = wo die Kamera steht (Meter über dem Boden / hinter dem Netz),
-// zielZ = auf welche Stelle des Platzes sie schaut (Meter vor dem Netz, minus = hinter dem Netz), mitX = wie stark sie seitlich mit dir mitgeht,
-// hochMax = so viel Grad darf das Bild höchstens in der Höhe zeigen, ab = alles, was weiter hinten als so viele Meter
-// hinter dem Netz steht (die Tribüne, in der die Kamera sitzt), wird nicht gezeichnet – sonst wäre sie im Weg.
+// mitX = wie stark sie seitlich mit dir mitgeht.
+// Nur beim TV-Blick: unten = der untere Bildrand liegt so viele Meter hinter dem Netz auf dem Boden (knapp hinter deiner Grundlinie),
+// schwenk = wie stark die Kamera dir seitlich nachschaut, hochMax = so viel Grad darf das Bild höchstens in der Höhe zeigen,
+// ab = alles, was weiter hinten als so viele Meter hinter dem Netz steht (die Tribüne, in der die Kamera sitzt), wird nicht gezeichnet.
+// Die TV-Zahlen sind an vier echten Fernsehbildern ausgemessen (Melbourne, Cincinnati, Paris, Barcelona):
+// Die Grundlinie vorn ist dort 1,5- bis 1,9-mal so breit wie die hinten und füllt fast das ganze Bild.
 const BLICK = {
-  tv:  { winkel: 31.5, hoch: 11, hinten: 46, zielZ: -1.6, mitX: 0.12, hochMax: 20, ab: 19.2 },
+  tv:  { winkel: 23, hoch: 12, hinten: 46, unten: 15.6, mitX: 0.1, schwenk: 0.35, hochMax: 14.8, ab: 19.2 },
   nah: { winkel: 62, hoch: 6.4, hinten: 23.5, zielZ: 1.5, mitX: 0.35 },
 };
 
@@ -536,13 +539,14 @@ export class Game3D {
     let tp, tl, nah = 0.3;
     if (B === BLICK.tv) {
       // Wie im Fernsehen: weit hinten, hoch oben, enger Blickwinkel. Die Kamera geht nur wenig mit dir mit.
-      this.setWinkel(B.winkel + 5 * breit, B.hochMax, 22);
-      tp = new THREE.Vector3(me.x * B.mitX, B.hoch, B.hinten + Math.max(0, me.z - 15) * 0.6);
-      // Hochkant-Bildschirm: Das Bild ist höher als nötig. Die Kamera schaut dann etwas weiter nach oben,
-      // damit der untere Bildrand bleibt, wo er ist, und der Platz nicht nach oben rutscht.
-      const zuviel = Math.max(0, this.camera.fov - B.hochMax) / 2 * Math.PI / 180;
-      const runter = Math.atan2(B.hoch - 0.8, B.hinten - B.zielZ) - zuviel;          // so steil schaut die Kamera nach unten
-      tl = new THREE.Vector3(me.x * B.mitX * 0.8 + b.x * 0.03, 0.8, B.hinten - (B.hoch - 0.8) / Math.tan(Math.max(0.03, runter)));
+      this.setWinkel(B.winkel + 4 * breit, B.hochMax, 18);
+      tp = new THREE.Vector3(me.x * B.mitX, B.hoch, B.hinten + Math.max(0, me.z - 14.5) * 0.8);
+      // Die Kamera neigt sich so, dass der untere Bildrand knapp hinter deiner Grundlinie liegt – egal wie hoch der Bildschirm ist.
+      // Fliegt der Ball sehr hoch (Lob), schaut sie ein wenig mit nach oben.
+      const halb = this.camera.fov / 2 * Math.PI / 180;
+      const runter = Math.max(0.03, Math.atan2(B.hoch, B.hinten - B.unten) - halb - clamp((b.y - 4) * 0.008, 0, 0.05));   // so steil schaut die Kamera nach unten
+      // Schwenk: Die Kamera dreht sich dir ein Stück nach, wenn du zur Seite läufst (wie der Kameramann im Fernsehen)
+      tl = new THREE.Vector3(me.x * B.schwenk + b.x * 0.05, tp.y - Math.tan(runter) * 40, tp.z - 40);
       // Die Tribüne zwischen Kamera und Platz ausblenden: Die Kamera zeichnet erst ab einer bestimmten Entfernung.
       nah = (tp.z - B.ab) * Math.cos(runter) + B.hoch * Math.sin(runter);
     } else {
