@@ -385,8 +385,8 @@ tr.cut td { text-align: center; font-size: 11px; font-weight: 700; color: var(--
 #anlage h3 { margin: 0 0 4px; font-size: 22px; color: var(--accent); }
 #anlage p { margin: 4px 0; }
 #anlage .kam { position: absolute; right: max(10px, env(safe-area-inset-right)); top: 50%; transform: translateY(-50%);
-  display: grid; gap: 8px; pointer-events: auto; }
-#anlage .kam button { width: 52px; height: 52px; padding: 0; font-size: 22px; background: var(--bg); touch-action: none; }
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; pointer-events: auto; }      /* zwei Spalten wie im Reitturnier: ⟲ ⟳ / ＋ － / ▲ ▼ nebeneinander */
+#anlage .kam button { width: 48px; height: 48px; padding: 0; font-size: 21px; background: var(--bg); touch-action: none; }
 #anlage .kam button.aus { opacity: 0.45; filter: grayscale(1); }
 #anlage .oben { align-items: center; }
 #anlage .zeit { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; font-weight: 600; font-size: 15px; }

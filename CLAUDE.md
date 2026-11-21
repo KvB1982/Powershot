@@ -155,6 +155,14 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
   die über die Tabelle gelegt werden, z. B. `{ type: 'drive', schlag: { top: 3400, tempo: [28, 28] } }` – gedacht für die Apple Watch.
 - Stoppball und Aufschlag von unten haben kein festes Tempo, sondern `bogen` (Höhe über dem Netz); `solveBogen` sucht das Tempo dazu.
 
+## Steuerung auf dem Turniergelände (seit 21.11.2026, Wunsch von Kristian: „komplett vom Reitturnier übernehmen“)
+
+- Einstellungen → „Steuerung auf dem Turniergelände“ (`settings.gelaende`: `reit` = Standard, `frei`; `Anlage.artSetzen`, `this.art`, `reit()` in `js/anlage.js`).
+- `reit` = wie auf dem Pferdehof im Reitturnier (`js/hof.js`, `js/spiel.js` dort), Zahlen `REIT_…` oben in `anlage.js` sind von dort abgeschrieben: Ein Finger ist immer der Steuerknüppel (12 Bildpunkte tot, 70 = volles Tempo, links/rechts und vor/zurück einzeln gerechnet), Pfeiltasten oder WASD. Zwei Finger gehören der Kamera (jeder Finger dreht 0,004 und neigt 0,003 pro Bildpunkt, kneifen zoomt; die Kamera klebt ohne Nachziehen an den Fingern; ein Finger, der danach liegen bleibt, läuft nicht los). Rechte Maustaste ziehen, Mausrad (mal 1,12 / 0,89 je Raste), Tasten Q/R (Stufen von 22,5°), T/G und +/− (mal 0,8 / 1,25), M = Übersicht. Knöpfe rechts in zwei Spalten: 🗺️ 🏷️ · ⟲ ⟳ · ＋ － · ▲ ▼ (neigen, `KNOPF_NEIG`) · Tageszeit, Wetter · 📷. Start: 45° von oben, 18,4 m weg; 5 m bis zur Übersicht. Die Kamera bleibt immer bei der Figur: kein Schieben mit drei Fingern, kein 🎯, kein Doppel-Tipp.
+- `frei` = die alte Steuerung mit freier Kamera (drei Finger, mittlere Maustaste, Umschalt + ziehen, Doppel-Tipp, 🎯, Taste F), dazu die neuen Knöpfe ▲ ▼.
+- Anders als im Reitturnier und mit Absicht geblieben: Ein kurzer Tipp schickt die Figur los (dort löst er die Tätigkeit aus), Radar und Lageplan, in der Übersicht schaut die Kamera auf die Mitte des Geländes (dort auf die Figur – unsere Gelände sind viel größer), die Kamera rückt vor Gebäude, die im Weg stehen, und die Übersicht geht so weit weg, wie das Gelände groß ist (dort fest 150 m).
+- Geprüft im Test-Browser im iPad-Format mit künstlichen Finger-Ereignissen (ein, zwei, drei Finger), Tasten und Knöpfen (Wimbledon), dazu Standbilder. Nicht geprüft: echtes iPad, echte Finger, flüssige Bewegung, das Städtchen.
+
 ## Steuerung „Wischen“ (`settings.control = 'wisch'`)
 
 - Zweite Touch-Steuerung neben `touch` (die bleibt, wie sie ist). Geschlagen wird nur mit einem Wisch; ausgewertet wird beim Loslassen (`wischHoch` → `wischFertig` in `js/controls.js`).

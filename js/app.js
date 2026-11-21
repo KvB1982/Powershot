@@ -52,7 +52,7 @@ const SET_KEY = 'powershot.einstellungen.v1';
 const touchDevice = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
 const settings = Object.assign({
   control: touchDevice ? 'touch' : 'klassik', assist: 'voll', difficulty: 'mittel', length: 'kurz',
-  sound: true, volume: 0.8, umgebung: 1, voice: true, quality: 'hoch', schaerfe: 'auto', figures: 'echt',
+  sound: true, volume: 0.8, umgebung: 1, voice: true, quality: 'hoch', schaerfe: 'auto', gelaende: 'reit', figures: 'echt',
   kamera: 'aus', kameraRaum: 'mittel', kameraTauschen: false,
   spielzuege: 'aus',       // taktische Spielzüge im Match: 'aus' oder 'an'
   blick: 'tv',             // Blick auf den Platz im Match: 'tv' (wie im Fernsehen) oder 'nah' (dicht hinter dir)
@@ -91,6 +91,7 @@ game.wennShow = (side, id) => {
 };
 game.setQuality(settings.quality);
 game.setScharfAuto(settings.schaerfe !== 'fest');
+game.anlage.artSetzen(settings.gelaende);      // Steuerung auf dem Turniergelände: 'reit' = wie im Reitturnier, 'frei' = mit freier Kamera
 game.blick = settings.blick;
 game.realFigures = settings.figures === 'echt';
 const controls = new Controls($('#touch'), $('#stick'));
@@ -445,6 +446,9 @@ actions.settings = (v) => {
       ${optionRow('Bildschärfe', 'schaerfe', { auto: 'Automatisch', fest: 'Immer voll' })}
       <p class="dim" style="margin:6px 0 0;font-size:13px">„Automatisch“: Wenn das Bild ruckelt (zum Beispiel auf einem großen Turniergelände), malt das Spiel
         etwas weniger scharf und läuft dafür flüssig. Läuft es wieder gut, wird es von selbst wieder schärfer.</p>
+      ${optionRow('Steuerung auf dem Turniergelände', 'gelaende', { reit: 'Wie im Reitturnier', frei: 'Mit freier Kamera' })}
+      <p class="dim" style="margin:6px 0 0;font-size:13px">„Wie im Reitturnier“: Ein Finger läuft immer, zwei Finger drehen, neigen und zoomen die Kamera, die Kamera bleibt bei deiner Figur.
+        „Mit freier Kamera“: Zusätzlich schiebst du die Ansicht mit drei Fingern frei über das Gelände.</p>
       ${optionRow('Spielerfiguren', 'figures', { echt: 'Realistisch', einfach: 'Einfach' })}
       ${optionRow('Blick auf den Platz', 'blick', { tv: 'Wie im Fernsehen', nah: 'Nah am Spieler' })}
       ${optionRow('Einlaufen vor dem Match', 'einlauf', { an: 'Ganze Szene', kurz: 'Nur Steckbriefe', aus: 'Aus' })}
@@ -473,6 +477,8 @@ actions.set = (v) => {
   sound.setEnabled(settings.sound);
   game.setQuality(settings.quality);
   game.setScharfAuto(settings.schaerfe !== 'fest');
+  game.anlage.artSetzen(settings.gelaende);
+  if (game.anlage.an) anlageZeigen();
   game.blick = settings.blick;
   game.realFigures = settings.figures === 'echt';
   if (key === 'quality') game.loadVenue(D.tournamentById(menuVenue));
@@ -1116,12 +1122,21 @@ let anlageErgebnis = null;   // was die letzte Tätigkeit gebracht hat: { ort, t
 let anlageMeldung = null;    // was nach einem Zufall (Ereignis) passiert ist: { text, bringt }
 // Der Kasten unten auf dem Gelände lässt sich klein machen, damit man mehr vom Gelände sieht
 let anlageKlein = false;
+// Die Kamera-Knöpfe rechts, genau wie auf dem Pferdehof im Reitturnier: drehen, zoomen, neigen (solange gedrückt)
+const KAM_KNOEPFE = [['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg'],
+  ['hoch', '▲', 'Kamera höher, mehr von oben'], ['flach', '▼', 'Kamera flacher, mehr von der Seite']];
 actions.anlagePanel = () => { anlageKlein = !anlageKlein; anlageZeigen(); };
 function anlageZeigen() {
   if (hotelWeg || (anlageTag && anlageTag.abend)) return hotelZeigen();      // Fahrt oder Fußweg ins Hotel: eigenes Fenster (weiter unten)
   const A = game.anlage, ort = A.amOrt;
-  const hilfe = 'Laufen: W A S D oder mit einem Finger ziehen. Tippe auf ein Gebäude, dann läuft deine Figur von selbst hin. In viele Häuser kannst du durch die Tür hineingehen – dann verschwindet das Dach und du siehst die Möbel. Kamera mit zwei Fingern: kneifen = nah oder ganz weit weg, zur Seite wischen = rundherum drehen, hoch oder runter wischen = Blickwinkel. Mit drei Fingern schiebst du die Ansicht frei über das Gelände (danach reicht ein Finger), Doppel-Tipp oder 🎯 = zurück zur Figur. 🏷️ schaltet die Beschriftungen an und aus. Am PC: rechte Maustaste ziehen und Mausrad, mittlere Maustaste oder Umschalt + ziehen = verschieben, F = zurück zur Figur, B = Beschriftungen.';
-  const kam = [...stimmungKnoepfe(), ['karte', '🗺️', 'Übersicht von oben (Taste M) – den Lageplan öffnest du mit einem Tipp auf das Radar oder Taste K'], ['schilder', '🏷️', 'Beschriftungen an oder aus (Taste B)'], ['figur', '🎯', 'Zurück zur Figur (Doppel-Tipp oder Taste F)'], ['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg']];
+  const reit = A.reit();
+  // Zwei Arten der Steuerung (Einstellungen → „Steuerung auf dem Turniergelände“): wie auf dem Pferdehof im Reitturnier oder mit freier Kamera
+  const hilfe = reit
+    ? 'Laufen: Pfeiltasten oder W A S D. Auf dem iPad: Finger auflegen und ziehen. Tippe auf ein Gebäude, dann läuft deine Figur von selbst hin. In viele Häuser kannst du durch die Tür hineingehen – dann verschwindet das Dach und du siehst die Möbel. Rechts sind die Knöpfe für die Kamera: 🗺️ Übersicht, ⟲ ⟳ drehen, ＋ － näher und weiter weg, ▲ ▼ mehr von oben oder flacher. Mit zwei Fingern geht das auch: zur Seite wischen = drehen, hoch oder runter = neigen, kneifen = zoomen. Am PC: rechte Maustaste ziehen und Mausrad, Tasten Q und R drehen, T und G zoomen, M = Übersicht, K = Lageplan, B = Beschriftungen.'
+    : 'Laufen: W A S D oder mit einem Finger ziehen. Tippe auf ein Gebäude, dann läuft deine Figur von selbst hin. In viele Häuser kannst du durch die Tür hineingehen – dann verschwindet das Dach und du siehst die Möbel. Kamera mit zwei Fingern: kneifen = nah oder ganz weit weg, zur Seite wischen = rundherum drehen, hoch oder runter wischen = Blickwinkel. Mit drei Fingern schiebst du die Ansicht frei über das Gelände (danach reicht ein Finger), Doppel-Tipp oder 🎯 = zurück zur Figur. 🏷️ schaltet die Beschriftungen an und aus. Am PC: rechte Maustaste ziehen und Mausrad, mittlere Maustaste oder Umschalt + ziehen = verschieben, F = zurück zur Figur, B = Beschriftungen.';
+  // Reihenfolge wie im Reitturnier: Übersicht, drehen, zoomen, neigen – danach unsere eigenen Knöpfe (Beschriftungen, Tageszeit, Wetter, Foto)
+  const kam = [['karte', '🗺️', 'Übersicht von oben (Taste M) – den Lageplan öffnest du mit einem Tipp auf das Radar oder Taste K'], ['schilder', '🏷️', 'Beschriftungen an oder aus (Taste B)'], ...KAM_KNOEPFE,
+    ...stimmungKnoepfe(), ...(reit ? [] : [['figur', '🎯', 'Zurück zur Figur (Doppel-Tipp oder Taste F)']])];
   let unten = `<p class="dim">${hilfe}</p>`, zeit = '', tagListe = '';
   if (anlageTag && phaseJetzt() === 'nach') {
     // Nach dem Match: nur noch die Aufgaben vom Team, dann geht es ins Hotel
@@ -1532,7 +1547,7 @@ function hotelAmWagen(G) {
 // Das Fenster während der Fahrt, im Städtchen und im Hotel
 function hotelZeigen() {
   const A = game.anlage, ort = A.amOrt, G = A.plan ? A.plan.g : null, W = hotelWeg, abend = !!(anlageTag && anlageTag.abend);
-  const kam = [...stimmungKnoepfe(), ['karte', '🗺️', 'Weiter weg / näher'], ['schilder', '🏷️', 'Beschriftungen an oder aus (Taste B)'], ['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg']];
+  const kam = [['karte', '🗺️', 'Weiter weg / näher'], ['schilder', '🏷️', 'Beschriftungen an oder aus (Taste B)'], ...KAM_KNOEPFE, ...stimmungKnoepfe()];
   const abendWahl = () => `<p class="dim">Was machst du heute Abend noch?</p><div class="row wahl">${Object.entries(TT.ABEND).map(([id, B]) => `<button data-a="hotelAbendWahl" data-v="${id}">${B.name} <small>${B.bringt}</small></button>`).join('')}</div>`;
   let zeit = '', unten = '';
   if (!W) {
