@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Powershot – Gehen und Sprinten ansehen</title>
+  <base href="../">      <!-- alle Dateien werden vom Spiel-Ordner aus gesucht (die Seite selbst liegt in tools/) -->
+  <!--
+    Zum Ansehen der Geh- und Sprint-Bewegung (assets/gang.json, aus Police Quest umgerechnet mit tools/gang.mjs).
+    Starten:  python tools/server.py   und dann   http://localhost:8765/tools/gang.html
+    Die Figur läuft auf der Stelle (wie auf einem Laufband). Der Boden hat Streifen, die unter ihr durchlaufen –
+    daran sieht man, ob die Füße rutschen.
+    Mit ?altergang in der Adresse sieht man zum Vergleich die alten, gebauten Bewegungen.
+  -->
+  <style>
+    body { margin: 0; background: #16203a; color: #fff; font: 16px system-ui, sans-serif; overflow: hidden; }
+    #leiste { position: fixed; left: 12px; top: 10px; right: 12px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    button, a { font: inherit; color: #fff; background: #2a3a5a; border: 0; border-radius: 8px; padding: 8px 12px; text-decoration: none; cursor: pointer; }
+    input[type=range] { width: 260px; }
+  </style>
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <canvas id="bild"></canvas>
+  <div id="leiste">
+    <label>Tempo <input id="tempo" type="range" min="0" max="5" step="0.1" value="1.5"> <b id="zahl"></b></label>
+    <button id="blick">Blick: von der Seite</button>
+    <button id="schlaeger">Schläger: ja</button>
+    <a id="alt" href="tools/gang.html?altergang">alte Bewegung zeigen</a>
+  </div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { loadFigure } from './js/figur.js';
+    import { loadGang } from './js/mocap.js';
+    import { Avatar } from './js/avatar.js';
+
+    const alt = /[?&]altergang/.test(location.search);
+    const link = document.getElementById('alt');
+    if (alt) { link.textContent = 'neue Bewegung zeigen'; link.href = 'tools/gang.html'; }
+    // Für Tests: ?tempo=3.5&blick=1&ohne
+    const wunsch = new URLSearchParams(location.search);
+    const regler = document.getElementById('tempo');
+    if (wunsch.has('tempo')) regler.value = wunsch.get('tempo');
+
+    const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('bild'), antialias: true });
+    const szene = new THREE.Scene();
+    szene.background = new THREE.Color(0x16203a);
+    szene.add(new THREE.HemisphereLight(0xffffff, 0x404858, 1.7));
+    const licht = new THREE.DirectionalLight(0xfff4d8, 2.2); licht.position.set(2, 4, 3); szene.add(licht);
+    // Boden mit Streifen (jeder Streifen ist einen halben Meter breit)
+    const streifen = [];
+    for (let i = -8; i <= 8; i++) {
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(6, 0.5), new THREE.MeshStandardMaterial({ color: i % 2 ? 0x2a3a5a : 0x35486e, roughness: 0.9 }));
+      s.rotation.x = -Math.PI / 2; szene.add(s); streifen.push(s);
+    }
+    const kamera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
+    const BLICKE = [['von der Seite', [5.2, 1.1, 0]], ['schräg von vorn', [3.2, 1.3, -4.2]], ['von vorn', [0, 1.2, -5.4]], ['von hinten', [0, 1.6, 5.4]]];
+    let blick = +(wunsch.get('blick') || 0), mitSchlaeger = !wunsch.has('ohne');
+    const kameraStellen = () => { kamera.position.set(...BLICKE[blick][1]); kamera.lookAt(0, 0.95, 0); document.getElementById('blick').textContent = 'Blick: ' + BLICKE[blick][0]; };
+    document.getElementById('blick').onclick = () => { blick = (blick + 1) % BLICKE.length; kameraStellen(); };
+    document.getElementById('schlaeger').onclick = (e) => { mitSchlaeger = !mitSchlaeger; e.target.textContent = 'Schläger: ' + (mitSchlaeger ? 'ja' : 'nein'); };
+    document.getElementById('schlaeger').textContent = 'Schläger: ' + (mitSchlaeger ? 'ja' : 'nein');
+    kameraStellen();
+    const passen = () => { renderer.setSize(innerWidth, innerHeight, false); kamera.aspect = innerWidth / innerHeight; kamera.updateProjectionMatrix(); };
+    addEventListener('resize', passen); passen();
+
+    await Promise.all([loadFigure(), loadGang()]);
+    const av = new Avatar({ shirt: 0x2f7fd0, shorts: 0xffffff, shoes: 0xffffff }, 0, 1, true);
+    szene.add(av.group);
+
+    let weg = 0;
+    // Ein Stück Zeit weiterrechnen (dt in Sekunden) und ein Bild malen
+    function schritt(dt) {
+      const tempo = +regler.value;
+      document.getElementById('zahl').textContent = tempo.toFixed(1).replace('.', ',') + ' m/s' + (alt ? ' (alte Bewegung)' : '');
+      weg += tempo * dt;
+      streifen.forEach((s, i) => { s.position.set(0, 0, ((i - 8) * 0.5 + weg) % 8.5 - (((i - 8) * 0.5 + weg) % 8.5 > 4.25 ? 8.5 : 0)); });
+      av.update(dt, { x: 0, z: 0, vx: 0, vz: -tempo, walk: true, jog: Math.max(0, Math.min(1, (tempo - 1.9) / 1.4)), ohneSchlaeger: !mitSchlaeger });
+      renderer.render(szene, kamera);
+    }
+    let zuletzt = performance.now(), angehalten = false;
+    function bild(jetzt) {
+      if (!angehalten) schritt(Math.min(0.05, (jetzt - zuletzt) / 1000));
+      zuletzt = jetzt;
+      requestAnimationFrame(bild);
+    }
+    requestAnimationFrame(bild);
+    // Für Tests: __gang.halt() hält an, __gang.step(n) rechnet n Bilder mit je 1/60 Sekunde
+    window.__gang = { av, halt: () => { angehalten = true; }, step: (n = 1) => { for (let i = 0; i < n; i++) schritt(1 / 60); } };
+  </script>
+</body>
+</html>
