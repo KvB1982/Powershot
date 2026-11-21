@@ -14,6 +14,10 @@ const REASON_TEXT = { aus: 'Aus!', netz: 'Netz!', doppelfehler: 'Doppelfehler!',
 import { Siegerehrung } from './siegerehrung.js';
 import { Anlage } from './anlage.js';
 
+// Automatische Bildschärfe: alle SCHARF_PRUEFEN Sekunden nachsehen. Dauert ein Bild im Schnitt länger als SCHARF_LANGSAM,
+// sinken die Bildpunkte um SCHARF_STUFE; ist es schneller als SCHARF_FLOTT, steigen sie nach einer Weile wieder. Alle Zahlen wie im Rennspiel.
+const SCHARF_PRUEFEN = 1.5, SCHARF_LANGSAM = 1 / 48, SCHARF_FLOTT = 1 / 57, SCHARF_STUFE = 0.25;
+
 // Blick auf den Platz im Match. Platz, Figur, Schläger und Netz haben die echten Maße in Metern (nachgemessen) –
 // wie groß die Spieler im Vergleich zum Platz AUSSEHEN, bestimmt allein die Kamera.
 //   tv:  wie im Fernsehen. Die Kamera steht sehr weit hinten (mitten in der Tribüne) und schaut mit einem engen Winkel,
@@ -67,13 +71,46 @@ export class Game3D {
     this.buildProps();
     this.ehrung = new Siegerehrung(this);      // Siegerehrung nach einem gewonnenen Finale
     this.anlage = new Anlage(this);            // Turnieranlage zum Herumlaufen (Probe)
+    // Automatische Bildschärfe (Idee aus dem Schwester-Spiel Rennspiel): Ruckelt das Bild, malt das Spiel mit weniger Bildpunkten.
+    this.scharfAuto = !/[?&]scharf\b/.test(location.search);      // ?scharf in der Adresse = immer volle Schärfe (für Testbilder)
+    this.punkte = 0;                 // so viele Bildpunkte je Bildschirmpunkt malen wir gerade (0 = noch nicht festgelegt)
+    this.bildZeit = 1 / 60; this.pruefZeit = 0; this.ruhig = 0; this.punkteGrenze = 9;
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
 
+  // Wie lange hat das letzte Bild wirklich gedauert (roh, in Sekunden)? Dauert es öfter länger als 1/48 Sekunde,
+  // geht die Schärfe eine Stufe herunter (weniger Bildpunkte = schneller). Läuft es lange ruhig, geht sie wieder herauf –
+  // aber nie zurück auf eine Stufe, die schon einmal zu langsam war.
+  tempoPruefen(roh) {
+    if (!this.scharfAuto || !(roh > 0) || roh > 0.25) return;       // sehr lange Bilder (Laden, anderes Fenster) zählen nicht
+    this.bildZeit += (roh - this.bildZeit) * 0.05;
+    this.pruefZeit += roh;
+    if (this.pruefZeit < SCHARF_PRUEFEN) return;
+    this.pruefZeit = 0;
+    let neu = this.punkte;
+    if (this.bildZeit > SCHARF_LANGSAM && this.punkte > this.punkteMin) { this.punkteGrenze = this.punkte; neu = Math.max(this.punkteMin, this.punkte - SCHARF_STUFE); this.ruhig = 0; }
+    else if (this.bildZeit < SCHARF_FLOTT && this.punkte + SCHARF_STUFE < this.punkteGrenze && this.punkte < this.punkteMax) { if (++this.ruhig >= 4) { neu = Math.min(this.punkteMax, this.punkte + SCHARF_STUFE); this.ruhig = 0; } }
+    else this.ruhig = 0;
+    if (neu === this.punkte) return;
+    this.punkte = neu;
+    this.bildZeit = 1 / 60;          // nach dem Umschalten neu messen
+    this.resize();
+  }
+  setScharfAuto(an) {
+    an = an && !/[?&]scharf\b/.test(location.search);
+    if (an === this.scharfAuto) return;
+    this.scharfAuto = an; this.punkte = 0; this.punkteGrenze = 9;
+    this.resize();
+  }
+
   resize() {
     const w = this.canvas.clientWidth || window.innerWidth, h = this.canvas.clientHeight || window.innerHeight;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.quality === 'niedrig' ? 1.25 : 2));
+    // Bildpunkte: höchstens so viele, wie der Bildschirm hat (und wie die Grafik-Einstellung erlaubt) – die automatische Bildschärfe darf darunter gehen
+    const max = this.punkteMax = Math.min(window.devicePixelRatio || 1, this.quality === 'niedrig' ? 1.25 : 2);
+    this.punkteMin = Math.min(max, Math.max(0.75, max * 0.5));
+    this.punkte = this.scharfAuto && this.punkte ? Math.max(this.punkteMin, Math.min(max, this.punkte)) : max;
+    this.renderer.setPixelRatio(this.punkte);
     this.renderer.setSize(w, h, false);
     this.aspect = w / h;
     this.camera.aspect = this.aspect;

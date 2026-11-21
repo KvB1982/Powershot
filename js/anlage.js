@@ -12,6 +12,7 @@
 //
 // Einfache Anlage (kleine Turniere): Alle Gebäude stehen im Kreis um einen Platz in der Mitte, die Türen zeigen zur Mitte.
 // So kommt man von jeder Tür geradeaus zu jeder anderen, ohne durch ein Haus zu laufen.
+import { GelaendeWetter } from './gelaendewetter.js';
 import * as THREE from 'three';
 import { requisit } from './requisiten.js';
 import { planVon, planAus } from './gelaende.js';
@@ -88,6 +89,7 @@ export class Anlage {
     this.knueppel = null;      // id des Fingers, der gerade läuft
     this.kamTaste = null;      // welcher Kamera-Knopf gerade gedrückt ist ('links', 'rechts', 'nah', 'fern')
     this.frei = null;          // freie Kamera: { x, z } = die Stelle am Boden, auf die sie schaut. null = sie folgt der Figur
+    this.stimmung = { zeit: 'tag', wetter: 'sonne' };      // Tageszeit und Wetter auf dem Gelände (gelaendewetter.js), gesetzt mit stimmungSetzen
     this.blick = { x: 0, z: 0 };   // dorthin schaut die Kamera gerade (merken wir uns, damit die freie Kamera ohne Ruck losfährt)
     this.letzterTipp = null;   // der letzte kurze Tipp (für den Doppel-Tipp)
     this.wennFrei = null;      // wird aufgerufen, wenn die Kamera frei wird oder zur Figur zurückkehrt (app.js färbt den Knopf 🎯)
@@ -98,7 +100,7 @@ export class Anlage {
     this.amOrt = null;         // der Ort, an dessen Tür die Figur gerade steht
     this.wennDa = null;        // wird aufgerufen, wenn sich amOrt ändert (app.js zeigt dann das Fenster)
     // Tasten, Maus und Finger – hören nur zu, solange die Anlage an ist
-    const meins = (e) => this.an && !e.target.closest('button, .panel');
+    const meins = (e) => this.an && !e.target.closest('button, .panel, #radar, #lageplan, #fotoLeiste');
     addEventListener('keydown', (e) => { if (!this.an) return; this.tasten[e.code] = true; if (e.code === 'KeyM') this.uebersicht(); if (e.code === 'KeyF') this.zurFigur(); if (e.code === 'KeyB' && !e.repeat) { this.schilderSchalten(); if (this.wennSchilder) this.wennSchilder(this.schilderAn); } });
     addEventListener('keyup', (e) => { this.tasten[e.code] = false; });
     addEventListener('contextmenu', (e) => { if (meins(e)) e.preventDefault(); });
@@ -255,6 +257,8 @@ export class Anlage {
     // Himmel und Dunst: am Tag, auch wenn das Turnier sonst abends gespielt wird
     this.alt = { hintergrund: g.scene.background, nebel: g.scene.fog.color.clone(), nah: g.camera.near, fern: g.camera.far };
     g.scene.background = new THREE.Color(0x8cc0ee);
+    this.wetter = new GelaendeWetter(g.scene, this.gruppe, himmel, sonne);
+    this.wetter.setze(this.stimmung.zeit, this.stimmung.wetter);
     g.scene.fog.color.set(0xa8cdea);
     g.scene.fog.near = this.weit * 1.2; g.scene.fog.far = this.weit * 1.2 + 1500;      // weit hinten verschwinden die Berge im Dunst
     g.camera.near = 1; g.camera.far = 4000; g.camera.updateProjectionMatrix();
@@ -499,6 +503,12 @@ export class Anlage {
     let lang = 0, px = this.p.x, pz = this.p.z;
     for (const q of w || [{ x, z }]) { lang += Math.hypot(q.x - px, q.z - pz); px = q.x; pz = q.z; }
     return lang;
+  }
+
+  // Tageszeit ('morgen', 'tag', 'abend', 'nacht') und Wetter ('sonne', 'wolken', 'regen', 'nebel') wählen – das Licht blendet weich um
+  stimmungSetzen(zeit, wetter) {
+    this.stimmung = { zeit, wetter };
+    if (this.wetter) this.wetter.setze(zeit, wetter);
   }
 
   // Zu einem Ort laufen (z. B. vom Knopf im Menü)
@@ -795,20 +805,17 @@ export class Anlage {
     const nach = new THREE.Vector3(mx, Math.max(this.schauHoch || 0, 0.9 + Math.max(0, 0.6 - e) * 2.2 * Math.min(1, d / 15)), mz);      // flache Kamera schaut etwas höher (ganz nah an der Figur nicht – sonst sähe man nur Himmel)
     // Die Schilder: aus der Ferne groß (sonst kann man sie nicht lesen), aus der Nähe klein
     // (auf den großen Geländen wachsen sie in der Übersicht immer weiter mit)
-    if (this.plan) {
-      // Der Dunst in der Ferne rückt mit weg, wenn die Kamera weit hinausfährt – sonst wäre von weit oben alles nur hellblau
-      const dunst = Math.max(this.weit * 1.2, k.d * 1.3);
-      g.scene.fog.near = dunst; g.scene.fog.far = dunst + 520 + k.d;
-    }
-    if (this.sonne) {
-      // Die Sonne wandert mit der Figur mit, damit die Schatten in ihrer Nähe scharf sind
-      this.sonne.position.set(mx + 50, 110, mz + 40);
-      this.sonne.target.position.set(mx, 0, mz);
-    }
     const kk = dt >= 1 ? 1 : 1 - Math.exp(-6 * dt);
     g.camPos.lerp(von, kk); g.camLook.lerp(nach, kk);
     g.camera.position.copy(g.camPos);
     g.camera.lookAt(g.camLook);
+    // Tageszeit und Wetter (gelaendewetter.js): Licht, Himmel, Regen. Die Sonne wandert mit der Figur mit, damit die Schatten in ihrer Nähe scharf sind
+    if (this.wetter) this.wetter.schritt(dt, g.camera, mx, mz);
+    if (this.plan) {
+      // Der Dunst in der Ferne rückt mit weg, wenn die Kamera weit hinausfährt – sonst wäre von weit oben alles nur hellblau. Bei Regen und Nebel rückt er heran
+      const dunst = Math.max(this.weit * 1.2, k.d * 1.3), W = this.wetter;
+      g.scene.fog.near = dunst * (W ? W.nah : 1); g.scene.fog.far = g.scene.fog.near + (520 + k.d) * (W ? W.fern : 1);
+    }
     this.schilderOrdnen(dt);
   }
 
@@ -906,7 +913,7 @@ export class Anlage {
       g.scene.fog.color.copy(this.alt.nebel);
       g.camera.near = this.alt.nah; g.camera.far = this.alt.fern; g.camera.updateProjectionMatrix();
     }
-    this.plan = null; this.gitter = null; this.sonne = null; this.pfad = null; this.namen = []; this.ball = null;
+    this.plan = null; this.gitter = null; this.sonne = null; this.wetter = null; this.pfad = null; this.namen = []; this.ball = null;
     this.fahrt = null; this.kamZiel = null; this.schauHoch = 0;
     this.an = false; this.frei = null; this.drei = null; this.letzterTipp = null;
     this.finger = {};

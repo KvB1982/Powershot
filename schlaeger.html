@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Powershot – Handy als Schläger</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b1020; color: #fff; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; overscroll-behavior: none; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+  main { height: 100%; display: flex; flex-direction: column; gap: 12px; padding: max(14px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom)); box-sizing: border-box; }
+  h1 { font-size: 20px; margin: 0; color: #d8f03a; }
+  #status { font-size: 16px; margin: 0; color: #b8c2dc; }
+  #code { display: flex; gap: 8px; }
+  #code input { flex: 1; font-size: 26px; text-align: center; text-transform: uppercase; letter-spacing: 6px; padding: 10px; border-radius: 12px; border: 1px solid #44507a; background: #141b33; color: #fff; }
+  button { font: inherit; font-size: 18px; font-weight: 600; color: #fff; background: #1f2a4d; border: 1px solid #44507a; border-radius: 16px; padding: 14px; }
+  button.gross { background: #d8f03a; color: #1a2440; font-size: 22px; padding: 22px; }
+  button:active, button.an { background: #3a4a86; }
+  #tasten { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-height: 0; }
+  #tasten button { font-size: 20px; }
+  #schwung { text-align: center; font-size: 30px; height: 44px; }
+  .klein { font-size: 14px; color: #8f9bbd; margin: 0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🎾 Powershot – Handy als Schläger</h1>
+  <p id="status">Einen Moment …</p>
+  <div id="code" hidden><input id="codeFeld" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off"><button id="codeOk">Verbinden</button></div>
+  <button id="los" class="gross" hidden>👋 Los geht’s – Schläger einschalten</button>
+  <div id="schwung"></div>
+  <div id="tasten" hidden>
+    <button data-t="x">Lob<br><small>hoch über den Gegner</small></button>
+    <button data-t="y">Stoppball<br><small>kurz hinters Netz</small></button>
+    <button data-t="netz">Ans Netz<br><small>und zurück</small></button>
+    <button data-t="pause">Pause</button>
+  </div>
+  <p class="klein" id="hilfe">Halte das Handy fest wie einen Schlägergriff (am besten mit Hülle und Schlaufe!) und schwinge, wenn der Ball kommt.
+    Früh schwingen = cross, spät = longline. Von unten nach oben = Topspin, von oben nach unten = Slice. Fest schwingen = harter Schlag.</p>
+</main>
+<script type="module">
+// Die Schläger-Seite auf dem Handy. Sie schickt dem Spiel 60-mal pro Sekunde, wie das Handy gerade bewegt wird.
+import { SchlaegerSender, bewegungAus } from './js/handyschlaeger.js';
+
+const $ = (id) => document.getElementById(id);
+const q = new URLSearchParams(location.search);
+const apfel = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+let sender = null, bewegung = null, tasten = { x: false, y: false, netz: false, pause: false }, laeuft = false, wach = null;
+
+const TEXTE = { suchen: '🔎 Suche das Spiel …', nichtGefunden: '🔎 Spiel nicht gefunden. Ist im Spiel „Handy als Schläger“ offen? Stimmt der Code?', fehler: '⚠️ Keine Verbindung zum Internet. Ich versuche es gleich noch einmal …', verbunden: '✅ Verbunden mit dem Spiel' };
+function zeige(s) {
+  $('status').textContent = (TEXTE[s] || s) + (sender ? ` · Code ${sender.code}` : '');
+  $('los').hidden = !(s === 'verbunden' && !laeuft);
+  $('tasten').hidden = !(s === 'verbunden' && laeuft);
+}
+function verbinden(code) {
+  $('code').hidden = true;
+  sender = new SchlaegerSender(code, q.has('lokal'));
+  sender.wennStatus = zeige;
+  // Das Spiel meldet einen erkannten Schwung zurück: kurz anzeigen und (wo es geht) rütteln
+  sender.wennDaten = (d) => { if (d.t === 'schwung') { $('schwung').textContent = d.hart ? '💥' : '🎾'; setTimeout(() => { $('schwung').textContent = ''; }, 350); if (navigator.vibrate) navigator.vibrate(d.hart ? 60 : 25); } };
+  sender.verbinden();
+}
+const code = (q.get('c') || '').toUpperCase();
+if (/^[A-Z0-9]{4}$/.test(code)) verbinden(code);
+else { $('status').textContent = 'Tippe den Code ein, den das Spiel anzeigt (Einstellungen → „Handy als Schläger“):'; $('code').hidden = false; }
+$('codeOk').onclick = () => { const c = $('codeFeld').value.trim().toUpperCase(); if (/^[A-Z0-9]{4}$/.test(c)) verbinden(c); };
+
+// Bewegungssensor einschalten. Auf dem iPhone muss man das einmal erlauben – das geht nur nach einem Tipp.
+$('los').onclick = async () => {
+  try {
+    if (window.DeviceMotionEvent && DeviceMotionEvent.requestPermission) {
+      const antwort = await DeviceMotionEvent.requestPermission();
+      if (antwort !== 'granted') { $('status').textContent = '⚠️ Ohne Erlaubnis für „Bewegung“ geht es nicht. Seite neu laden und „Erlauben“ tippen.'; return; }
+    }
+  } catch (e) { /* ältere Geräte fragen nicht */ }
+  if (!window.DeviceMotionEvent) { $('status').textContent = '⚠️ Dieses Gerät hat keinen Bewegungssensor (oder der Browser gibt ihn nicht frei).'; return; }
+  window.addEventListener('devicemotion', (e) => { bewegung = bewegungAus(e, apfel) || bewegung; });
+  try { wach = await navigator.wakeLock.request('screen'); } catch (e) { /* dann geht der Bildschirm vielleicht aus */ }
+  laeuft = true; zeige('verbunden');
+  setInterval(senden, 1000 / 60);
+  setTimeout(() => { if (!bewegung) $('status').textContent = '⚠️ Der Bewegungssensor meldet nichts. Geht nur über https und mit erlaubter „Bewegung“.'; }, 2500);
+};
+function senden() {
+  if (!sender || sender.status !== 'verbunden') return;
+  sender.senden({ t: 's', m: bewegung, ...tasten });
+}
+// Zum Testen ohne echtes Handy: __schlaeger.bewege(ax, ay, az) macht eine Bewegung nach (g zeigt nach −y)
+window.__schlaeger = { bewege: (ax, ay, az) => { bewegung = { ax, ay, az, gx: 0, gy: -1, gz: 0 }; }, start: () => { laeuft = true; zeige('verbunden'); setInterval(senden, 1000 / 60); }, get sender() { return sender; } };
+for (const b of document.querySelectorAll('#tasten button')) {
+  const t = b.dataset.t;
+  b.addEventListener('pointerdown', (e) => { e.preventDefault(); tasten[t] = true; b.classList.add('an'); });
+  for (const n of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(n, () => { tasten[t] = false; b.classList.remove('an'); });
+}
+document.addEventListener('visibilitychange', async () => { if (!document.hidden && laeuft) try { wach = await navigator.wakeLock.request('screen'); } catch (e) { /* egal */ } });
+</script>
+</body>
+</html>

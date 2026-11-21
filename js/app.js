@@ -1,5 +1,8 @@
 // Powershot – Hauptprogramm: Menüs, Abläufe (Freies Spiel, Turnier, Karriere, Training), Anzeige im Spiel
 
+import { SchlaegerEmpfang, qrMalen } from './handyschlaeger.js';
+import { GelaendeKarte } from './gelaendekarte.js';
+import * as GW from './gelaendewetter.js';
 import { Sound } from './audio.js';
 import { Game3D } from './game3d.js';
 import { Controls } from './controls.js';
@@ -48,7 +51,7 @@ const SET_KEY = 'powershot.einstellungen.v1';
 const touchDevice = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
 const settings = Object.assign({
   control: touchDevice ? 'touch' : 'klassik', assist: 'voll', difficulty: 'mittel', length: 'kurz',
-  sound: true, volume: 0.8, umgebung: 1, voice: true, quality: 'hoch', figures: 'echt',
+  sound: true, volume: 0.8, umgebung: 1, voice: true, quality: 'hoch', schaerfe: 'auto', figures: 'echt',
   kamera: 'aus', kameraRaum: 'mittel', kameraTauschen: false,
   spielzuege: 'aus',       // taktische Spielzüge im Match: 'aus' oder 'an'
   blick: 'tv',             // Blick auf den Platz im Match: 'tv' (wie im Fernsehen) oder 'nah' (dicht hinter dir)
@@ -85,6 +88,7 @@ game.wennShow = (side, id) => {
   if (career && ctxT && ctxT.career) { career.showSchlaege = career.showSchlaege || {}; career.showSchlaege[S.clip] = (career.showSchlaege[S.clip] || 0) + 1; }
 };
 game.setQuality(settings.quality);
+game.setScharfAuto(settings.schaerfe !== 'fest');
 game.blick = settings.blick;
 game.realFigures = settings.figures === 'echt';
 const controls = new Controls($('#touch'), $('#stick'));
@@ -411,6 +415,7 @@ actions.settings = (v) => {
       <p class="dim" style="margin:6px 0 0;font-size:13px">🎮 ${controls.pad.connected
         ? `Verbunden: ${esc(controls.pad.name)} · ${controls.pad.motion ? 'Schwingen wird erkannt' : 'nur Tasten und Stick (kein Schwingen)'}`
         : 'Kein Controller verbunden. Koppeln: iPad-Einstellungen → Bluetooth, am Joy-Con die kleine runde Taste gedrückt halten.'}</p>
+      <div class="row" style="margin-top:8px"><button data-a="handySchlaeger">📱 Handy als Schläger verbinden (QR-Code)</button></div>
       ${window.webkit?.messageHandlers?.powershot ? `<div class="row" style="margin-top:8px">
         <button data-a="schlaeger">📱 Dieses Gerät als Schläger für ein anderes benutzen</button></div>` : ''}
       <label>Laufen mit der Kamera</label><div class="row">
@@ -431,6 +436,9 @@ actions.settings = (v) => {
         Auf iPad und iPhone bleibt alles still, solange der Schalter „Stumm“ an ist.</p>
       ${optionRow('Schiedsrichter spricht', 'voice', { true: 'Ja', false: 'Nein' })}
       ${optionRow('Grafik', 'quality', { hoch: 'Schön', niedrig: 'Schnell (ältere Geräte)' })}
+      ${optionRow('Bildschärfe', 'schaerfe', { auto: 'Automatisch', fest: 'Immer voll' })}
+      <p class="dim" style="margin:6px 0 0;font-size:13px">„Automatisch“: Wenn das Bild ruckelt (zum Beispiel auf einem großen Turniergelände), malt das Spiel
+        etwas weniger scharf und läuft dafür flüssig. Läuft es wieder gut, wird es von selbst wieder schärfer.</p>
       ${optionRow('Spielerfiguren', 'figures', { echt: 'Realistisch', einfach: 'Einfach' })}
       ${optionRow('Blick auf den Platz', 'blick', { tv: 'Wie im Fernsehen', nah: 'Nah am Spieler' })}
       ${optionRow('Spieltempo', 'tempo', { echt: 'Echt', schnell: 'Schnell', turbo: 'Turbo' })}
@@ -455,6 +463,7 @@ actions.set = (v) => {
   sound.setUmgebung(settings.umgebung);
   sound.setEnabled(settings.sound);
   game.setQuality(settings.quality);
+  game.setScharfAuto(settings.schaerfe !== 'fest');
   game.blick = settings.blick;
   game.realFigures = settings.figures === 'echt';
   if (key === 'quality') game.loadVenue(D.tournamentById(menuVenue));
@@ -1102,7 +1111,7 @@ function anlageZeigen() {
   if (hotelWeg || (anlageTag && anlageTag.abend)) return hotelZeigen();      // Fahrt oder Fußweg ins Hotel: eigenes Fenster (weiter unten)
   const A = game.anlage, ort = A.amOrt;
   const hilfe = 'Laufen: W A S D oder mit einem Finger ziehen. Tippe auf ein Gebäude, dann läuft deine Figur von selbst hin. In viele Häuser kannst du durch die Tür hineingehen – dann verschwindet das Dach und du siehst die Möbel. Kamera mit zwei Fingern: kneifen = nah oder ganz weit weg, zur Seite wischen = rundherum drehen, hoch oder runter wischen = Blickwinkel. Mit drei Fingern schiebst du die Ansicht frei über das Gelände (danach reicht ein Finger), Doppel-Tipp oder 🎯 = zurück zur Figur. 🏷️ schaltet die Beschriftungen an und aus. Am PC: rechte Maustaste ziehen und Mausrad, mittlere Maustaste oder Umschalt + ziehen = verschieben, F = zurück zur Figur, B = Beschriftungen.';
-  const kam = [['karte', '🗺️', 'Übersicht'], ['schilder', '🏷️', 'Beschriftungen an oder aus (Taste B)'], ['figur', '🎯', 'Zurück zur Figur (Doppel-Tipp oder Taste F)'], ['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg']];
+  const kam = [...stimmungKnoepfe(), ['karte', '🗺️', 'Übersicht von oben (Taste M) – den Lageplan öffnest du mit einem Tipp auf das Radar oder Taste K'], ['schilder', '🏷️', 'Beschriftungen an oder aus (Taste B)'], ['figur', '🎯', 'Zurück zur Figur (Doppel-Tipp oder Taste F)'], ['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg']];
   let unten = `<p class="dim">${hilfe}</p>`, zeit = '', tagListe = '';
   if (anlageTag && phaseJetzt() === 'nach') {
     // Nach dem Match: nur noch die Aufgaben vom Team, dann geht es ins Hotel
@@ -1186,12 +1195,124 @@ anlageEl.addEventListener('pointerdown', (e) => {
   const b = e.target.closest('[data-kam]');
   if (!b) return;
   e.preventDefault();
-  if (b.dataset.kam === 'karte') game.anlage.uebersicht();
+  if (b.dataset.kam === 'zeit' || b.dataset.kam === 'wetter') stimmungWeiter(b.dataset.kam);
+  else if (b.dataset.kam === 'foto') fotoStart();
+  else if (b.dataset.kam === 'karte') game.anlage.uebersicht();
   else if (b.dataset.kam === 'figur') game.anlage.zurFigur();
   else if (b.dataset.kam === 'schilder') b.classList.toggle('aus', !game.anlage.schilderSchalten());
   else game.anlage.kamTaste = b.dataset.kam;
 });
 for (const n of ['pointerup', 'pointercancel', 'pointerleave']) anlageEl.addEventListener(n, () => { game.anlage.kamTaste = null; }, true);
+
+// ---- Tageszeit und Wetter auf dem Gelände (gelaendewetter.js, Idee aus dem Reitturnier). Man wählt selbst; abends nach dem Match ist von allein Abend.
+const STIMMUNG_KEY = 'powershot.stimmung.v1';
+let stimmung = { zeit: null, wetter: 'sonne' };       // zeit null = von allein (Mittag, am Abend nach dem Match Abend)
+try { stimmung = { ...stimmung, ...(JSON.parse(localStorage.getItem(STIMMUNG_KEY)) || {}) }; } catch (e) { /* dann eben Mittag und Sonne */ }
+const zeitJetzt = () => (GW.ZEITEN[stimmung.zeit] ? stimmung.zeit : (hotelWeg || (anlageTag && anlageTag.abend) ? 'abend' : 'tag'));
+const wetterJetzt = () => (GW.WETTER[stimmung.wetter] ? stimmung.wetter : 'sonne');
+const stimmungKnoepfe = () => [
+  ['zeit', GW.ZEITEN[zeitJetzt()].bild, `Tageszeit: ${GW.ZEITEN[zeitJetzt()].name} – antippen wechselt (Mittag, Abend, Nacht, Morgen)`],
+  ['wetter', GW.WETTER[wetterJetzt()].bild, `Wetter: ${GW.WETTER[wetterJetzt()].name} – antippen wechselt (Sonne, Wolken, Regen, Nebel)`],
+  ['foto', '📷', 'Fotomodus: alle Knöpfe weg, Kamera frei drehen, Foto speichern (Taste P)'],
+];
+function stimmungWeiter(was) {
+  if (was === 'zeit') stimmung.zeit = GW.ZEIT_REIHE[(GW.ZEIT_REIHE.indexOf(zeitJetzt()) + 1) % GW.ZEIT_REIHE.length];
+  else stimmung.wetter = GW.WETTER_REIHE[(GW.WETTER_REIHE.indexOf(wetterJetzt()) + 1) % GW.WETTER_REIHE.length];
+  try { localStorage.setItem(STIMMUNG_KEY, JSON.stringify(stimmung)); } catch (e) { /* ohne Speicher gilt es nur bis zum Neuladen */ }
+  const Z = GW.ZEITEN[zeitJetzt()], W = GW.WETTER[wetterJetzt()];
+  for (const b of document.querySelectorAll('[data-kam="zeit"]')) { b.textContent = Z.bild; b.title = `Tageszeit: ${Z.name}`; }
+  for (const b of document.querySelectorAll('[data-kam="wetter"]')) { b.textContent = W.bild; b.title = `Wetter: ${W.name}`; }
+  fotoEl.querySelector('.was').textContent = `${Z.bild} ${Z.name} · ${W.bild} ${W.name}`;
+}
+
+// ---- Radar und Lageplan (gelaendekarte.js, Idee aus Police Quest). Ein Tipp auf einen Ort im Plan = die Figur läuft hin.
+const gKarte = new GelaendeKarte((ort) => { game.anlage.geheZu(ort.id); });
+
+// ---- Fotomodus (Idee aus dem Reitturnier): Knöpfe und Schilder verschwinden, die Kamera dreht man wie immer, 📸 speichert das Bild.
+let fotoAn = false, fotoRahmen = true, fotoSchilder = true;
+const fotoEl = document.createElement('div');
+fotoEl.id = 'fotoLeiste';
+fotoEl.innerHTML = `<span class="was"></span><button data-kam="zeit" title="Tageszeit wechseln">☀️</button><button data-kam="wetter" title="Wetter wechseln">☀️</button>
+  <button data-foto="rahmen" title="Mit oder ohne Rahmen">🖼️ Rahmen: an</button><button class="primary" data-foto="knips">📸 Foto machen</button><button data-foto="zu">✕ Fertig</button>`;
+document.body.appendChild(fotoEl);
+const fotoBlitz = document.createElement('div');
+fotoBlitz.id = 'fotoBlitz';
+document.body.appendChild(fotoBlitz);
+function fotoStart() {
+  const A = game.anlage;
+  if (fotoAn || !A.an) return;
+  fotoAn = true; fotoSchilder = A.schilderAn; A.schilderAn = false;       // die Beschriftungen stören auf dem Foto (nur solange der Fotomodus an ist)
+  A.kamTaste = null;
+  const Z = GW.ZEITEN[zeitJetzt()], W = GW.WETTER[wetterJetzt()];
+  fotoEl.querySelector('[data-kam="zeit"]').textContent = Z.bild; fotoEl.querySelector('[data-kam="wetter"]').textContent = W.bild;
+  fotoEl.querySelector('.was').textContent = `${Z.bild} ${Z.name} · ${W.bild} ${W.name}`;
+  document.body.classList.add('foto');
+}
+function fotoEnde() {
+  if (!fotoAn) return;
+  fotoAn = false; game.anlage.schilderAn = fotoSchilder;
+  document.body.classList.remove('foto');
+}
+function fotoKnips() {
+  game.frame(0);                     // das Bild frisch malen – gleich danach kann man es von der Malfläche abnehmen
+  const quelle = game.renderer.domElement, c = document.createElement('canvas'), G = game.anlage.plan ? game.anlage.plan.g : null;
+  if (fotoRahmen) {
+    // Rahmen wie bei einem Sofortbild, unten der Ort und das Datum
+    const rand = Math.round(quelle.width * 0.03), unten = Math.round(quelle.width * 0.085), k = c.getContext('2d');
+    c.width = quelle.width + rand * 2; c.height = quelle.height + rand + unten;
+    k.fillStyle = '#fffaf0'; k.fillRect(0, 0, c.width, c.height);
+    k.drawImage(quelle, rand, rand);
+    k.fillStyle = '#1a2440'; k.textAlign = 'center'; k.textBaseline = 'middle';
+    k.font = `bold ${Math.round(unten * 0.4)}px system-ui, "Segoe UI", Arial, sans-serif`;
+    k.fillText(`🎾 ${G ? `${G.name} · ` : ''}${new Date().toLocaleDateString('de-DE')}`, c.width / 2, quelle.height + rand + unten / 2);
+  } else { c.width = quelle.width; c.height = quelle.height; c.getContext('2d').drawImage(quelle, 0, 0); }
+  fotoBlitz.classList.remove('an'); void fotoBlitz.offsetWidth; fotoBlitz.classList.add('an');
+  sound.play('klick');
+  const name = `powershot-foto-${Date.now()}.png`;
+  c.toBlob((blob) => {
+    if (!blob) return;
+    // Auf iPad und iPhone über „Teilen“ (dort kann man das Bild in den Fotos sichern), sonst als Datei speichern
+    try {
+      const datei = new File([blob], name, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [datei] }) && (/iPad|iPhone|Android/i.test(navigator.userAgent) || navigator.maxTouchPoints > 1)) {
+        navigator.share({ files: [datei], title: 'Powershot Tennis' }).catch(() => {});
+        return;
+      }
+    } catch (e) { /* dann eben als Datei */ }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  }, 'image/png');
+  return c;
+}
+fotoEl.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.kam) stimmungWeiter(b.dataset.kam);
+  else if (b.dataset.foto === 'rahmen') { fotoRahmen = !fotoRahmen; b.textContent = `🖼️ Rahmen: ${fotoRahmen ? 'an' : 'aus'}`; }
+  else if (b.dataset.foto === 'knips') fotoKnips();
+  else fotoEnde();
+});
+window.addEventListener('keydown', (e) => {
+  if (!game.anlage.an || MS.offen() || e.target.closest('input, textarea')) return;
+  if (e.code === 'KeyP') (fotoAn ? fotoEnde : fotoStart)();
+  else if (e.code === 'KeyK' && !fotoAn) (gKarte.offen() ? gKarte.zu() : gKarte.stand && gKarte.auf(gKarte.stand));
+  else if (e.code === 'Escape') { fotoEnde(); gKarte.zu(); }
+});
+// Jedes Bild: Stimmung weitergeben und das Radar malen
+function gelaendeFrame() {
+  const A = game.anlage, an = A.an && !!A.plan;
+  if (!an) { if (fotoAn) fotoEnde(); gKarte.setze(null); return; }
+  if (A.stimmung.zeit !== zeitJetzt() || A.stimmung.wetter !== wetterJetzt()) A.stimmungSetzen(zeitJetzt(), wetterJetzt());
+  gKarte.setze(A.plan);
+  const wo = A.kamZiel || A.p, punkte = [];
+  // Am Rand des Radars: im Städtchen das Hotel (gelb), auf dem Gelände am Turniertag der Platz, auf dem dein Match wartet (weiß)
+  const fest = A.orte.find((o) => o.id === (gKarte.istStadt() ? 'ziel' : 'court'));
+  if (fest && (gKarte.istStadt() || anlageTag)) punkte.push({ x: fest.tx, z: fest.tz, farbe: gKarte.istStadt() ? '#ffd23a' : '#ffffff' });
+  gKarte.radar({ x: wo.x, z: wo.z, blick: A.p.blick, kamW: A.kam.w, ziel: A.ziel, punkte });
+}
+
 // woher = an welcher Tür die Figur startet · ergebnis = was dort gleich angezeigt wird (nach einem Minispiel)
 function anlageStart(ich, woher, ergebnis = null) {
   hide();
@@ -1401,7 +1522,7 @@ function hotelAmWagen(G) {
 // Das Fenster während der Fahrt, im Städtchen und im Hotel
 function hotelZeigen() {
   const A = game.anlage, ort = A.amOrt, G = A.plan ? A.plan.g : null, W = hotelWeg, abend = !!(anlageTag && anlageTag.abend);
-  const kam = [['karte', '🗺️', 'Weiter weg / näher'], ['schilder', '🏷️', 'Beschriftungen an oder aus (Taste B)'], ['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg']];
+  const kam = [...stimmungKnoepfe(), ['karte', '🗺️', 'Weiter weg / näher'], ['schilder', '🏷️', 'Beschriftungen an oder aus (Taste B)'], ['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg']];
   const abendWahl = () => `<p class="dim">Was machst du heute Abend noch?</p><div class="row wahl">${Object.entries(TT.ABEND).map(([id, B]) => `<button data-a="hotelAbendWahl" data-v="${id}">${B.name} <small>${B.bringt}</small></button>`).join('')}</div>`;
   let zeit = '', unten = '';
   if (!W) {
@@ -2845,8 +2966,10 @@ function gelaendeTon(dt) {
 
 let last = performance.now();
 function loop(now) {
-  const dt = Math.min(0.05, (now - last) / 1000);
+  const roh = (now - last) / 1000, dt = Math.min(0.05, roh);
   last = now;
+  if (!MS.offen() && !document.hidden) game.tempoPruefen(roh);      // ruckelt es? Dann malt das Spiel mit weniger Bildpunkten (game3d.js)
+  handy.pruefen();                  // meldet sich das Handy (als Schläger) noch?
   controls.pollPad();               // Controller im Browser abfragen (auch in der Pause, wegen der Pause-Taste)
   // Läuft ein Mini-Spiel (minispiele.js), bleibt das Gelände dahinter als Standbild stehen: Das spart Rechenzeit fürs Mini-Spiel.
   if (MS.offen()) return requestAnimationFrame(loop);
@@ -2859,6 +2982,7 @@ function loop(now) {
     for (let i = 0; i < teile; i++) match.update(dm / teile);
   }
   game.frame(match && paused ? 0 : dm);
+  gelaendeFrame();
   gelaendeTon(dt);
   hudFrame(dt);
   kameraFrame();
@@ -2870,6 +2994,7 @@ function step(n = 60) {
   for (let i = 0; i < n; i++) {
     if (match && !paused) { controls.update(1 / 60); match.update(1 / 60); }
     game.frame(1 / 60);
+    gelaendeFrame();
     gelaendeTon(1 / 60);
     hudFrame(1 / 60);
   }
@@ -2927,12 +3052,51 @@ controls.onHint = (text) => hud.message(text, 'warn');
 // Nur in der iOS-App: Dieses Gerät wird zum Schläger für ein anderes (z. B. iPhone für das Spiel auf dem iPad).
 actions.schlaeger = () => window.webkit.messageHandlers.powershot.postMessage('schlaeger');
 
+// ---- Handy als Schläger über einen QR-Code (handyschlaeger.js, Idee aus dem Rennspiel: Handy als Lenkrad).
+// Das Handy schickt seine Bewegung, das Spiel behandelt es wie einen Controller mit Bewegungssensor.
+const handy = new SchlaegerEmpfang();
+let handyDa = false;
+const HANDY_TEXT = { aus: '', laden: '⏳ Verbindung wird vorbereitet …', bereit: '📡 Wartet auf dein Handy …', fehler: '⚠️ Kein Internet oder der Vermittler antwortet nicht – der QR-Code geht gerade nicht.' };
+const handyText = () => (handy.status === 'verbunden' ? `✅ ${handy.geraet || 'Handy'} ist verbunden. Schwinge einmal zur Probe!` : HANDY_TEXT[handy.status] || '');
+handy.wennDaten = (d) => {
+  if (d.t !== 's') return;
+  window.__powershotPad({ name: `${handy.geraet || 'Handy'} als Schläger`, lx: 0, ly: 0, motion: d.m || null, x: !!d.x, y: !!d.y, netz: !!d.netz, pause: !!d.pause });
+};
+handy.wennStatus = (st) => {
+  if (st === 'verbunden' && !handyDa) {
+    handyDa = true;
+    // Geschwungen wird in der Steuerung „Controller“ – die stellen wir gleich ein
+    if (settings.control !== 'controller') { settings.control = 'controller'; saveSettings(); controls.setMode('controller'); if (match) match.cfg.controlMode = 'controller'; }
+  } else if (st !== 'verbunden' && handyDa) { handyDa = false; window.__powershotPadWeg(); }
+  const el = document.getElementById('handyStatus');
+  if (el) el.textContent = handyText();
+  const c = document.getElementById('handyCode');
+  if (c) c.textContent = handy.code || '';
+};
+// Das Handy darf kurz anzeigen (und rütteln), wenn das Spiel einen Schwung erkannt hat
+controls.onSchwung = (kraft) => { if (handyDa) handy.senden({ t: 'schwung', hart: kraft > 0.7 }); };
+actions.handySchlaeger = () => {
+  handy.start();
+  show(`<div class="bar">${back('settings')}<h2>📱 Handy als Schläger</h2></div>
+    <div class="panel" style="text-align:center">
+      <p>Scanne den Code mit der Kamera deines Handys. Es öffnet sich eine Seite – dort auf <b>„Los geht’s“</b> tippen und „Bewegung“ erlauben.</p>
+      <canvas id="handyQr" width="264" height="264" style="width:220px;height:220px;border-radius:12px"></canvas>
+      <p>Oder am Handy <b>kvb1982.github.io/Powershot/schlaeger.html</b> öffnen und diesen Code eintippen: <b id="handyCode" style="font-size:26px;letter-spacing:4px;color:var(--accent)">${handy.code || ''}</b></p>
+      <p id="handyStatus" style="font-weight:600">${handyText()}</p>
+      <p class="dim" style="font-size:13px;text-align:left">So geht es: Das Handy fest halten wie einen Schlägergriff (mit Hülle, am besten mit Schlaufe ums Handgelenk!) und schwingen, wenn der Ball kommt.
+        Früh schwingen = cross, spät = longline. Von unten nach oben = Topspin, von oben nach unten = Slice, fest = hart. Lob, Stoppball und „Ans Netz“ sind Knöpfe auf dem Handy.
+        Die Steuerung stellt sich von selbst auf „Controller“, am besten mit Laufhilfe „Voll“ – dann läuft deine Figur von allein.
+        Beide Geräte brauchen Internet (nur für den ersten Kontakt). Mit dem iPhone geht es auch ohne Internet über die Powershot-App.</p>
+    </div>`);
+  qrMalen(document.getElementById('handyQr'), handy.adresse());
+};
+
 // Controller: Die Pause-Taste hält das Spiel an. Die iOS-App meldet den Controller über diese beiden Funktionen.
 controls.onPause = () => togglePause();
 window.__powershotPad = (s) => { controls.nativePad = true; controls.setPad(s); };
 window.__powershotPadWeg = () => { controls.nativePad = false; controls.padWeg(); };
 
-window.__powershot = { game, controls, settings, step, kameraLauf, kameraBild, get match() { return match; }, get career() { return career; }, get season() { return season; }, actions };
+window.__powershot = { game, controls, settings, step, kameraLauf, kameraBild, get match() { return match; }, get career() { return career; }, get season() { return season; }, actions, karte: gKarte, handy, foto: { start: fotoStart, knips: fotoKnips, ende: fotoEnde } };
 // Das Spielermodell laden (höchstens 8 Sekunden warten – sonst geht es mit den einfachen Figuren los)
 await Promise.race([Promise.all([loadFigure(), loadMocap(), loadGang(), ladeRequisiten()]), new Promise((r) => setTimeout(r, 8000))]);
 $('#loading').remove();
