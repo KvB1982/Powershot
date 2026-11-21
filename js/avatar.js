@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { figureReady, makeFigure, REST, BONES, HAND } from './figur.js';
 import { requisit } from './requisiten.js';
-import { mocapClip, mocapFrame, mocapLoop, mocapLauf } from './mocap.js';
+import { mocapClip, mocapFrame, mocapLoop, mocapLauf, mocapStufe, mocapWeg, mocapMix, mocapGang, mocapRunde } from './mocap.js';
 import { SHOW, showFuer } from './showschlaege.js';
 import { JUBEL, pose as namedPose, mixPose, strokePose, prepPose, strokeName, strokeFamily, strokeStart, strokeEnd } from './posen.js';
 
@@ -262,6 +262,32 @@ function joggFuss(u, boden) {
   return [wert(J.flugVor, 0, [-J.hinten, J.vorn]), Math.max(0, wert(J.flugHoch, 1, [J.abdruck, 0])), wert(J.flugFuss, 2, [J.flugFuss[0], J.flugFuss[n]])];
 }
 // Zum Vergleichen: Mit ?altergang in der Adresse geht und joggt die Figur wieder mit den gebauten Bewegungen (GANG, JOGGEN).
+// Die Lauf-Leiter: Aufnahmen vom Gehen bis zum Sprint, nach Tempo sortiert (walk und sprint aus Police Quest, lauf und spurt von Mixamo).
+// Je nach Tempo der Figur wird zwischen zwei Nachbarn gemischt.
+const LEITER = ['walk', 'sprint', 'lauf', 'spurt'];
+let leiterAlt = null, leiterListe = null;
+function laufLeiter() {
+  const gehen = mocapClip('walk');
+  if (!gehen || !gehen.tempo) return null;
+  if (leiterAlt !== gehen) { leiterAlt = gehen; leiterListe = LEITER.map(mocapClip).filter((c) => c && c.tempo && c.gang).sort((x, y) => x.tempo - y.tempo); }
+  return leiterListe;
+}
+// Beine im Ballwechsel (dort schaut die Figur immer zum Netz): nach vorn laufen = Lauf-Leiter, zur Seite = Seitwärts-Aufnahmen.
+// Rückwärts gibt es keine Aufnahme, da bleibt der gebaute Schritt.
+const BEINE = {
+  wechsel: 8,                    // so schnell wird zwischen vor, rechts und links umgeblendet (pro Sekunde)
+  schrittMin: 0.6, schrittMax: 1.25,   // Seitwärts-Schritte dürfen so viel kürzer oder länger werden als in der Aufnahme
+  hocke: 0.6,                    // so viel von der Hocke eines Schlags (pose.cr) bleibt beim Laufen übrig
+};
+// (in welcher Mitte pendelt jeder Fuß seitlich? einmal je Aufnahme ausrechnen)
+function fussMitte(clip) {
+  if (!clip.fm) {
+    const i = clip.keys.indexOf('footR') * 3 + 1, j = clip.keys.indexOf('footL') * 3 + 1, n = clip.frames.length - 1;
+    let r = 0, l = 0; for (let k = 0; k < n; k++) { r += clip.frames[k][i]; l += clip.frames[k][j]; }
+    clip.fm = [r / n, l / n];
+  }
+  return clip.fm;
+}
 const ALTER_GANG = typeof location !== 'undefined' && /[?&]altergang/.test(location.search || '');
 const UP = new THREE.Vector3(0, 1, 0);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -580,18 +606,20 @@ export class Avatar {
     a.walkK = clamp((a.walkK || 0) + (st.walk ? dt : -dt) / 0.35, 0, 1);
     const walkK = smooth(a.walkK);
     // Gibt es eine Aufnahme vom Gehen? Dann bestimmt sie auch die Schrittlänge (weg = Meter für zwei Schritte).
+    const leiter = this.real && !ALTER_GANG ? laufLeiter() : null;
     const gang = this.real && walkK > 0 && !ALTER_GANG ? mocapClip('walk') : null;
-    // Gibt es dazu eine Aufnahme vom Sprinten? Dann wird je nach Tempo gemischt: langsam = gehen, schnell = sprinten,
-    // dazwischen ein lockerer Lauf. laufK = 0 (gehen) … 1 (sprinten). Große Spieler machen größere Schritte (this.gross).
-    const renn = gang && gang.tempo ? mocapClip('sprint') : null;
-    const laufSoll = renn ? clamp((sp / this.gross - gang.tempo) / (renn.tempo - gang.tempo), 0, 1) : 0;
+    // Gibt es die Lauf-Leiter (gehen → laufen → sprinten)? Dann wird je nach Tempo gemischt.
+    // laufK = Stelle auf der Leiter (0 = gehen, 1 = die nächste Aufnahme …). Große Spieler machen größere Schritte (this.gross).
+    const renn = gang && leiter && leiter[0] === gang ? leiter : null;
+    const laufSoll = leiter ? mocapStufe(leiter, sp / this.gross) : 0;
     a.laufK = (a.laufK || 0) + (laufSoll - (a.laufK || 0)) * Math.min(1, dt * 5);
-    const gangWeg = gang ? (gang.weg + (renn ? (renn.weg - gang.weg) * a.laufK : 0)) * this.gross : 0;
+    const gangWeg = gang ? (renn ? mocapWeg(renn, a.laufK) : gang.weg) * this.gross : 0;
     // Joggen (auf dem Turniergelände): lockeres Laufen ohne Schläger. jog = 0 (gehen) … 1 (joggen). Die Schritte werden länger,
     // die Füße heben höher ab, die Arme sind angewinkelt und schwingen mit.
     a.jogK = (a.jogK || 0) + ((st.jog || 0) - (a.jogK || 0)) * Math.min(1, dt * 5);
     const jog = a.jogK;
-    const stepRun = 0.5 + 0.18 * sp, stepWalk = renn ? gangWeg / 2 : (gang && gang.weg > 0.6 ? gang.weg / 2 : GANG.schritt) + jog * Math.max(0, JOGGEN.schritt + JOGGEN.schrittTempo * sp - GANG.schritt);
+    // (im Ballwechsel: Kommen die Beine aus einer Aufnahme, bestimmt sie die Schrittlänge – sonst rutschen die Füße)
+    const stepRun = 0.5 + 0.18 * sp + ((a.beinWeg || 1) * this.gross / 2 - 0.5 - 0.18 * sp) * (a.beinK || 0), stepWalk = renn ? gangWeg / 2 : (gang && gang.weg > 0.6 ? gang.weg / 2 : GANG.schritt) + jog * Math.max(0, JOGGEN.schritt + JOGGEN.schrittTempo * sp - GANG.schritt);
     const stepLen = stepRun + (stepWalk - stepRun) * walkK;
     // Beim Gehen dreht sich der ganze Körper in Laufrichtung (sonst schaut die Figur immer zum Netz).
     // An der Bank angekommen, dreht sie sich zum Platz um.
@@ -612,6 +640,36 @@ export class Avatar {
     a.amp = (a.amp || 0) + ((moving ? stepLen / 2 : 0) - (a.amp || 0)) * Math.min(1, dt * 10);
     a.run += (clamp(sp / 3.2, 0, 1) - a.run) * Math.min(1, dt * 10);
     a.legK = (a.legK || 0) + (smooth((sp - 0.6) / 1.4) - (a.legK || 0)) * Math.min(1, dt * 8);
+    // --- Beine im Ballwechsel aus Aufnahmen: Wohin läuft die Figur gerade (von ihr aus gesehen)? ---
+    let bein = null, beinW = 0;
+    const seitR = leiter ? mocapClip('seit_r') : null, seitL = leiter ? mocapClip('seit_l') : null;
+    if (seitR && seitL && walkK < 0.999) {
+      const B = a.bein || (a.bein = [0, 0, 0]);                          // Anteile: vor, zur Schlaghand, zur anderen Seite
+      const soll = moving ? [Math.max(0, a.dir[0]) ** 2, Math.max(0, a.dir[1]) ** 2, Math.max(0, -a.dir[1]) ** 2] : B;
+      for (let i = 0; i < 3; i++) B[i] += (soll[i] - B[i]) * Math.min(1, dt * BEINE.wechsel);
+      const summe = B[0] + B[1] + B[2];
+      a.beinK = Math.min(1, summe) * a.legK;
+      if (summe > 0.02 && a.legK > 0.001) {
+        let weg = 0;
+        const teile = [];
+        if (B[0] > 0.01) { teile.push([mocapLauf(leiter, a.step, a.laufK), B[0]]); weg += B[0] * mocapWeg(leiter, a.laufK); }
+        for (const [clip, anteil] of [[seitR, B[1]], [seitL, B[2]]]) {
+          if (anteil <= 0.01) continue;
+          // Seitwärts: Bei wenig Tempo werden die Schritte kürzer, bei viel Tempo länger (und schneller)
+          const k = clamp(Math.sqrt(sp / this.gross / clip.tempo), BEINE.schrittMin, BEINE.schrittMax), fm = fussMitte(clip);
+          const f = mocapGang(clip, a.step);
+          for (const [fuss, zeh, knie, m] of [['footR', 'toeR', 'kneeR', fm[0]], ['footL', 'toeL', 'kneeL', fm[1]]]) {
+            const neu = m + (f[fuss][1] - m) * k, schub = neu - f[fuss][1];
+            f[fuss] = [f[fuss][0], neu, f[fuss][2]]; f[zeh] = [f[zeh][0], f[zeh][1] + schub, f[zeh][2]]; f[knie] = [f[knie][0], f[knie][1] + schub * 0.5, f[knie][2]];
+          }
+          teile.push([f, anteil]); weg += anteil * clip.weg * k;
+        }
+        let ges = 0;
+        for (const [f, anteil] of teile) { ges += anteil; bein = bein ? mocapMix(bein, f, anteil / ges) : f; }
+        a.beinWeg = weg / ges;
+        beinW = a.beinK * (1 - walkK);
+      }
+    } else a.beinK = 0;
 
     // Stimmung nach dem Punkt. Der Jubel dauert nur einen Moment: Faust ballen, zweimal kurz pumpen, weiter.
     a.mood = st.mood || a.mood;
@@ -639,8 +697,10 @@ export class Avatar {
     const bob = Math.sin(a.time * 4) * 0.012 * still;
     // Beim Rennen hebt der Körper ab, wenn die Beine auseinander sind. Beim Gehen ist es umgekehrt:
     // Die Hüfte ist am höchsten, wenn ein Bein gerade unter dem Körper steht.
-    const hipH = 0.90 - pose.cr + pose.jp + bob + run * Math.abs(sinS) * 0.035 * (1 - walkK) - gehK * GANG.wippen * (1 - Math.cos(2 * a.step)) * (1 - jog) + gehK * jog * (JOGGEN.huepfen * 0.5 * (1 - Math.cos(4 * Math.PI * (joggU - joggBoden / 2))) - JOGGEN.tief);
+    const hipH0 = 0.90 - pose.cr + pose.jp + bob + run * Math.abs(sinS) * 0.035 * (1 - walkK) - gehK * GANG.wippen * (1 - Math.cos(2 * a.step)) * (1 - jog) + gehK * jog * (JOGGEN.huepfen * 0.5 * (1 - Math.cos(4 * Math.PI * (joggU - joggBoden / 2))) - JOGGEN.tief);
     const dm = this.dim;
+    // (laufen die Beine nach einer Aufnahme, kommt auch das Auf und Ab der Hüfte von dort)
+    const hipH = beinW > 0.001 ? hipH0 + (bein.hip[2] - pose.cr * BEINE.hocke + pose.jp - hipH0) * beinW : hipH0;
     const shH = hipH + dm.shUp;
     const lean = (0.05 + 0.07 * run) * (1 - 0.7 * walkK) + pose.ln + GANG.nicken * Math.cos(2 * a.step) * gehK + JOGGEN.vorlage * jog * gehK;
     // Der Körper wiegt sich über das Standbein; im Stehen verlagert er ab und zu gemütlich das Gewicht
@@ -687,6 +747,17 @@ export class Avatar {
     footL = limitReach(hipL, footL, dm.thigh + dm.shin - 0.004);
     let kneeR = ik(hipR, footR, dm.thigh, dm.shin, [1, 0.15, 0.2]);
     let kneeL = ik(hipL, footL, dm.thigh, dm.shin, [1, -0.15, 0.2]);
+    if (beinW > 0.001) {
+      // Beine aus der Aufnahme: Die Füße stehen so weit neben und vor der Hüfte wie dort und genauso hoch über dem Boden.
+      // Die Hüfte selbst bleibt, wo der Schlag sie haben will – die Knie werden dazu passend neu ausgerechnet.
+      const H = bein.hip, ort = (q) => [q[0] - H[0], hipMid[1] + q[1] - H[1], q[2] + air];
+      const hueft = (q) => [q[0] - H[0], hipMid[1] + q[1] - H[1], hipH + q[2] - H[2]];
+      hipR = mix3(hipR, hueft(bein.hipR), beinW); hipL = mix3(hipL, hueft(bein.hipL), beinW);
+      footR = limitReach(hipR, mix3(footR, ort(bein.footR), beinW), dm.thigh + dm.shin - 0.004);
+      footL = limitReach(hipL, mix3(footL, ort(bein.footL), beinW), dm.thigh + dm.shin - 0.004);
+      kneeR = ik(hipR, footR, dm.thigh, dm.shin, mix3([1, 0.15, 0.2], sub(bein.kneeR, bein.hipR), beinW));
+      kneeL = ik(hipL, footL, dm.thigh, dm.shin, mix3([1, -0.15, 0.2], sub(bein.kneeL, bein.hipL), beinW));
+    }
 
     let handR = limitReach(shR, pose.r, dm.reach);
     let handL = limitReach(shL, pose.l, dm.reach);
@@ -761,28 +832,41 @@ export class Avatar {
     let footNodL = GANG.ferse * (hintenL - 0.55 * Math.max(0, -schwung) ** 2 * gehK);
     if (joggR) { footNodR += (joggR[2] - footNodR) * jw; footNodL += (joggL[2] - footNodL) * jw; }
     const look = st.ball ? clamp(Math.atan2((st.ball.x - this.pos.x) * d, Math.abs(st.ball.z - this.pos.z) + 2), -0.7, 0.7) * hand : 0;
+    if (beinW > 0.001) {
+      // Füße aus der Aufnahme: wohin die Zehen zeigen und ob der Fuß flach steht oder abrollt
+      const nick = (f, t) => Math.atan2(f[2] - t[2], Math.hypot(t[0] - f[0], t[1] - f[1])) - FOOT_REST;
+      footYawR += (Math.atan2(bein.toeR[1] - bein.footR[1], bein.toeR[0] - bein.footR[0]) - footYawR) * beinW;
+      footYawL += (Math.atan2(bein.toeL[1] - bein.footL[1], bein.toeL[0] - bein.footL[0]) - footYawL) * beinW;
+      footNodR += (nick(bein.footR, bein.toeR) - footNodR) * beinW; footNodL += (nick(bein.footL, bein.toeL) - footNodL) * beinW;
+    }
     const layers = [];
     if (iw > 0.001 && a.idf) layers.push([a.idf, iw, false]);
     if (mw > 0.001) layers.push([a.mf, mw, true]);
     // Aufnahme vom Gehen (falls vorhanden): ersetzt den gebauten Gang, Beine inklusive. Der Schläger bleibt, wie er ist.
+    // Der Schlägerarm schwingt ruhiger als der freie Arm: Die Hand bleibt näher an ihrer Mitte neben der Hüfte.
+    const schlaegerArm = (m) => {
+      if (st.ohneSchlaeger) return m;
+      const r = sub(m.handR, m.shR), ruhe = [0.03, 0.11, -0.56], k = TRAGEN.armRuhig;
+      const ellbogen = sub(m.elR, m.shR);
+      m.handR = limitReach(m.shR, add3(m.shR, mix3(ruhe, r, k)), dm.reach);
+      m.elR = ik(m.shR, m.handR, dm.upper, dm.fore, [ellbogen[0] - 0.3, ellbogen[1], ellbogen[2]]);
+      return m;
+    };
     if (gang && gehK > 0.001) {
-      const m = mocapLauf(gang, renn, a.step, a.laufK);
-      if (renn && a.laufK > 0.001 && a.laufK < 0.999) {
+      const m = renn ? mocapLauf(renn, a.step, a.laufK) : mocapGang(gang, a.step);
+      const zwischen = a.laufK % 1;
+      if (renn && zwischen > 0.001 && zwischen < 0.999) {
         // Beim Mischen zweier Aufnahmen würden Arme und Beine ein wenig kürzer – Knie und Ellbogen deshalb neu ausrechnen
         for (const s of ['R', 'L']) {
           m['knee' + s] = ik(m['hip' + s], m['foot' + s], dm.thigh, dm.shin, sub(m['knee' + s], m['hip' + s]));
           m['el' + s] = ik(m['sh' + s], m['hand' + s], dm.upper, dm.fore, sub(m['el' + s], m['sh' + s]));
         }
       }
-      if (!st.ohneSchlaeger) {
-        // Der Schlägerarm schwingt ruhiger als der freie Arm: Die Hand bleibt näher an ihrer Mitte neben der Hüfte.
-        const r = sub(m.handR, m.shR), ruhe = [0.03, 0.11, -0.56], k = TRAGEN.armRuhig;
-        const ellbogen = sub(m.elR, m.shR);
-        m.handR = limitReach(m.shR, add3(m.shR, mix3(ruhe, r, k)), dm.reach);
-        m.elR = ik(m.shR, m.handR, dm.upper, dm.fore, [ellbogen[0] - 0.3, ellbogen[1], ellbogen[2]]);
-      }
-      layers.push([m, gehK, false, true]);
+      layers.push([schlaegerArm(m), gehK, false, true]);
     }
+    // Stehen (an der Bank, auf dem Gelände): eine Aufnahme vom lockeren Dastehen und Atmen
+    const steh = gang && stehK > 0.001 ? mocapClip('steh') : null;
+    if (steh) layers.push([schlaegerArm(mocapRunde(steh, a.time + a.rnd * 9)), stehK * (1 - smooth(a.moodK)), false, true]);
     for (const [m, w, head, gehen] of layers) {
       // Läuft der Spieler, kommen die Beine weiter aus der Laufbewegung – nur Oberkörper, Arme und Schläger folgen der Aufnahme.
       // (Sonst würde die Figur mit den Beinen der Aufnahme über den Platz rutschen.) Die Geh-Aufnahme bringt ihre Beine selbst mit.

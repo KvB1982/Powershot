@@ -16,34 +16,16 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { MASS, KEYS, add, umrechner } from './figurmass.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const QUELLE = process.argv[2] || path.join(ROOT, '../Police-Quest/assets/modelle/polizist.glb');
 const FPS = 60;
 
-// Maße unserer Figur in Metern (wie DIM_REAL in js/avatar.js und REST in js/figur.js)
-const MASS = {
-  ober: 0.42, unter: 0.425,        // Oberschenkel, Unterschenkel
-  hueftBreit: 0.09,                // von der Körpermitte bis zum Hüftgelenk
-  halsHoch: 0.625,                 // von der Hüfte bis zum Hals
-  schulterTief: 0.77,              // die Schultern sitzen auf diesem Teil der Strecke Hüfte → Hals …
-  schulterHinten: 0.05,            // … und so weit hinter dieser Linie (Meter)
-  schulterBreit: 0.192,            // von der Körpermitte bis zur Schulter
-  oberarm: 0.275, unterarm: 0.278, // Schulter → Ellbogen → Handgelenk
-  griff: 0.065,                    // vom Handgelenk bis zur Mitte der Handfläche
-  kopf: 0.075,                     // Hals → Kopfgelenk
-  knoechel: 0.09,                  // so hoch ist der Knöchel, wenn der Fuß flach steht
-  fuss: 0.15, fussRuhe: 0.46,      // Knöchel → Fußballen; so stark zeigt diese Linie im Stand nach unten (Bogenmaß)
-};
 // Welche Aufnahme wird welche Bewegung im Spiel?
 const CLIPS = { walk: 'gehen', sprint: 'laufen' };
 
 // ---- kleine Rechen-Helfer
-const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const add = (a, b, k = 1) => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
-const len = (a) => Math.hypot(a[0], a[1], a[2]);
-const norm = (a) => { const l = len(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
-const mitte = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
 // Drehungen sind vier Zahlen [x, y, z, w] (ein „Quaternion“)
 const qMal = (a, b) => [a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1], a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
   a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3], a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]];
@@ -92,38 +74,7 @@ function gelenke(spuren, t) {
 
 // ---- Maße des Polizisten in der Ruhe-Haltung
 const R = gelenke(null, 0);
-const beinQ = len(sub(R.RightLeg, R.RightUpLeg)) + len(sub(R.RightFoot, R.RightLeg));
-const kBein = (MASS.ober + MASS.unter) / beinQ;                              // so viel kleiner (oder größer) sind unsere Beine
-const rumpfQ = len(sub(R.Neck, mitte(R.LeftUpLeg, R.RightUpLeg))), kopfQ = len(sub(R.Head, R.Neck));
-const neigung = (fuss, zeh) => Math.atan2(fuss[2] - zeh[2], Math.hypot(zeh[0] - fuss[0], zeh[1] - fuss[1]));
-const fussRuheQ = neigung(R.RightFoot, R.RightToeBase);                      // so steht der Fuß des Polizisten, wenn er flach steht
-
-// ---- ein Bild des Polizisten auf unsere Figur umrechnen
-const KEYS = ['hip', 'neck', 'head', 'shR', 'shL', 'elR', 'elL', 'handR', 'handL', 'hipR', 'hipL', 'kneeR', 'kneeL', 'footR', 'footL', 'toeR', 'toeL'];
-function umrechnen(Q) {
-  const o = {};
-  const beinMitte = mitte(Q.LeftUpLeg, Q.RightUpLeg);
-  o.hip = [beinMitte[0] * kBein, beinMitte[1] * kBein, beinMitte[2] * kBein];
-  const hQuer = norm(sub(Q.RightUpLeg, Q.LeftUpLeg)), sQuer = norm(sub(Q.RightArm, Q.LeftArm));
-  // Rumpf: Die Linie Hüfte → Hals neigt sich wie beim Polizisten. Die Schultern sitzen fest an dieser Linie
-  // (beim Polizisten hängen sie mit den Armen herunter – unsere Figur hat dafür kein Gelenk).
-  o.neck = add(o.hip, sub(Q.Neck, beinMitte), MASS.halsHoch / rumpfQ);
-  const oben = add(add(o.hip, sub(o.neck, o.hip), MASS.schulterTief), [-MASS.schulterHinten, 0, 0]);    // Mitte zwischen den Schultern
-  o.head = add(o.neck, sub(Q.Head, Q.Neck), MASS.kopf / kopfQ);
-  for (const [s, S, v] of [['R', 'Right', 1], ['L', 'Left', -1]]) {
-    o['hip' + s] = add(o.hip, hQuer, v * MASS.hueftBreit);
-    o['knee' + s] = add(o['hip' + s], norm(sub(Q[S + 'Leg'], Q[S + 'UpLeg'])), MASS.ober);
-    o['foot' + s] = add(o['knee' + s], norm(sub(Q[S + 'Foot'], Q[S + 'Leg'])), MASS.unter);
-    // Fuß: Richtung zum Fußballen wie beim Polizisten, aber die Neigung von unserem flachen Fuß aus gerechnet
-    const f = Q[S + 'Foot'], z = Q[S + 'ToeBase'], w = MASS.fussRuhe + neigung(f, z) - fussRuheQ, flach = norm([z[0] - f[0], z[1] - f[1], 0]);
-    o['toe' + s] = add(o['foot' + s], [flach[0] * Math.cos(w), flach[1] * Math.cos(w), -Math.sin(w)], MASS.fuss);
-    o['sh' + s] = add(oben, sQuer, v * MASS.schulterBreit);
-    o['el' + s] = add(o['sh' + s], norm(sub(Q[S + 'ForeArm'], Q[S + 'Arm'])), MASS.oberarm);
-    const gelenk = add(o['el' + s], norm(sub(Q[S + 'Hand'], Q[S + 'ForeArm'])), MASS.unterarm);
-    o['hand' + s] = add(gelenk, norm(sub(Q[S + 'Finger1'], Q[S + 'Hand'])), MASS.griff);
-  }
-  return o;
-}
+const umrechnen = umrechner(R), { beinQ, kBein, rumpfQ } = umrechnen;
 
 const ergebnis = {
   quelle: 'Gehen und Sprinten aus KvB1982/Police-Quest (assets/modelle/polizist.glb): Aufnahmen von DeepMotion SayMotion, von Kristian erzeugt. Umgerechnet mit tools/gang.mjs.',

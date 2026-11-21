@@ -13,6 +13,7 @@
 // Alles als [vor, seite, hoch] in Metern aus Sicht der Figur (seite: + = ihre rechte Hand). Ellbogen und Knie rechnet `gelenke` aus.
 import * as THREE from 'three';
 import { Avatar } from './avatar.js';
+import { mocapClip, mocapFrame } from './mocap.js';
 import { figureReady } from './figur.js';
 import { moebelBauen } from './moebel.js';
 
@@ -414,12 +415,22 @@ const SCH = 1.38, ARM = 0.58;                                  // Schulterhöhe 
 // Locker stehen und atmen
 const steh = (t = 0, o = {}) => ({ hip: [0, 0, 0.9 + 0.004 * Math.sin(t * 1.7)], auf: [0.02, 0.012 * Math.sin(t * 0.7), 1], ...o });
 
+// Eine Übung aus einer Aufnahme (assets/lauf.json, von tools/mixamo.mjs): s = 0 (Grundstellung) … 1 (ganz ausgeführt).
+// Aus den Gelenken der Aufnahme wird eine Pose, wie die Puppe sie versteht. Fehlt die Aufnahme, kommt null – dann gilt die gebaute Pose.
+function ausAufnahme(name, s) {
+  const c = mocapClip(name);
+  if (!c) return null;
+  const m = mocapFrame(c, c.t0 + begrenzen(s, 0, 1) * (c.tEnd - c.t0));
+  return { hip: m.hip, auf: minus(m.neck, m.hip), quer: minus(m.shR, m.shL), becken: [0, 0, 1], hquer: minus(m.hipR, m.hipL),
+    hR: m.handR, hL: m.handL, eR: minus(m.elR, m.shR), eL: minus(m.elL, m.shL), fR: m.footR, fL: m.footL, kR: minus(m.kneeR, m.hipR), kL: minus(m.kneeL, m.hipL) };
+}
+
 // Die vier Übungen beim Warmmachen. s = 0 (Grundstellung) … 1 (ganz ausgeführt), t = Zeit
 const WARM = [
   // Hampelmann: Beine auseinander, Arme seitlich über den Kopf
-  (s) => { const a = s * 2.8, hR = [0.03, 0.19 + Math.sin(a) * ARM, SCH - Math.cos(a) * ARM]; return { hip: [0, 0, 0.9 - 0.03 * s + 0.07 * Math.sin(s * Math.PI)], fR: [0, 0.13 + 0.27 * s, 0.09 + 0.05 * Math.sin(s * Math.PI)], fL: [0, -0.13 - 0.27 * s, 0.09 + 0.05 * Math.sin(s * Math.PI)], hR, hL: sp(hR), eR: [-0.3, 0.2, 0.3], eL: [-0.3, -0.2, 0.3] }; },
+  (s) => { const echt = ausAufnahme('hampel', s); if (echt) return echt; const a = s * 2.8, hR = [0.03, 0.19 + Math.sin(a) * ARM, SCH - Math.cos(a) * ARM]; return { hip: [0, 0, 0.9 - 0.03 * s + 0.07 * Math.sin(s * Math.PI)], fR: [0, 0.13 + 0.27 * s, 0.09 + 0.05 * Math.sin(s * Math.PI)], fL: [0, -0.13 - 0.27 * s, 0.09 + 0.05 * Math.sin(s * Math.PI)], hR, hL: sp(hR), eR: [-0.3, 0.2, 0.3], eL: [-0.3, -0.2, 0.3] }; },
   // Kniebeuge: Po nach hinten unten, Arme nach vorn
-  (s) => { const hip = [-0.24 * s, 0, 0.9 - 0.4 * s], auf = norm([0.42 * s, 0, 1]), sh = plus(hip, auf, DIM.shUp); const hR = misch3([sh[0] + 0.07, 0.28, sh[2] - 0.57], [sh[0] + 0.54, 0.2, sh[2] + 0.03], s); return { hip, auf, fR: [0.02, 0.21, 0.09], fL: [0.02, -0.21, 0.09], kR: [1, 0.45, 0.1], kL: [1, -0.45, 0.1], hR, hL: sp(hR) }; },
+  (s) => { const echt = ausAufnahme('hocke', s); if (echt) return echt; const hip = [-0.24 * s, 0, 0.9 - 0.4 * s], auf = norm([0.42 * s, 0, 1]), sh = plus(hip, auf, DIM.shUp); const hR = misch3([sh[0] + 0.07, 0.28, sh[2] - 0.57], [sh[0] + 0.54, 0.2, sh[2] + 0.03], s); return { hip, auf, fR: [0.02, 0.21, 0.09], fL: [0.02, -0.21, 0.09], kR: [1, 0.45, 0.1], kL: [1, -0.45, 0.1], hR, hL: sp(hR) }; },
   // Knie hoch: auf der Stelle laufen, die Knie bis zur Hüfte
   (s, t) => { const k = Math.min(1, s * 3), l = Math.max(0, Math.sin(t * 9)) * k, r = Math.max(0, -Math.sin(t * 9)) * k; return { hip: [0, 0, 0.9 + 0.03 * Math.abs(Math.sin(t * 9)) * k], fL: [0.1 + 0.2 * l, -0.12, 0.09 + 0.5 * l], fR: [0.1 + 0.2 * r, 0.12, 0.09 + 0.5 * r], hR: [0.12 + 0.24 * l - 0.1 * r, 0.24, 0.98 + 0.24 * l], hL: [0.12 + 0.24 * r - 0.1 * l, -0.24, 0.98 + 0.24 * r], eR: [-1, 0.3, -0.3], eL: [-1, -0.3, -0.3] }; },
   // Arme kreisen: beide Arme gestreckt in großen Kreisen
