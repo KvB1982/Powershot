@@ -66,7 +66,7 @@ for (const [art, S] of Object.entries(SCHLAEGE)) {
 
 console.log(`\nAufschläge eines Rechtshänders (von rechts ins linke Aufschlagfeld, Ziel Mitte des Feldes)\n${kopf}`);
 for (const [art, S] of Object.entries(AUFSCHLAEGE)) {
-  const vh = S.bogen ? 12 : (35 + 23 * STAERKE) * (0.72 + 0.28 * 0.9) * S.tempo;
+  const vh = S.bogen ? 12 : (38 + 25 * STAERKE) * (0.72 + 0.28 * 0.9) * S.tempo;
   const from = { x: 1.1, y: S.hoehe || 2.75, z: C.L + 0.05 };
   const d = S.tiefe ? (S.tiefe[0] + S.tiefe[1]) / 2 : C.SL - 0.8;
   R['a_' + art] = messen(from, { x: -C.W / 2, y: 0, z: -d }, vh, { top: S.top, seite: S.seite, drall: S.drall }, S.netz, S.bogen);
@@ -77,6 +77,7 @@ for (const [art, S] of Object.entries(AUFSCHLAEGE)) {
 console.log('\nPrüfung:');
 let fehler = 0;
 const pruefe = (text, ok) => { console.log((ok ? '  ✓ ' : '  ✗ ') + text); if (!ok) fehler++; };
+for (const [k, m] of Object.entries(R)) if (!(m.landung < 0.15)) console.log("    daneben:", k, m.landung);
 pruefe('Alle Schläge landen höchstens 15 cm neben dem Ziel', Object.values(R).every((m) => m.landung < 0.15));
 pruefe('Hoher Topspin springt höher als normaler Topspin, der höher als der gerade Schuss', R.topspin.sprung > R.drive.sprung && R.drive.sprung > R.flach.sprung);
 pruefe('Slice springt flacher als Topspin', R.slice.sprung < R.drive.sprung);

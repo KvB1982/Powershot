@@ -5,6 +5,7 @@
 // Was die Zahlen bedeuten:
 //   tempo      : [langsam, schnell] in Metern pro Sekunde. Ein schwacher Spieler schafft das linke Tempo,
 //                ein sehr kräftiger das rechte. (Mal 3,6 ergibt km/h: 40 m/s = 144 km/h.)
+//                Seit dem 21.11.2026 mit Absicht etwas schneller als im echten Tennis – das macht mehr Spaß.
 //   kraft      : wie viel vom Tempo davon abhängt, wie fest man schlägt (0 = immer gleich schnell)
 //   top        : Drall in Umdrehungen pro Minute. + = Topspin (Ball fällt steil und springt hoch und weit weg),
 //                − = Slice (Ball schwebt, kommt flach an und bleibt flach)
@@ -17,21 +18,21 @@
 
 export const SCHLAEGE = {
   // Der normale Grundschlag der Profis: viel Tempo und etwa 2600 Umdrehungen. Sicher, weil der Ball von selbst herunterfällt.
-  drive:   { name: 'Topspin', tempo: [24, 42], kraft: 0.45, top: 2600, netz: [0.30, 0.15], streu: 1, netzfehler: 1 },
+  drive:   { name: 'Topspin', tempo: [28, 46], kraft: 0.5, top: 2600, netz: [0.30, 0.15], streu: 1, netzfehler: 1 },
   // Gerader Angriffsschlag: sehr schnell, knapp über das Netz, wenig Drall. Bleibt flach – aber geht leicht ins Netz oder ins Aus.
-  flach:   { name: 'Gerader Schuss', tempo: [27, 47], kraft: 0.45, top: 900, netz: [0.15, 0.08], streu: 1.25, netzfehler: 1.8 },
+  flach:   { name: 'Gerader Schuss', tempo: [32, 52], kraft: 0.5, top: 900, netz: [0.15, 0.08], streu: 1.25, netzfehler: 1.8 },
   // Hoher Topspin (wie auf Sand): langsamer, hoch über das Netz, springt dem Gegner bis auf Schulterhöhe.
-  topspin: { name: 'Hoher Topspin', tempo: [20, 34], kraft: 0.45, top: 3800, netz: [0.80, 0.60], streu: 0.85, netzfehler: 0.5 },
+  topspin: { name: 'Hoher Topspin', tempo: [23, 38], kraft: 0.5, top: 3800, netz: [0.80, 0.60], streu: 0.85, netzfehler: 0.5 },
   // Slice: Rückwärtsdrall. Der Ball schwebt lange, kommt flach an und rutscht flach weg.
-  slice:   { name: 'Slice', tempo: [20, 29], kraft: 0.30, top: -2400, netz: 0.20, streu: 1, netzfehler: 1 },
+  slice:   { name: 'Slice', tempo: [21, 30], kraft: 0.30, top: -2400, netz: 0.20, streu: 1, netzfehler: 1 },
   // Stoppball: ganz langsam mit viel Rückwärtsdrall. Er bleibt nach dem Aufkommen fast liegen.
   drop:    { name: 'Stoppball', bogen: 0.40, top: -3000, netz: 0.30, streu: 1, netzfehler: 1, tiefe: [1.5, 4] },
   // Lob: hoch über den Gegner hinweg, mit etwas Topspin, damit er noch im Feld herunterkommt.
   lob:     { name: 'Lob', tempo: [11.5, 11.5], kraft: 0, top: 1200, netz: 1.5, streu: 1, netzfehler: 1 },
   // Volley: der Ball wird aus der Luft nur geblockt, mit ein wenig Rückwärtsdrall.
-  volley:  { name: 'Volley', tempo: [17, 28], kraft: 0.40, top: -800, netz: 0.20, streu: 1, netzfehler: 1 },
+  volley:  { name: 'Volley', tempo: [19, 31], kraft: 0.40, top: -800, netz: 0.20, streu: 1, netzfehler: 1 },
   // Schmetterball: von oben mit voller Wucht.
-  smash:   { name: 'Schmetterball', tempo: [32, 44], kraft: 0, top: 300, netz: 0.15, streu: 1, netzfehler: 1 },
+  smash:   { name: 'Schmetterball', tempo: [36, 50], kraft: 0, top: 300, netz: 0.15, streu: 1, netzfehler: 1 },
 };
 
 // Diese Schläge sind "normale" Grundschläge. Am Netz wird daraus ein Volley, bei hohen Bällen ein Schmetterball.

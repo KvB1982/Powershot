@@ -33,6 +33,12 @@ const BLICK = {
   nah: { winkel: 62, hoch: 6.4, hinten: 23.5, zielZ: 1.5, mitX: 0.35 },
 };
 
+// Action im Bild (seit 21.11.2026). Alle Zahlen geschätzt – einfach ändern und ausprobieren!
+const SCHWEIF_AB = 15, SCHWEIF_VOLL = 40;   // Schweif hinter dem Ball: ab diesem Tempo (m/s) fängt er an, ab dem zweiten leuchtet er voll
+const SCHWEIF_BREIT = 0.075;                // so breit ist der Schweif direkt am Ball (Meter)
+const WUCHT_AB = 29, WUCHT_VOLL = 47;       // harter Schlag: ab diesem Tempo (m/s) gibt es Blitz und Ruck, ab dem zweiten in voller Stärke
+const RUCK = 0.2, RUCK_ZEIT = 0.25;         // Kamera-Ruck: so weit wackelt sie höchstens (Meter) und so lange (Sekunden)
+const BLITZ_ZEIT = 0.22;                    // so lange sieht man den Ring am Treffpunkt (Sekunden)
 const BREMS_AB = 4.0;        // ab diesem Tempo (Meter pro Sekunde) quietscht es beim scharfen Abbremsen
 
 export class Game3D {
@@ -130,12 +136,28 @@ export class Game3D {
     S.add(this.aimLine);
 
     // Leuchtspur hinter dem Ball
-    this.trailN = 14;
+    // Sie ist ein schmales Band aus Dreiecken: am Ball breit und hell, nach hinten wird es dünn und durchsichtig.
+    // Je schneller der Ball, desto kräftiger leuchtet es – so sieht man, wie hart ein Schlag war.
+    this.trailN = 16;
     this.trailPts = Array.from({ length: this.trailN }, () => new THREE.Vector3());
-    this.trail = new THREE.Line(new THREE.BufferGeometry().setFromPoints(this.trailPts),
-      new THREE.LineBasicMaterial({ color: 0xe8ff6a, transparent: true, opacity: 0.45 }));
+    this.trailStark = new Array(this.trailN).fill(0);        // wie schnell war der Ball an dieser Stelle? (0 bis 1)
+    const tg = new THREE.BufferGeometry();
+    tg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.trailN * 2 * 3), 3));
+    tg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.trailN * 2 * 4), 4));     // Farbe und Durchsichtigkeit je Ecke
+    const ti = [];
+    for (let i = 0; i < this.trailN - 1; i++) { const a = i * 2; ti.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    tg.setIndex(ti);
+    this.trail = new THREE.Mesh(tg, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false }));
     this.trail.frustumCulled = false;
+    this.trail.renderOrder = 5;
     S.add(this.trail);
+    // Blitz: ein heller Ring, der am Treffpunkt eines harten Schlags kurz aufgeht
+    this.blitz = new THREE.Mesh(new THREE.RingGeometry(0.72, 1, 28),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, depthTest: false, side: THREE.DoubleSide, fog: false }));
+    this.blitz.visible = false; this.blitz.renderOrder = 6;
+    this.blitz.userData = { t: 9, w: 0 };
+    S.add(this.blitz);
+    this.ruck = { t: 9, w: 0 };       // Kamera-Ruck: t = so lange ist der Schlag her, w = wie stark (0 bis 1)
 
     this.zoneGroup = new THREE.Group();
     S.add(this.zoneGroup);
@@ -310,6 +332,8 @@ export class Game3D {
       hit(h) {
         snd.hit(clamp((h.speed - 8) / 40, 0.2, 1), h.type);      // die Schlagart bestimmt, welche Aufnahme kommt
         if (h.type === 'serve') call('serveSpeed', Math.round(h.speed * 3.6), h.side, h.art);
+        const w = self.wucht(h);
+        if (w > 0) call('schlagTempo', Math.round(h.speed * 3.6), w);      // dein harter Schlag: Tempo anzeigen
         snd.setCrowd(0.02);
       },
       bounce(b) {
@@ -405,6 +429,7 @@ export class Game3D {
     const m = this.match;
     if (!m) {
       this.setWinkel(62);             // außerhalb des Matches gilt immer der weite Blickwinkel
+      this.blitz.visible = false;
       if (this.nahVorher != null) { this.camera.near = this.nahVorher; this.nahVorher = null; this.camera.updateProjectionMatrix(); }
     }
     if (m) this.syncMatch(dt, m); else if (this.ehrung.an) this.ehrung.update(dt); else if (this.anlage.an) this.anlage.update(dt); else this.menuCamera(dt);
@@ -418,6 +443,51 @@ export class Game3D {
     if (this.pokal) this.pokalZeichnen(dt);          // zuerst der kleine Pokal, danach übermalt das Stadion das ganze Bild
     if (this.figur) this.figurZeichnen(dt);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  // Ein harter Schlag soll sich auch hart anfühlen: Am Treffpunkt geht kurz ein heller Ring auf, und die Kamera ruckt ein wenig.
+  // Bei deinen eigenen harten Schlägen steht außerdem das Tempo da.
+  wucht(h) {
+    const m = this.match;
+    if (!m) return 0;
+    const w = clamp((h.speed - WUCHT_AB) / (WUCHT_VOLL - WUCHT_AB), 0, 1);
+    if (w <= 0) return 0;
+    const meiner = m.P[h.side] && m.P[h.side].isHuman;
+    const stark = w * (h.side === 0 ? 1 : 0.5);         // der Gegner ist weit weg: bei ihm fällt alles kleiner aus
+    this.ruck.t = 0; this.ruck.w = stark;
+    const b = m.ball.pos;
+    this.blitz.position.set(b.x, b.y, b.z);
+    this.blitz.userData.t = 0; this.blitz.userData.w = stark;
+    this.blitz.visible = true;
+    return meiner && h.type !== 'serve' ? w : 0;
+  }
+
+  // Den Schweif hinter dem Ball neu zeichnen (einmal pro Bild)
+  schweifZeichnen(flying, tempo) {
+    const P = this.trailPts, K = this.trailStark, n = this.trailN;
+    P.unshift(P.pop().copy(this.ball.position));
+    K.pop(); K.unshift(flying ? clamp((tempo - SCHWEIF_AB) / (SCHWEIF_VOLL - SCHWEIF_AB), 0, 1) : 0);
+    if (!flying) { for (const p of P) p.copy(this.ball.position); K.fill(0); }
+    this.trail.visible = flying;
+    if (!flying) return;
+    const pos = this.trail.geometry.attributes.position, col = this.trail.geometry.attributes.color;
+    const quer = this._quer || (this._quer = new THREE.Vector3()), lang = this._lang || (this._lang = new THREE.Vector3()), blick = this._blick || (this._blick = new THREE.Vector3());
+    for (let i = 0; i < n; i++) {
+      const p = P[i], a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)];
+      // Das Band soll immer flach zur Kamera liegen: quer = senkrecht zur Flugrichtung und zur Blickrichtung
+      lang.subVectors(a, b); blick.subVectors(this.camera.position, p);
+      quer.crossVectors(lang, blick);
+      const l = quer.length();
+      const k = 1 - i / (n - 1);                           // 1 am Ball, 0 am Ende
+      const breit = l > 1e-6 ? SCHWEIF_BREIT * (0.35 + 0.65 * K[i]) * k / l : 0;
+      pos.setXYZ(i * 2, p.x + quer.x * breit, p.y + quer.y * breit, p.z + quer.z * breit);
+      pos.setXYZ(i * 2 + 1, p.x - quer.x * breit, p.y - quer.y * breit, p.z - quer.z * breit);
+      // Farbe: gelb wie der Ball, bei sehr schnellen Bällen fast weiß. Nach hinten wird das Band durchsichtig.
+      const hell = K[i], alpha = (0.18 + 0.67 * hell) * k * k;
+      col.setXYZW(i * 2, 0.93 + 0.07 * hell, 1, 0.42 + 0.5 * hell, alpha);
+      col.setXYZW(i * 2 + 1, 0.93 + 0.07 * hell, 1, 0.42 + 0.5 * hell, alpha);
+    }
+    pos.needsUpdate = true; col.needsUpdate = true;
   }
 
   // Rennt ein Spieler schnell und bleibt plötzlich stehen, quietschen die Schuhe (auf Sand rutscht er)
@@ -495,11 +565,7 @@ export class Game3D {
 
     // Leuchtspur
     const flying = m.ball.live && (m.state === 'rally' || m.state === 'pointOver');
-    this.trailPts.pop();
-    this.trailPts.unshift(this.ball.position.clone());
-    if (!flying) for (const p of this.trailPts) p.copy(this.ball.position);
-    this.trail.geometry.setFromPoints(this.trailPts);
-    this.trail.visible = flying;
+    this.schweifZeichnen(flying, Math.hypot(m.ball.vel.x, m.ball.vel.y, m.ball.vel.z));
 
     // Ziel-Anzeige
     const pv = m.previewTarget();
@@ -576,6 +642,26 @@ export class Game3D {
     this.camPos.lerp(tp, k); this.camLook.lerp(tl, k);
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.camLook);
+    // Kamera-Ruck nach einem harten Schlag: Sie zittert kurz und kommt sofort wieder zur Ruhe.
+    const R = this.ruck;
+    R.t += dt;
+    if (R.t < RUCK_ZEIT) {
+      const weit = RUCK * R.w * (1 - R.t / RUCK_ZEIT) * (B === BLICK.tv ? 1 : 0.4);    // die nahe Kamera wackelt weniger, sonst wird einem schwindelig
+      this.camera.position.x += Math.sin(R.t * 85) * weit;
+      this.camera.position.y += Math.cos(R.t * 67) * weit * 0.7;
+    }
+    // Blitz am Treffpunkt: Der Ring wird schnell größer und verblasst dabei. Er schaut immer zur Kamera.
+    const bz = this.blitz, bu = bz.userData;
+    bu.t += dt;
+    if (bz.visible) {
+      const u = bu.t / BLITZ_ZEIT;
+      if (u >= 1) bz.visible = false;
+      else {
+        bz.scale.setScalar((0.25 + 1.1 * u) * (0.6 + 0.6 * bu.w));
+        bz.material.opacity = (1 - u) * (0.35 + 0.5 * bu.w);
+        bz.quaternion.copy(this.camera.quaternion);
+      }
+    }
     // Ab welcher Entfernung gezeichnet wird (nur beim TV-Blick). Am Anfang fährt die Kamera erst nach hinten in die Tribüne.
     // Damit man dabei nicht auf eine blaue Wand schaut, rechnen wir mit der Stelle, an der die Kamera JETZT gerade ist:
     // Wie weit ist es in Blickrichtung bis zum Boden vor der Tribüne (z = ab)? Alles davor wird weggelassen.
@@ -595,7 +681,7 @@ export class Game3D {
     this.camLook.lerp(new THREE.Vector3(0, 1, 0), Math.min(1, dt * 2));
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.camLook);
-    this.ball.visible = this.blob.visible = this.trail.visible = false;
+    this.ball.visible = this.blob.visible = this.trail.visible = this.blitz.visible = false;
     for (const av of this.avatars) if (av) av.group.visible = false;
     if (this.maschine) this.maschine.visible = false;
   }
