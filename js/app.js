@@ -1122,10 +1122,16 @@ let anlageErgebnis = null;   // was die letzte Tätigkeit gebracht hat: { ort, t
 let anlageMeldung = null;    // was nach einem Zufall (Ereignis) passiert ist: { text, bringt }
 // Der Kasten unten auf dem Gelände lässt sich klein machen, damit man mehr vom Gelände sieht
 let anlageKlein = false;
+// Unten auf dem Gelände liegt nur eine schmale Leiste mit Knöpfen. Ein Tipp darauf klappt EINE Sache auf:
+// 'aufgaben' (Liste vom Team), 'wohin' (Knöpfe zum Hinlaufen), 'hilfe' (wie man steuert). null = nichts ist aufgeklappt.
+let anlageAuf = null;
+let anlageWeg = null;        // den Kasten zu diesem Ort hat man mit ✕ weggetippt (id des Ortes) – er kommt wieder, wenn man neu an die Tür tritt
+actions.anlageAuf = (v) => { anlageAuf = anlageAuf === v ? null : v; anlageListe = false; anlageZeigen(); };
+actions.anlageZu = () => { if (anlageAuf || anlageListe) { anlageAuf = null; anlageListe = false; } else { anlageWeg = game.anlage.amOrt ? game.anlage.amOrt.id : '-'; anlageMeldung = null; } anlageZeigen(); };
 // Die Kamera-Knöpfe rechts, genau wie auf dem Pferdehof im Reitturnier: drehen, zoomen, neigen (solange gedrückt)
 const KAM_KNOEPFE = [['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg'],
   ['hoch', '▲', 'Kamera höher, mehr von oben'], ['flach', '▼', 'Kamera flacher, mehr von der Seite']];
-actions.anlagePanel = () => { anlageKlein = !anlageKlein; anlageZeigen(); };
+actions.anlagePanel = () => actions.anlageZu();      // (alter Name, falls ihn noch jemand ruft)
 function anlageZeigen() {
   if (hotelWeg || (anlageTag && anlageTag.abend)) return hotelZeigen();      // Fahrt oder Fußweg ins Hotel: eigenes Fenster (weiter unten)
   const A = game.anlage, ort = A.amOrt;
@@ -1153,16 +1159,17 @@ function anlageZeigen() {
   tagListe = anlageTag ? unten : '';       // die Aufgabenliste merken: Am Morgen (noch am Fahrdienst) bleibt sie zu sehen
   // Auf einem großen Gelände: oben steht, wo man ist, und unten gibt es Knöpfe zum Hinlaufen (die Wege sind lang)
   const G = A.plan ? A.plan.g : null;
-  let wohin = '';
+  let wohin = '', listeHtml = '';
   if (G) {
     if (!anlageTag) {
       zeit = `<span class="zeit">${esc(G.name)} · <span class="dim">${esc(G.stadt)}</span></span><button data-a="anlageListe">🌍 Gelände wechseln</button>`;
-      unten = anlageListe
+      if (anlageListe) unten = anlageListe
         ? `<h3>Welches Turniergelände möchtest du sehen?</h3><div class="row wahl">${GL.GELAENDE_LISTE.map((id) => `<button class="${id === anlageWo ? 'primary' : ''}" data-a="anlageWahlOrt" data-v="${id}">${esc(D.tournamentById(id).name)} <small>${esc(GL.GELAENDE[id].name)}</small></button>`).join('')}</div>
           <p class="dim klein">Kleinere Turniere (Beispiele – in der Karriere hat jedes Turnier sein eigenes Gelände):</p>
           <div class="row wahl">${ANLAGE_KLEIN.map((t) => `<button class="${t.id === anlageWo ? 'primary' : ''}" data-a="anlageWahlOrt" data-v="${t.id}">${esc(t.city === 'Zu Hause' ? 'Heimatverein' : t.city)} <small>${esc(t.catName)}</small></button>`).join('')}</div>`
-        : `<p class="dim">${G.klein ? 'Dieses Gelände ist ausgedacht und nur an den echten Ort angelehnt.' : 'Dieses Gelände ist dem echten nachempfunden.'} Lauf herum und sieh dir alles an – an den blauen Kreisen ℹ️ erfährst du etwas über den Ort. ${hilfe}</p>`;
+        : `<p class="dim">${G.klein ? 'Dieses Gelände ist ausgedacht und nur an den echten Ort angelehnt.' : 'Dieses Gelände ist dem echten nachempfunden.'} Lauf herum und sieh dir alles an – an den blauen Kreisen ℹ️ erfährst du etwas über den Ort.</p>`;
     }
+    if (anlageListe && !anlageTag) listeHtml = unten;      // die Liste „Gelände wechseln“ merken (weiter unten wird „unten“ vielleicht vom Ort überschrieben)
     const hab = stempelVon(G), infos = A.orte.filter((o) => o.info);
     // Am Turniertag: Orte, die es bei so kleinen Turnieren noch nicht gibt (Kraftraum, Physio …), bekommen ein Schloss
     const zu = (o) => { if (!anlageTag || o.info || o.id === 'court' || o.id === 'hotel') return false; const hier = TA.AUFGABEN_IDS.filter((id) => TA.AUFGABEN[id].ort === o.id); return hier.length > 0 && !hier.some((id) => TA.gibtEs(id, anlageTag.def)); };
@@ -1192,7 +1199,7 @@ function anlageZeigen() {
       } else if (ort.id === 'hotel') {
         const nachOffen = TA.offen(c, 'nach');
         unten = phase === 'nach' ? `${tagListe}<p>${nachOffen ? 'Du hast noch Aufgaben offen.' : 'Alles erledigt!'} Im Hotel suchst du dir aus, was du am Abend machst.</p><button class="${nachOffen ? '' : 'primary'}" data-a="nachHotel">🏨 ${nachOffen ? 'Trotzdem schon ins Hotel' : 'Ab ins Hotel'} ›</button>`
-          : `<p class="dim klein">Du bist mit dem Fahrdienst angekommen. Erst nach dem Match geht es zurück ins Hotel.</p>${tagListe}`;   // am Morgen stehst du hier: Die Aufgabenliste bleibt zu sehen
+          : `<h3>${esc(ort.name)}</h3><p class="dim">Du bist mit dem Fahrdienst angekommen. Erst nach dem Match geht es zurück ins Hotel. Was dein Team heute von dir möchte, steht unten bei <b>📋 Aufgaben</b>.</p>`;
       } else {
         // Alles, was man an diesem Ort machen kann: Aufgaben vom Team zuerst, dann Freiwilliges. Jedes ist ein Mini-Spiel.
         const liste = TA.amOrt(c, ort.id, anlageTag.def, phase);
@@ -1206,9 +1213,28 @@ function anlageZeigen() {
       unten = `<h3>${esc(ort.name)}</h3><p>${anlageErgebnis.text}</p><p class="gold">${anlageErgebnis.bringt.join(' · ')}</p>`;
     }
   }
+  // --- Was ist unten zu sehen? Immer nur die schmale Leiste – und darüber höchstens EIN kleiner Kasten. ---
+  //   1. Etwas, das man entscheiden muss (Zufall am Morgen)            → Kasten bleibt, bis man gewählt hat
+  //   2. Etwas, das man selbst aufgeklappt hat (Aufgaben, Hinlaufen, Hilfe, Gelände wechseln)
+  //   3. Man steht an einer Tür                                         → Kasten zu diesem Ort (mit ✕ wegzutippen)
+  //   4. Sonst nichts: Das Gelände ist frei zu sehen.
+  const offenZahl = anlageTag ? TA.offen(lebenC(), phaseJetzt() === 'nach' ? 'nach' : 'vor') : 0;
+  let kasten = '', muss = false;
+  if (E) { kasten = unten; muss = true; }
+  else if (listeHtml) kasten = listeHtml;
+  else if (anlageAuf === 'hilfe') kasten = `<h3>❓ So steuerst du</h3><p class="dim">${hilfe}</p>`;
+  else if (anlageAuf === 'wohin' && wohin) kasten = `<h3>🧭 Wohin möchtest du?</h3>${wohin}`;
+  else if (anlageAuf === 'aufgaben' && tagListe) kasten = tagListe;
+  else if (ort && anlageWeg !== ort.id) kasten = unten;
+  else if (anlageMeldung && !ort && anlageWeg !== '-') kasten = unten;
+  const chip = (id, text) => `<button class="${anlageAuf === id ? 'sel' : ''}" data-a="anlageAuf" data-v="${id}">${text}</button>`;
+  const leiste = muss ? '' : `<div class="leiste">
+    ${anlageTag ? chip('aufgaben', `📋 Aufgaben${offenZahl ? ` <b class="zahl">${offenZahl}</b>` : ' ⭐'}`) : ''}
+    ${wohin ? chip('wohin', '🧭 Hinlaufen') : ''}
+    ${chip('hilfe', '❓ Hilfe')}</div>`;
   anlageEl.innerHTML = `<div class="oben"><button class="ghost" data-a="anlageEnde">‹ Zurück</button>${zeit}</div>
     <div class="kam">${kam.map(([k, z, t]) => `<button data-kam="${k}"${(k === 'schilder' && !game.anlage.schilderAn) || (k === 'figur' && !game.anlage.frei) ? ' class="aus"' : ''} title="${t}" aria-label="${t}">${z}</button>`).join('')}</div>
-    <div class="panel${anlageKlein ? ' klein' : ''}"><button class="klappe" data-a="anlagePanel" title="Kasten klein oder groß machen">${anlageKlein ? '▴ Aufklappen' : '▾ Kleiner'}</button>${unten}${anlageListe && !anlageTag ? '' : wohin}</div>`;
+    ${kasten ? `<div class="panel${muss ? ' muss' : ''}">${muss ? '' : '<button class="klappe" data-a="anlageZu" title="Kasten schließen" aria-label="Kasten schließen">✕</button>'}${kasten}</div>` : ''}${leiste}`;
   anlageEl.classList.add('on');
 }
 // Taste B schaltet die Beschriftungen auch – dann den Knopf 🏷️ mit umfärben
@@ -1348,6 +1374,8 @@ function anlageStart(ich, woher, ergebnis = null) {
   game.anlage.wennDa = (ort) => {
     if (!ort || !anlageErgebnis || anlageErgebnis.ort !== ort.id) anlageErgebnis = null;
     if (ort) anlageMeldung = null;
+    anlageWeg = null;                       // neu an einer Tür (oder weg von ihr): Der Kasten darf wiederkommen
+    if (ort) { anlageAuf = null; anlageListe = false; }      // was aufgeklappt war, macht Platz für den Ort
     // Eine Sehenswürdigkeit zum ersten Mal besucht? Dann gibt es einen Stempel ins Heft (und in der Karriere etwas Erfahrung).
     const G = game.anlage.plan && game.anlage.plan.g;
     if (ort && ort.info && G && !stempelVon(G).includes(ort.name)) {
@@ -1358,6 +1386,7 @@ function anlageStart(ich, woher, ergebnis = null) {
     }
     anlageZeigen();
   };
+  anlageAuf = anlageTag && !ergebnis && !woher ? 'aufgaben' : null; anlageWeg = null;      // am Morgen zeigt das Team einmal seine Aufgaben, sonst ist das Gelände frei
   game.anlage.start(woher, anlageGelaende());
   // Der Glücksball: in der Karriere einer pro Turniertag, beim freien Herumlaufen immer einer (nicht nach dem Match, nicht am Abend und nicht im Städtchen)
   if (hotelWeg || (anlageTag && (anlageTag.abend || anlageTag.phase === 'nach'))) { /* heute kein Glücksball mehr */ } else if (!anlageTag || !TT.ballGefunden(lebenC())) game.anlage.ballLegen();
@@ -1370,8 +1399,8 @@ function anlageStart(ich, woher, ergebnis = null) {
   anlageZeigen();
 }
 // Knopf „Hinlaufen“: Die Figur sucht sich den Weg selbst
-actions.anlageGeh = (v) => { game.anlage.geheZu(v); };
-actions.anlageListe = () => { anlageListe = !anlageListe; anlageZeigen(); };
+actions.anlageGeh = (v) => { game.anlage.geheZu(v); anlageAuf = null; anlageZeigen(); };      // losgelaufen: Die Liste klappt wieder zu
+actions.anlageListe = () => { anlageListe = !anlageListe; anlageAuf = null; anlageZeigen(); };
 // Ein anderes Gelände ansehen (nur im Hauptmenü)
 actions.anlageWahlOrt = (v) => { if (anlageTag || !D.tournamentById(v)) return; anlageWo = v; anlageListe = false; anlageStart(career ? CA.mePlayer(career) : D.PLAYERS[0]); };
 function anlageSchluss() { hotelSchluss(); anlageMeldung = null; game.anlage.ende(); anlageEl.classList.remove('on'); anlageEl.innerHTML = ''; }
