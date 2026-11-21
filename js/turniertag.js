@@ -9,6 +9,10 @@
 //              und dass es bei kleinen ITF-Turnieren fast nichts davon auf der Anlage gibt
 //   geschätzt: alle Zahlen (Pluspunkte, Frische, Kosten, Fans)
 //
+// Neu: Was du an den Orten wirklich TUST, steht jetzt in aufgaben.js (Aufgaben vom Team, jede mit einem Mini-Spiel).
+// Hier bleiben die Zeitfenster, die Zufälle am Morgen, der Abend, der Glücksball und die Reporter-Fragen.
+// `tun` weiter unten ist die alte, einfache Rechnung ohne Mini-Spiele – die brauchen nur noch die Prüfwerkzeuge in tools/.
+//
 // Pluspunkte gelten für: s = Aufschlag, p = Kraft, t = Tempo, c = Präzision, v = Volley
 import { addXp, saveCareer, traegt, bespannen, gratis } from './career.js';
 import { ausheilen } from './ausbau.js';
@@ -107,6 +111,58 @@ export const FRAGEN = [
     ['patzig', 'Was für eine dumme Frage.'],
     ['witzig', 'Die Rangliste spielt zum Glück nicht mit – auf dem Platz stehen nur er und ich.'],
     ['nett', 'Er ist der Favorit. Aber ich gebe alles, und im Tennis ist immer etwas möglich.']] },
+  { frage: 'Was haben Sie heute zum Frühstück gegessen?', antworten: [
+    ['witzig', 'Drei Asse und einen Vorhand-Winner. Und Müsli.'],
+    ['nett', 'Müsli, Obst und ein Ei. Nichts Besonderes, aber es gibt Kraft.'],
+    ['patzig', 'Das geht Sie wirklich nichts an.']] },
+  { frage: 'Der Schiedsrichter hat heute einen Ball falsch gesehen. Sind Sie sauer?', antworten: [
+    ['nett', 'Jeder macht mal einen Fehler – ich auch. Das gehört zum Spiel.'],
+    ['patzig', 'Der braucht dringend eine Brille. Unglaublich!'],
+    ['witzig', 'Ich leihe ihm nächstes Mal meine Sonnenbrille.']] },
+  { frage: 'Wer ist Ihr Vorbild?', antworten: [
+    ['patzig', 'Ich brauche kein Vorbild. Ich bin selbst gut genug.'],
+    ['nett', 'Alle, die jeden Tag hart arbeiten und dabei freundlich bleiben.'],
+    ['witzig', 'Mein Opa. Der schlägt mich bis heute im Tischtennis.']] },
+  { frage: 'Das Publikum war heute sehr laut. Hat Sie das gestört?', antworten: [
+    ['witzig', 'Nur als jemand „Aus!“ rief – und es war meine Mutter.'],
+    ['nett', 'Im Gegenteil, die Stimmung war toll. Danke an alle, die da waren!'],
+    ['patzig', 'Die sollen leise sein, wenn ich aufschlage.']] },
+  { frage: 'Was machen Sie, wenn Sie einmal nicht Tennis spielen?', antworten: [
+    ['nett', 'Zeit mit Familie und Freunden verbringen. Die sehe ich viel zu selten.'],
+    ['witzig', 'Schlafen. Und davon träumen, dass ich Tennis spiele.'],
+    ['patzig', 'Das ist privat.']] },
+  { frage: 'Ihr Gegner hat sich nach dem Match über Sie beschwert. Was sagen Sie?', antworten: [
+    ['patzig', 'Wer verliert, sucht immer Ausreden.'],
+    ['witzig', 'Dann schicke ich ihm zum Trost eine Dose Bälle.'],
+    ['nett', 'Auf dem Platz geht es manchmal heiß her. Ich rede mit ihm, dann ist das geklärt.']] },
+  { frage: 'Sie haben heute viele Doppelfehler gemacht. Machen Sie sich Sorgen?', antworten: [
+    ['nett', 'Nein. Morgen übe ich mit meinem Trainer ein paar Aufschläge mehr.'],
+    ['patzig', 'Zählen Sie lieber meine Asse.'],
+    ['witzig', 'Ich wollte nur testen, ob das Netz noch hält.']] },
+  { frage: 'Wie wichtig ist Ihnen Ihr Team?', antworten: [
+    ['witzig', 'Sehr! Ohne meine Physiotherapeutin käme ich morgens nicht aus dem Bett.'],
+    ['nett', 'Ohne mein Team wäre ich nicht hier. Jeder Sieg gehört uns allen.'],
+    ['patzig', 'Auf dem Platz stehe am Ende nur ich.']] },
+  { frage: 'Was sagen Sie den Ballkindern, die heute so schnell gerannt sind?', antworten: [
+    ['nett', 'Vielen Dank! Ihr macht einen super Job, ohne euch ginge gar nichts.'],
+    ['witzig', 'Ihr wart schneller als ich – wollt ihr morgen für mich spielen?'],
+    ['patzig', 'Einmal kam das Handtuch viel zu spät.']] },
+  { frage: 'Es ist sehr heiß hier. Wie kommen Sie damit zurecht?', antworten: [
+    ['patzig', 'Schlecht. Bei so einem Wetter sollte man gar nicht spielen müssen.'],
+    ['nett', 'Es ist für beide Spieler gleich. Viel trinken, Kappe auf, weiter geht es.'],
+    ['witzig', 'Ich habe gefragt, ob wir im Schwimmbad spielen können. Leider nein.']] },
+  { frage: 'Viele sagen, Sie hätten heute nur Glück gehabt. Stimmt das?', antworten: [
+    ['witzig', 'Stimmt! Je mehr ich trainiere, desto mehr Glück habe ich.'],
+    ['patzig', 'Wer das sagt, hat keine Ahnung von Tennis.'],
+    ['nett', 'Ein bisschen Glück gehört dazu. Aber ich habe auch hart dafür gearbeitet.']] },
+  { frage: 'Was war heute der schwerste Moment im Match?', antworten: [
+    ['nett', 'Als ich hinten lag. Da habe ich mir gesagt: Punkt für Punkt, ganz ruhig.'],
+    ['witzig', 'Der Seitenwechsel. Die Banane war noch nicht reif.'],
+    ['patzig', 'Die Frage ist mir zu langweilig.']] },
+  { frage: 'Würden Sie gern einmal ein großes Turnier gewinnen?', antworten: [
+    ['patzig', 'Was für eine Frage. Natürlich, was denn sonst?'],
+    ['nett', 'Das ist mein großer Traum. Dafür trainiere ich jeden Tag.'],
+    ['witzig', 'Ja – der Pokal würde so gut zu meinem Wohnzimmer passen.']] },
 ];
 export const ANTWORT_SATZ = {
   nett: 'Die Reporter nicken. Morgen steht etwas Nettes über dich in der Zeitung.',
@@ -206,7 +262,8 @@ export function abend(c, id) {
   const A = ABEND[id];
   if (!A || !c.abendOffen) return null;
   const bringt = folgen(c, A);
-  if (A.bonus) { c.abend = { bonus: A.bonus }; bringt.push(A.bringt); }
+  // (Pluspunkte aus den Aufgaben nach dem Match – aufgaben.js – bleiben dabei erhalten)
+  if (A.bonus) { const b = { ...((c.abend && c.abend.bonus) || {}) }; for (const k in A.bonus) b[k] = (b[k] || 0) + A.bonus[k]; c.abend = { bonus: b }; bringt.push(A.bringt); }
   c.abendOffen = false;
   saveCareer(c);
   return { text: A.text, bringt };

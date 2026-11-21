@@ -16,6 +16,9 @@ import * as D from './data.js';
 import * as TN from './tournament.js';
 import * as CA from './career.js';
 import * as TT from './turniertag.js';
+import * as QZ from './quiz.js';
+import * as TA from './aufgaben.js';
+import * as MS from './minispiele.js';
 import * as GL from './gelaende.js';
 import * as AU from './ausruestung.js';
 import * as KT from './kleinetour.js';
@@ -595,7 +598,12 @@ function renderTournament() {
       <button class="primary" data-a="tourDone">Weiter</button></div>`;
   } else if (m && mitLeben() && lebenC().abendOffen && def.cat !== 'LIGA') {
     // Nach einem Sieg: Was machst du am Abend? (Liste ABEND in turniertag.js)
-    top = `<div class="panel"><h3 style="margin-top:0">🌙 Der Abend nach deinem Sieg</h3><p class="dim">Morgen geht das Turnier für dich weiter. Was machst du heute Abend noch?</p>
+    // Vorher hat dein Team noch Aufgaben für dich auf der Anlage (aufgaben.js) – wer mag, fährt gleich ins Hotel.
+    TA.nachAufgaben(lebenC(), def, nachKennung());
+    const nachOffen = TA.offen(lebenC(), 'nach');
+    top = `<div class="panel"><h3 style="margin-top:0">📋 Nach dem Match: Aufgaben von deinem Team</h3>${aufgabenHtml('nach', false)}
+      <div class="center">${nachOffen ? `<button class="primary" data-a="nachAnlage">🚶 Auf die Anlage <small>noch ${nachOffen} ${nachOffen === 1 ? 'Aufgabe' : 'Aufgaben'} offen</small></button>` : '<b class="gold">⭐ Alles erledigt – dein Team ist stolz auf dich!</b>'}</div></div>
+      <div class="panel"><h3 style="margin-top:0">🌙 Der Abend nach deinem Sieg</h3><p class="dim">Morgen geht das Turnier für dich weiter. Was machst du heute Abend noch?${nachOffen ? ' (Danach ist der Tag vorbei – offene Aufgaben verfallen.)' : ''}</p>
       <div class="row">${Object.entries(TT.ABEND).map(([id, A]) => `<button data-a="abend" data-v="${id}">${A.name} <small>${A.bringt}</small></button>`).join('')}</div></div>`;
   } else if (m) {
     const oppId = m.a === T.humanId ? m.b : m.a;
@@ -604,7 +612,7 @@ function renderTournament() {
       <div class="vs"><div><div class="who">${flag(me.country)} ${esc(me.short)}</div><div class="dim">Stärke ${D.overall(me.stats)}</div></div>
       <div class="x">gegen</div>
       <div><div class="who">${flag(opp.country)} ${esc(opp.short)}</div><div class="dim">${def.cat === 'LIGA' ? 'Spieler des anderen Vereins' : T.players[oppId].seed ? 'Nr. ' + T.players[oppId].seed + ' der Setzliste' : 'nicht gesetzt'} · Stärke ${D.overall(opp.stats)}</div></div></div>
-      <div class="center">${mitLeben() && def.cat !== 'LIGA' ? `<button data-a="tagAnlage">🚶 Erst auf die Anlage <small>${lebenC().tag ? `noch ${TT.freieFenster(lebenC())} Zeitfenster` : `${TT.fensterVon(def)} Zeitfenster vor dem Match`}</small></button> ` : ''}<button class="primary" data-a="tourPlay">Match spielen ›</button></div></div>`;
+      <div class="center">${mitLeben() && def.cat !== 'LIGA' ? `<button data-a="tagAnlage">🚶 Erst auf die Anlage <small>${lebenC().tag && lebenC().tag.aufg ? `📋 ${TA.offen(lebenC(), 'vor')} Aufgaben vom Team offen · noch ${TT.freieFenster(lebenC())} Zeitfenster` : '📋 Dein Team hat Aufgaben für dich'}</small></button> ` : ''}<button class="primary" data-a="tourPlay">Match spielen ›</button></div></div>`;
   } else {
     top = `<div class="panel center"><p>${T.humanId ? 'Du bist ausgeschieden.' : 'Du spielst dieses Turnier nicht mit.'}</p>
       <button class="primary" data-a="tourSim">Turnier zu Ende spielen lassen</button></div>`;
@@ -665,7 +673,30 @@ actions.abend = (v) => {
 const anlageEl = document.createElement('div');
 anlageEl.id = 'anlage';
 document.body.appendChild(anlageEl);
-let anlageTag = null;        // { def } wenn die Anlage gerade der Tag vor einem Karriere-Match ist, sonst null
+let anlageTag = null;        // { def, phase } wenn die Anlage gerade ein Turniertag ist (phase: 'vor' oder 'nach' dem Match), sonst null
+const phaseJetzt = () => (anlageTag && anlageTag.phase) || 'vor';
+// Kennung des Matches, nach dem die Aufgaben „nach dem Match“ gelten (damit es nach jedem Sieg neue gibt)
+const nachKennung = () => `${ctxT.def.id}:${ctxT.T.rounds.length}`;
+// Welche Quiz-Fragen hattest du schon? (gilt für alle Spielarten zusammen, damit sich die Fragen nicht so schnell wiederholen)
+const QUIZ_KEY = 'powershot.quiz.v1';
+let quizGesehen = [];
+try { quizGesehen = JSON.parse(localStorage.getItem(QUIZ_KEY)) || []; } catch (e) { quizGesehen = []; }
+function quizMerken(ids) {
+  quizGesehen = [...new Set([...quizGesehen, ...ids])];
+  if (quizGesehen.length > QZ.ANZAHL - 10) quizGesehen = ids.slice();       // fast alle durch: wieder von vorn
+  try { localStorage.setItem(QUIZ_KEY, JSON.stringify(quizGesehen)); } catch (e) { /* voller Speicher: dann wiederholen sich Fragen eben eher */ }
+}
+MS.klaenge({ gut: () => sound.coin(), tipp: () => sound.click() });
+// Die Liste „Aufgaben vom Team“ (wie das Aufgabenbuch im Reitturnier). mitWeg = mit Knöpfen „Hinlaufen“
+function aufgabenHtml(phase, mitWeg = true) {
+  const c = lebenC(), L = TA.liste(c, phase);
+  if (!L.length) return '';
+  const alle = L.every((a) => a.note != null);
+  return `<div class="aufgaben">${L.map(({ id, A, note }) => `<div class="aufg${note != null ? ' ok' : ''}"><span class="bild">${note != null ? '✅' : '⬜'}</span>
+      <span class="was"><b>${A.bild} ${esc(A.name)}</b> <small>${note != null ? (note >= 0.75 ? '⭐⭐⭐' : note >= 0.4 ? '⭐⭐' : '⭐') : `${esc(TA.werSagt(c, A.von))}: „${esc(TA.auftragText(id, phase))}“`}</small></span>
+      ${note == null && mitWeg ? `<button data-a="anlageGeh" data-v="${A.ort}">Hinlaufen ›</button>` : ''}</div>`).join('')}</div>
+    <p class="dim klein">${alle ? `⭐ Alle Aufgaben geschafft! ${TA.STERN[phase].text}.` : `Aufgaben vom Team kosten keine Zeit. Schaffst du alle, gibt es einen <b>Team-Stern ⭐</b> und einen Bonus (${TA.STERN[phase].text.split(': ')[1]}).`} Team-Sterne bisher: ⭐ ${c.teamSterne || 0}</p>`;
+}
 let anlageWo = 'wim';        // welches Gelände man sich im Hauptmenü ansieht (Kürzel des Turniers)
 // Das Stempelheft: Welche Sehenswürdigkeiten (blaue Kreise ℹ️) hast du schon entdeckt? Gilt für alle Spielarten zusammen.
 const STEMPEL_KEY = 'powershot.stempel.v1';
@@ -680,22 +711,24 @@ const ANLAGE_KLEIN = ['Halle', 'Hamburg', 'London', 'Dubai', 'Tokio', 'Basel', '
   .map((stadt) => KT.KLEINE_TURNIERE.find((t) => t.city === stadt)).filter(Boolean).concat([KT.LIGA]);
 let anlageErgebnis = null;   // was die letzte Tätigkeit gebracht hat: { ort, text, bringt }
 let anlageMeldung = null;    // was nach einem Zufall (Ereignis) passiert ist: { text, bringt }
-let kraftSpiel = null;       // läuft gerade das Spiel im Kraftraum? { n, treffer, mitte, start, uhr, letzter }
-// Wo steht der Zeiger im Kraftraum-Spiel gerade? (0 = ganz links, 1 = ganz rechts; er läuft hin und her)
-const kraftZeiger = () => 0.5 - 0.5 * Math.cos(2 * Math.PI * (performance.now() - kraftSpiel.start) / 1000 / TT.KRAFT_SPIEL.dauer);
-function kraftEnde() { if (kraftSpiel) clearInterval(kraftSpiel.uhr); kraftSpiel = null; }
 function anlageZeigen() {
   const A = game.anlage, ort = A.amOrt;
   const hilfe = 'Laufen: W A S D oder mit einem Finger ziehen. Tippe auf ein Gebäude, dann läuft deine Figur von selbst hin. In viele Häuser kannst du durch die Tür hineingehen – dann verschwindet das Dach und du siehst die Möbel. Kamera mit zwei Fingern: kneifen = nah oder ganz weit weg, zur Seite wischen = rundherum drehen, hoch oder runter wischen = Blickwinkel. Mit drei Fingern schiebst du die Ansicht frei über das Gelände (danach reicht ein Finger), Doppel-Tipp oder 🎯 = zurück zur Figur. 🏷️ schaltet die Beschriftungen an und aus. Am PC: rechte Maustaste ziehen und Mausrad, mittlere Maustaste oder Umschalt + ziehen = verschieben, F = zurück zur Figur, B = Beschriftungen.';
   const kam = [['karte', '🗺️', 'Übersicht'], ['schilder', '🏷️', 'Beschriftungen an oder aus (Taste B)'], ['figur', '🎯', 'Zurück zur Figur (Doppel-Tipp oder Taste F)'], ['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg']];
-  let unten = `<p class="dim">${hilfe}</p>`, zeit = '';
-  if (anlageTag) {
+  let unten = `<p class="dim">${hilfe}</p>`, zeit = '', tagListe = '';
+  if (anlageTag && phaseJetzt() === 'nach') {
+    // Nach dem Match: nur noch die Aufgaben vom Team, dann geht es ins Hotel
+    const offen = TA.offen(lebenC(), 'nach');
+    zeit = `<span class="zeit">${esc(anlageTag.def.name)} · Nach dem Match · ${offen ? `noch ${offen} ${offen === 1 ? 'Aufgabe' : 'Aufgaben'}` : 'alles erledigt ⭐'} · Frische ${Math.round(lebenC().frische)}</span>`;
+    unten = `<h3>📋 Aufgaben von deinem Team</h3>${aufgabenHtml('nach')}<p class="dim">${offen ? 'Lauf zu den Orten und erledige die Aufgaben.' : 'Geschafft!'} Zum Schluss geht es mit dem <b>Fahrdienst ins Hotel</b> (oder oben auf „Zurück“).</p>`;
+  } else if (anlageTag) {
     // Der Tag vor dem Match: oben steht, wie viel Zeit noch ist
-    const frei = TT.freieFenster(lebenC());
-    zeit = `<span class="zeit">${esc(anlageTag.def.name)} · ${TT.fensterName(lebenC())} · ${frei ? `noch ${frei} Zeitfenster` : 'dein Match beginnt gleich'} · Frische ${Math.round(lebenC().frische)}</span>`;
+    const frei = TT.freieFenster(lebenC()), offen = TA.offen(lebenC(), 'vor');
+    zeit = `<span class="zeit">${esc(anlageTag.def.name)} · ${TT.fensterName(lebenC())} · 📋 ${offen ? `noch ${offen} ${offen === 1 ? 'Aufgabe' : 'Aufgaben'}` : 'Aufgaben erledigt ⭐'} · ${frei ? `${frei} Zeitfenster frei` : 'keine freie Zeit mehr'} · Frische ${Math.round(lebenC().frische)}</span>`;
     const court = A.orte.find((o) => o.id === 'court');
-    unten = `<p class="dim">${frei ? 'Such dir aus, was du vor dem Match machst. Für alles reicht die Zeit nicht!' : `Die Zeit ist um. Geh zum <b>${esc(court ? court.name : 'Centre Court')}</b> – dort wartet dein Match.`}</p>`;
+    unten = `<h3>📋 Aufgaben von deinem Team</h3>${aufgabenHtml('vor')}<p class="dim">${frei ? `Dazu hast du noch <b>${frei} Zeitfenster</b> für Freiwilliges – an jedem Ort siehst du, was dort geht.` : 'Für Freiwilliges ist keine Zeit mehr.'} Dein Match wartet im <b>${esc(court ? court.name : 'Centre Court')}</b>.</p>`;
   }
+  tagListe = anlageTag ? unten : '';       // die Aufgabenliste merken: Am Morgen (noch am Fahrdienst) bleibt sie zu sehen
   // Auf einem großen Gelände: oben steht, wo man ist, und unten gibt es Knöpfe zum Hinlaufen (die Wege sind lang)
   const G = A.plan ? A.plan.g : null;
   let wohin = '';
@@ -722,37 +755,29 @@ function anlageZeigen() {
   } else if (ort) {
     unten = `<h3>${esc(ort.name)}</h3><p>${ort.text}</p>${ort.info || G ? '' : '<p class="dim klein">Hier passiert noch nichts. Später gehst du hier hinein.</p>'}`;
     if (G && !ort.info && !anlageTag) unten += `<p class="dim klein">${esc({ court: 'In der Karriere spielst du hier dein Match.', hotel: 'In der Karriere bringt dich der Fahrdienst nach dem Match ins Hotel.' }[ort.id] || 'In der Karriere kannst du hier am Tag vor dem Match etwas tun.')}</p>`;
-    const T = TT.TAETIGKEITEN[ort.id];
-    if (anlageTag && kraftSpiel && ort.id === 'kraft') {
-      // Kraftraum-Spiel: Der Zeiger läuft hin und her. Drücken, wenn er im grünen Feld ist.
-      const K = TT.KRAFT_SPIEL, b = K.breite[kraftSpiel.n];
-      unten = `<h3>${esc(ort.name)} · Wiederholung ${kraftSpiel.n + 1} von ${K.wdh}</h3>
-        <p>${kraftSpiel.letzter == null ? 'Drücke, wenn der Zeiger im grünen Feld steht. So hebst du das Gewicht sauber.' : kraftSpiel.letzter ? '<b class="plus">Sauber gehoben!</b>' : '<b class="minus">Verwackelt!</b>'} <span class="dim">Sauber: ${kraftSpiel.treffer}</span></p>
-        <div class="kraftbalken"><i style="left:${(kraftSpiel.mitte - b / 2) * 100}%;width:${b * 100}%"></i><b id="kraftzeiger"></b></div>
-        <button class="primary" data-a="kraftDruck">🏋️ Jetzt heben!</button>`;
-    } else if (anlageErgebnis && anlageErgebnis.ort === ort.id && (anlageTag || ort.info)) {
+    if (anlageTag && !ort.info) {
+      const phase = phaseJetzt(), c = lebenC();
+      // Was gerade hier herausgekommen ist (nach einem Mini-Spiel), steht oben
+      const ergebnis = anlageErgebnis && anlageErgebnis.ort === ort.id ? `<p>${anlageErgebnis.text}</p><p class="gold">${anlageErgebnis.bringt.join(' · ')}</p>` : '';
+      if (ort.id === 'court') {
+        const offen = TA.offen(c, 'vor');
+        unten = phase === 'nach' ? `<h3>${esc(ort.name)}</h3><p>Dein Match ist vorbei. Die Zuschauer gehen nach Hause.</p>`
+          : `<h3>${esc(ort.name)}</h3><p>Dein Gegner wartet schon. Bist du bereit?${offen ? ` <span class="dim">(Du hast noch ${offen} ${offen === 1 ? 'Aufgabe' : 'Aufgaben'} vom Team offen – die verfallen dann.)</span>` : ''}</p><button class="primary" data-a="anlageMatch">Match spielen ›</button>`;
+      } else if (ort.id === 'hotel') {
+        const nachOffen = TA.offen(c, 'nach');
+        unten = phase === 'nach' ? `${tagListe}<p>Der Fahrer wartet${nachOffen ? '' : ' schon'}. Im Hotel suchst du dir aus, was du am Abend machst.</p><button class="${nachOffen ? '' : 'primary'}" data-a="anlageEnde">🚐 ${nachOffen ? 'Trotzdem schon ins Hotel fahren' : 'Ins Hotel fahren'} ›</button>`
+          : `<p class="dim klein">Du bist mit dem Fahrdienst angekommen. Erst nach dem Match geht es zurück ins Hotel.</p>${tagListe}`;   // am Morgen stehst du hier: Die Aufgabenliste bleibt zu sehen
+      } else {
+        // Alles, was man an diesem Ort machen kann: Aufgaben vom Team zuerst, dann Freiwilliges. Jedes ist ein Mini-Spiel.
+        const liste = TA.amOrt(c, ort.id, anlageTag.def, phase);
+        const zeile = (a) => (a.note != null || (!a.ok && a.warum === 'Das hast du heute schon gemacht.') ? `<div class="aufg ok"><span class="bild">✅</span><span class="was"><b>${a.A.bild} ${esc(a.A.name)}</b> <small>heute schon gemacht</small></span></div>`
+          : a.ok ? `<button class="${a.team ? 'primary' : ''}" data-a="aufgabe" data-v="${a.id}">${a.A.bild} ${esc(a.A.name)} <small>${a.team ? '📋 Aufgabe vom Team · kostet keine Zeit' : 'freiwillig · braucht 1 Zeitfenster'}</small></button>`
+            : `<div class="aufg"><span class="bild">🚫</span><span class="was"><b>${a.A.bild} ${esc(a.A.name)}</b> <small>${esc(a.warum)}</small></span></div>`);
+        unten = `<h3>${esc(ort.name)}</h3>${ergebnis || `<p>${ort.text}</p>`}` + (liste.length ? `<div class="spalte">${liste.map(zeile).join('')}</div>`
+          : `<p class="dim">${phase === 'nach' ? 'Hier hat dein Team heute keine Aufgabe mehr für dich.' : 'Hier gibt es heute nichts zu tun.'}</p>`);
+      }
+    } else if (anlageErgebnis && anlageErgebnis.ort === ort.id) {
       unten = `<h3>${esc(ort.name)}</h3><p>${anlageErgebnis.text}</p><p class="gold">${anlageErgebnis.bringt.join(' · ')}</p>`;
-    } else if (anlageTag && ort.id === 'court') {
-      unten = `<h3>${esc(ort.name)}</h3><p>Dein Gegner wartet schon. Bist du bereit?</p><button class="primary" data-a="anlageMatch">Match spielen ›</button>`;
-    } else if (anlageTag && ort.id === 'hotel') {
-      unten = `<h3>${esc(ort.name)}</h3><p>Erst nach dem Match geht es zurück ins Hotel.</p>`;
-    } else if (anlageTag && T && T.spiel) {
-      // Trainingsplatz: zwei Übungen zur Auswahl, jede ist ein kleines Spiel
-      const k = TT.kann(lebenC(), ort.id, anlageTag.def);
-      unten = `<h3>${esc(ort.name)}</h3>` + (k.ok ? `<p>Je besser du triffst, desto mehr Pluspunkte hast du im Match. Braucht 1 Zeitfenster.</p><div class="row">${Object.entries(TT.UEBUNGEN).map(([id, U]) =>
-        `<button class="primary" data-a="anlageUeben" data-v="${id}">${U.name} <small>${U.kurz}</small></button>`).join('')}</div>` : `<p>${k.warum}</p>`);
-    } else if (anlageTag && T && T.wahl) {
-      // Restaurant und Presse: Du suchst dir selbst eine Antwort aus
-      const k = TT.kann(lebenC(), ort.id, anlageTag.def);
-      const wahl = T.wahl === 'essen' ? TT.ESSEN.map((e) => e.name) : TT.FRAGEN[lebenC().tag.frage || 0].antworten.map((a) => '„' + a[1] + '“');
-      unten = `<h3>${esc(ort.name)}</h3>` + (k.ok ? `<p>${T.wahl === 'essen' ? esc(T.text) : `Ein Reporter fragt: <b>„${esc(TT.FRAGEN[lebenC().tag.frage || 0].frage)}“</b>`} <span class="dim">Braucht 1 Zeitfenster.</span></p>
-        <div class="${T.wahl === 'essen' ? 'row' : 'spalte'}">${wahl.map((w, i) => `<button data-a="anlageWahl" data-v="${ort.id}:${i}">${esc(w)}</button>`).join('')}</div>` : `<p>${k.warum}</p>`);
-    } else if (anlageTag && T && T.kraft) {
-      const k = TT.kann(lebenC(), ort.id, anlageTag.def);
-      unten = `<h3>${esc(ort.name)}</h3>` + (k.ok ? `<p>${ort.text}</p><button class="primary" data-a="kraftStart">${T.name} <small>${TT.KRAFT_SPIEL.wdh} Wiederholungen · braucht 1 Zeitfenster</small></button>` : `<p>${k.warum}</p>`);
-    } else if (anlageTag && T) {
-      const k = TT.kann(lebenC(), ort.id, anlageTag.def);
-      unten = `<h3>${esc(ort.name)}</h3>` + (k.ok ? `<p>${ort.text}</p><button class="primary" data-a="anlageTun" data-v="${ort.id}">${T.name} <small>braucht 1 Zeitfenster</small></button>` : `<p>${k.warum}</p>`);
     }
   }
   anlageEl.innerHTML = `<div class="oben"><button class="ghost" data-a="anlageEnde">‹ Zurück</button>${zeit}</div>
@@ -792,12 +817,11 @@ function anlageStart(ich, woher, ergebnis = null) {
       try { localStorage.setItem(STEMPEL_KEY, JSON.stringify(stempel)); } catch (e) { /* voller Speicher: dann eben ohne Stempel */ }
       anlageErgebnis = { ort: ort.id, text: ort.text, bringt: ['📒 Neuer Stempel im Heft!', ...(anlageTag ? TT.entdeckt(lebenC()) : [])] };
     }
-    if (!ort || ort.id !== 'kraft') kraftEnde();           // wer aus dem Kraftraum weggeht, bricht das Training ab
     anlageZeigen();
   };
   game.anlage.start(woher, anlageGelaende());
   // Der Glücksball: in der Karriere einer pro Turniertag, beim freien Herumlaufen immer einer
-  if (!anlageTag || !TT.ballGefunden(lebenC())) game.anlage.ballLegen();
+  if (!anlageTag || (phaseJetzt() === 'vor' && !TT.ballGefunden(lebenC()))) game.anlage.ballLegen();
   game.anlage.wennBall = () => {
     const bringt = anlageTag ? TT.gluecksball(lebenC()) || [] : [];
     anlageMeldung = { text: '🟡 Du hast den goldenen Glücksball gefunden! ' + (anlageTag ? 'Mit so einem Glücksbringer in der Tasche gehst du ganz ruhig ins Match.' : 'In der Karriere bringt er dir Glück für das Match des Tages.'), bringt };
@@ -810,72 +834,76 @@ actions.anlageGeh = (v) => { game.anlage.geheZu(v); };
 actions.anlageListe = () => { anlageListe = !anlageListe; anlageZeigen(); };
 // Ein anderes Gelände ansehen (nur im Hauptmenü)
 actions.anlageWahlOrt = (v) => { if (anlageTag || !D.tournamentById(v)) return; anlageWo = v; anlageListe = false; anlageStart(career ? CA.mePlayer(career) : D.PLAYERS[0]); };
-function anlageSchluss() { kraftEnde(); anlageMeldung = null; game.anlage.ende(); anlageEl.classList.remove('on'); anlageEl.innerHTML = ''; }
+function anlageSchluss() { anlageMeldung = null; game.anlage.ende(); anlageEl.classList.remove('on'); anlageEl.innerHTML = ''; }
 // Aus dem Hauptmenü: einfach nur herumlaufen (mit deinem Karriere-Spieler, sonst mit dem ersten Spieler der Liste)
 actions.anlage = () => { anlageTag = null; anlageListe = false; anlageStart(career ? CA.mePlayer(career) : D.PLAYERS[0]); };
 // In der Karriere: der Tag vor dem Match. Wer schon auf der Anlage war und zurückkommt, macht dort weiter.
 actions.tagAnlage = () => {
   if (!mitLeben()) return;
   if (!lebenC().tag) TT.tagStart(lebenC(), ctxT.def);
-  anlageTag = { def: ctxT.def };
+  if (!lebenC().tag.aufg) TA.tagAufgaben(lebenC(), ctxT.def);       // das Team sucht die Aufgaben für heute aus (aufgaben.js)
+  anlageTag = { def: ctxT.def, phase: 'vor' };
   anlageStart(ichJetzt());
 };
-actions.anlageTun = (v) => {
-  if (!anlageTag) return;
-  const bringt = TT.tun(lebenC(), v, anlageTag.def);
-  if (bringt) anlageErgebnis = { ort: v, text: TT.TAETIGKEITEN[v].text, bringt };
-  anlageZeigen();
+// Nach einem Sieg: noch einmal auf die Anlage, für die Aufgaben nach dem Match
+actions.nachAnlage = () => {
+  if (!mitLeben() || !lebenC().abendOffen) return;
+  TA.nachAufgaben(lebenC(), ctxT.def, nachKennung());
+  anlageTag = { def: ctxT.def, phase: 'nach' };
+  anlageStart(ichJetzt());
 };
 // Ein Zufall am Morgen: Antwort wählen
 actions.tagEreignis = (v) => { if (anlageTag) anlageMeldung = TT.ereignisWahl(lebenC(), +v); anlageZeigen(); };
-// Restaurant und Presse: v = 'ort:nummer'
-actions.anlageWahl = (v) => {
-  if (!anlageTag) return;
-  const [ort, nr] = String(v).split(':');
-  const bringt = TT.tun(lebenC(), ort, anlageTag.def, { wahl: +nr });
-  if (bringt) anlageErgebnis = { ort, text: bringt[0], bringt: bringt.slice(1) };
-  anlageZeigen();
-};
-// Kraftraum-Spiel starten, und: der Knopf „Jetzt heben!“
-function kraftRunde() { kraftSpiel.mitte = 0.3 + Math.random() * 0.4; kraftSpiel.start = performance.now(); }
-actions.kraftStart = () => {
-  if (!anlageTag || !TT.kann(lebenC(), 'kraft', anlageTag.def).ok) return;
-  kraftEnde();
-  kraftSpiel = { n: 0, treffer: 0, letzter: null, uhr: setInterval(() => { const z = document.getElementById('kraftzeiger'); if (z && kraftSpiel) z.style.left = kraftZeiger() * 100 + '%'; }, 30) };
-  kraftRunde();
-  anlageZeigen();
-};
-actions.kraftDruck = () => {
-  if (!kraftSpiel || !anlageTag) return;
-  const K = TT.KRAFT_SPIEL, gut = Math.abs(kraftZeiger() - kraftSpiel.mitte) <= K.breite[kraftSpiel.n] / 2;
-  kraftSpiel.letzter = gut;
-  if (gut) { kraftSpiel.treffer++; sound.coin(); }
-  kraftSpiel.n++;
-  if (kraftSpiel.n >= K.wdh) {
-    const treffer = kraftSpiel.treffer;
-    kraftEnde();
-    const bringt = TT.tun(lebenC(), 'kraft', anlageTag.def, { treffer });
-    if (bringt) anlageErgebnis = { ort: 'kraft', text: bringt[0], bringt: bringt.slice(1) };
-  } else kraftRunde();
-  anlageZeigen();
-};
-// Minispiel auf dem Trainingsplatz: Ballmaschine oder Aufschlag. Danach geht es zurück auf die Anlage.
-actions.anlageUeben = (v) => {
-  const U = TT.UEBUNGEN[v];
-  if (!anlageTag || !U || !TT.kann(lebenC(), 'training', anlageTag.def).ok) return;
-  const def = anlageTag.def, trainer = { ...D.PLAYERS[59], name: 'Trainer', short: 'Trainer' };
-  anlageSchluss();
-  startMatch({
-    me: ichJetzt(), opp: trainer, def, mode: U.modus, balls: U.baelle, title: U.name,
-    onEnd: (res) => {
-      let ergebnis = null;
-      // Wer abbricht, hat das Zeitfenster noch nicht verbraucht
-      if (!res.aborted) {
-        const bringt = TT.tun(lebenC(), 'training', def, { uebung: v, punkte: res.training.score });
-        if (bringt) ergebnis = { ort: 'training', text: `${res.training.score} von ${U.baelle * TT.PUNKTE_PRO_BALL} Punkten. ${bringt[0]}`, bringt: bringt.slice(1) };
-      }
-      anlageStart(ichJetzt(), 'training', ergebnis);
-    },
+// Welchen Spielzug übt der Trainer heute mit dir? Am liebsten einen, den du noch nicht gelernt hast.
+function zugFuerHeute() {
+  const frei = SZ.ZUG_IDS.filter((id) => SZ.offen(zugSpeicher, id)), neu = frei.filter((id) => !SZ.stufe(zugSpeicher, id));
+  const aus = neu.length ? neu.slice(0, 2) : frei;
+  return aus[Math.floor(Math.random() * aus.length)] || SZ.ZUG_IDS[0];
+}
+// Eine Aufgabe oder etwas Freiwilliges an einem Ort starten (v = Kennung aus AUFGABEN in aufgaben.js). Jedes ist ein Mini-Spiel.
+actions.aufgabe = (v) => {
+  const A = TA.AUFGABEN[v];
+  if (!anlageTag || !A) return;
+  const c = lebenC(), def = anlageTag.def, phase = phaseJetzt(), tag = anlageTag;
+  if (!TA.kann(c, v, def, phase).ok) return;
+  // Wenn das Spiel vorbei ist: Belohnung ausrechnen und als Ergebnis am Ort zeigen
+  const abrechnen = (note, davor = '') => {
+    const r = TA.fertig(c, v, def, phase, note);
+    return r ? { ort: A.ort, text: `<b>${A.bild} ${esc(A.name)}:</b> ${davor}${r.text}`, bringt: r.bringt.concat(r.stern ? ['⭐ Team-Stern! ' + TA.STERN[phase].text] : []) } : null;
+  };
+  if (A.spiel === 'platz') {
+    // Auf dem echten Platz in 3D: Zielübung, Aufschlag-Ziele oder ein Spielzug. Danach geht es zurück auf die Anlage.
+    const trainer = { ...D.PLAYERS[59], name: 'Trainer', short: 'Trainer' };
+    const zug = A.modus === 'lernen' ? zugFuerHeute() : null;
+    anlageSchluss();
+    startMatch({
+      me: ichJetzt(), opp: trainer, def, title: zug ? 'Spielzug: ' + SZ.ZUEGE[zug].name : A.name,
+      ...(zug ? { lernen: zug } : { mode: A.modus, balls: A.baelle }),
+      onEnd: (res) => {
+        let ergebnis = null;
+        // Wer abbricht, hat die Aufgabe noch nicht gemacht
+        if (!res.aborted && res.training) {
+          const tr = res.training;
+          ergebnis = zug ? abrechnen(Math.min(1, tr.score / 4), `${tr.score}-mal geschafft. `) : abrechnen(tr.score / (A.baelle * TT.PUNKTE_PRO_BALL), `${tr.score} von ${A.baelle * TT.PUNKTE_PRO_BALL} Punkten. `);
+        }
+        anlageTag = tag;
+        anlageStart(ichJetzt(), A.ort, ergebnis);
+      },
+    });
+    return;
+  }
+  // Alle anderen Spiele laufen in einem Fenster über dem Gelände (minispiele.js)
+  const hemd = ichJetzt().look && ichJetzt().look.shirt;
+  MS.starte(A.spiel, {
+    titel: `${A.bild} ${A.name}`, wer: TA.werSagt(c, A.von), auftrag: TA.auftragText(v, phase), phase,
+    farbe: typeof hemd === 'number' ? '#' + hemd.toString(16).padStart(6, '0') : undefined,
+    anzahl: A.anzahl, gesehen: quizGesehen, themen: A.themen && A.themen[phase],
+  }, (r) => {
+    if (!r.abbruch) {
+      if (r.ids) quizMerken(r.ids);
+      anlageErgebnis = abrechnen(r.note);
+    }
+    if (anlageTag) anlageZeigen();
   });
 };
 actions.anlageMatch = () => { anlageSchluss(); actions.tourPlay(); };
@@ -2149,6 +2177,8 @@ function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   controls.pollPad();               // Controller im Browser abfragen (auch in der Pause, wegen der Pause-Taste)
+  // Läuft ein Mini-Spiel (minispiele.js), bleibt das Gelände dahinter als Standbild stehen: Das spart Rechenzeit fürs Mini-Spiel.
+  if (MS.offen()) return requestAnimationFrame(loop);
   if (match && !paused) {
     controls.update(dt);
     match.update(dt);

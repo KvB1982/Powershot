@@ -393,10 +393,6 @@ tr.cut td { text-align: center; font-size: 11px; font-weight: 700; color: var(--
 /* Verletzung: roter Kasten mit Erklärung */
 .verletzt { border: 1px solid #ff8a7a; border-radius: 10px; padding: 10px 12px; margin: 8px 0; background: rgba(255, 90, 70, .12); }
 .verletzt ul { margin: 6px 0 6px 18px; padding: 0; }
-/* Kraftraum-Spiel: Balken mit grünem Feld und laufendem Zeiger */
-.kraftbalken { position: relative; height: 34px; border-radius: 17px; background: rgba(255, 255, 255, .12); margin: 10px 0 14px; overflow: hidden; }
-.kraftbalken i { position: absolute; top: 0; bottom: 0; background: #3ecf6e; opacity: .8; }
-.kraftbalken b { position: absolute; top: -2px; bottom: -2px; width: 6px; margin-left: -3px; left: 0; background: #fff; border-radius: 3px; box-shadow: 0 0 6px #000; }
 .spalte { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
 .spalte button { text-align: left; }
 /* Anprobe im Shop: links die Figur, rechts der Text */
@@ -479,3 +475,43 @@ table.planer td.frv { min-width: 130px; }
 table.planer td.frv .frische { display: block; margin: 3px 0; }
 /* Niedriger Bildschirm (Handy quer): die Kamera-Knöpfe in zwei Spalten, sonst passen sie nicht untereinander */
 @media (max-height: 560px) { #anlage .kam { grid-template-columns: 1fr 1fr; gap: 6px; } #anlage .kam button { width: 44px; height: 44px; font-size: 19px; } }
+
+/* ---------- Aufgaben vom Team (Liste wie ein Aufgabenbuch) ---------- */
+.aufgaben { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.aufg { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255, 255, 255, .05); text-align: left; }
+.aufg.ok { opacity: .7; }
+.aufg .bild { font-size: 20px; }
+.aufg .was { flex: 1; min-width: 0; }
+.aufg .was small { display: block; color: var(--dim); font-size: 13px; font-weight: 400; }
+.aufg button { flex: none; padding: 8px 12px; font-size: 14px; min-height: 0; }
+
+/* ---------- Mini-Spiele auf dem Turniergelände (minispiele.js) ---------- */
+#mini { position: fixed; inset: 0; display: none; z-index: 30; background: rgba(6, 10, 22, .78); place-items: center; padding: 8px; touch-action: none; }
+#mini.on { display: grid; }
+#mini .kasten { width: min(940px, 100%, calc((100vh - 230px) * 1.667)); min-width: min(100%, 420px); max-height: 100%; overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 10px 12px 12px; }
+#mini .kopf { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+#mini .titel { font-size: 20px; color: var(--accent); }
+#mini .info { flex: 1; color: var(--dim); font-size: 14px; text-align: right; }
+#mini .kopf button { padding: 6px 10px; font-size: 14px; min-height: 0; }
+#mini canvas { display: block; width: 100%; aspect-ratio: 5 / 3; background: #1a2340; border-radius: 12px; touch-action: none; cursor: pointer; }
+#mini.ohneBild canvas, #mini.vor canvas { display: none; }
+#mini.fertig canvas { display: none; }
+#mini.vor .kasten, #mini.fertig .kasten, #mini.ohneBild .kasten { width: min(720px, 100%); }
+#mini .text { margin-top: 6px; font-size: 16px; line-height: 1.4; }
+#mini .text:empty { display: none; }
+#mini .text p { margin: 6px 0; }
+#mini .text h3 { margin: 6px 0; font-size: 22px; }
+#mini .auftrag { background: rgba(232, 240, 74, .1); border-left: 4px solid var(--accent); border-radius: 6px; padding: 8px 10px; }
+#mini .sterne { font-size: 34px; text-align: center; }
+#mini .knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; justify-content: center; }
+#mini .knoepfe:empty { display: none; }
+#mini .knoepfe button { flex: 1 1 200px; min-height: 52px; font-size: 16px; touch-action: none; }
+#mini .knoepfe button small { opacity: .6; margin-left: 6px; }
+#mini.ohneBild .knoepfe { flex-direction: column; }
+#mini.ohneBild .knoepfe button { flex: none; text-align: left; }
+#mini .knoepfe button.richtig { background: #1f8a4a; border-color: #4ade80; color: #fff; opacity: 1; }
+#mini .knoepfe button.falsch { background: #8a2a22; border-color: #ff6b5a; color: #fff; opacity: 1; }
+#mini .zeit { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .12); overflow: hidden; margin: 8px 0; }
+#mini .zeit i { display: block; height: 100%; width: 100%; background: var(--accent); }
+/* Vor dem Start und am Ende ist das Bild ausgeblendet, damit Erklärung und Knopf ohne Rollen zu sehen sind */
+@media (max-height: 700px) { #mini .text { font-size: 14px; } #mini .kasten { width: min(940px, 100%, calc((100vh - 190px) * 1.667)); } }
