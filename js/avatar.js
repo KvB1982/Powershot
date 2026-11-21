@@ -234,6 +234,16 @@ const JOGGEN = {
   armHub: 0.13,       // … vorn kommt sie so viel höher (Richtung Brust), hinten so viel tiefer (Richtung Hüfte)
   armInnen: 0.06,     // vorn schwingt die Hand so weit zur Körpermitte (Meter)
 };
+// --- Schläger tragen beim Gehen (Seitenwechsel): Der Schläger hängt locker in der Hand, Kante nach unten ---
+const TRAGEN = {
+  winkel: 0.72,       // so weit zeigt der Schläger vom hängenden Unterarm aus nach vorn (Bogenmaß; 0.72 sind etwa 40 Grad)
+  mit: 0.7,           // so stark folgt der Schläger dem Schwingen des Unterarms (1 = ganz, 0 = hängt immer gleich)
+  innen: -0.06,       // der Schlägerkopf zeigt ein klein wenig zur Körpermitte (−) oder nach außen (+)
+  kippen: 0.3,        // so stark kippt die Fläche mit, wenn der Schläger schräg zur Seite zeigt
+  hochMax: -0.2,      // höher als so (0 = waagerecht, −1 = senkrecht nach unten) zeigt der Schlägerkopf nie – er hängt immer etwas
+  armRuhig: 0.55,     // der Schlägerarm schwingt nur so stark mit wie der freie Arm (1 = gleich stark) – der Schläger ist ja schwer
+  traege: 0.14,       // so viele Sekunden hängt der Schläger dem Arm hinterher (größer = träger)
+};
 // Weiche Kurve durch vier Punkte (zwischen p1 und p2, t = 0…1)
 const kurve = (p0, p1, p2, p3, t) => 0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (3 * p1 - p0 - 3 * p2 + p3) * t * t * t);
 // Wo ist ein Fuß beim Joggen? u = 0…1 ist eine ganze Runde des Beins (0 = Fuß setzt vorn auf),
@@ -764,6 +774,13 @@ export class Avatar {
           m['el' + s] = ik(m['sh' + s], m['hand' + s], dm.upper, dm.fore, sub(m['el' + s], m['sh' + s]));
         }
       }
+      if (!st.ohneSchlaeger) {
+        // Der Schlägerarm schwingt ruhiger als der freie Arm: Die Hand bleibt näher an ihrer Mitte neben der Hüfte.
+        const r = sub(m.handR, m.shR), ruhe = [0.03, 0.11, -0.56], k = TRAGEN.armRuhig;
+        const ellbogen = sub(m.elR, m.shR);
+        m.handR = limitReach(m.shR, add3(m.shR, mix3(ruhe, r, k)), dm.reach);
+        m.elR = ik(m.shR, m.handR, dm.upper, dm.fore, [ellbogen[0] - 0.3, ellbogen[1], ellbogen[2]]);
+      }
       layers.push([m, gehK, false, true]);
     }
     for (const [m, w, head, gehen] of layers) {
@@ -826,6 +843,26 @@ export class Avatar {
       Y.lerp(D(m.d), w).normalize();
       Z.lerp(Zm, w).normalize();
     }
+    // --- Schläger tragen beim Gehen ---
+    // Niemand trägt den Schläger wie eine Bratpfanne (Fläche nach oben, steif nach vorn). In echt hängt der Arm locker,
+    // die Handfläche zeigt zum Bein, und der Schläger hängt mit der KANTE nach unten schräg nach vorn – die Bespannung
+    // schaut zur Seite. Er hängt am Unterarm: Schwingt der Arm, schwingt der Schläger mit, aber etwas träger (er ist schwer).
+    if (walkK > 0.001 && !st.ohneSchlaeger) {
+      const T = TRAGEN, arm = norm(sub(handR, elR));
+      // Unterarm-Richtung etwas beruhigen (zum Teil einfach "nach unten"), dann um die Quer-Achse nach vorn kippen
+      const ruhig = norm([arm[0] * T.mit, arm[1] * T.mit, arm[2] * T.mit - (1 - T.mit)]);
+      const c = Math.cos(T.winkel), si = Math.sin(T.winkel);
+      let ziel = norm([ruhig[0] * c - ruhig[2] * si, ruhig[1] * 0.5 + T.innen, ruhig[2] * c + ruhig[0] * si]);
+      // Der Schlägerkopf hängt immer ein Stück nach unten (auch beim Laufen mit angewinkeltem Arm)
+      if (ziel[2] > T.hochMax) ziel = norm([ziel[0], ziel[1], T.hochMax * Math.hypot(ziel[0], ziel[1]) / Math.sqrt(1 - T.hochMax * T.hochMax)]);
+      // träge nachschwingen
+      a.trag = a.trag ? norm(mix3(a.trag, ziel, Math.min(1, dt / T.traege))) : ziel;
+      const t = a.trag, kante = norm([-t[1] * T.kippen, 1, 0]);      // die Bespannung schaut zur Seite (ganz leicht mitgekippt)
+      const Yt = D(t).normalize(), Zt = D(kante).normalize();
+      if (Zt.dot(Z) < 0 && walkK < 0.5) Zt.negate();
+      Y.lerp(Yt, walkK).normalize();
+      Z.lerp(Zt, walkK).normalize();
+    } else a.trag = null;
     X.crossVectors(Y, Z).normalize();
     Z.crossVectors(X, Y).normalize();
     let faustMitte = null;
