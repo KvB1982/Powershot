@@ -293,6 +293,7 @@ tr.cut td { text-align: center; font-size: 11px; font-weight: 700; color: var(--
   #scoreboard td { padding: 2px 7px; }
   #scoreboard td.nm { min-width: 90px; }
   #pauseBtn { width: 44px; height: 44px; min-height: 0; }
+  #helpBtn { width: 44px; height: 44px; min-height: 0; right: calc(max(12px, env(safe-area-inset-right)) + 50px); }
   #speed { top: 62px; font-size: 14px; }
   #hint { font-size: 11px; }
   #aufschlagWahl { bottom: max(44px, calc(env(safe-area-inset-bottom) + 26px)); }
@@ -544,3 +545,25 @@ table.planer td.frv .frische { display: block; margin: 3px 0; }
 .antworten button:disabled { opacity: 0.75; cursor: default; }
 .antworten button.gut { background: rgba(53, 224, 106, 0.28); outline: 3px solid #35e06a; opacity: 1; }
 .antworten button.falsch { background: rgba(255, 90, 70, 0.28); outline: 3px solid #ff5a46; opacity: 1; }
+.panel.help.meins { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+/* Leere Sterne: grau statt gelb */
+.sternleer { color: #7d8794; opacity: 0.7; }
+
+/* Spickzettel-Knopf „?“ im Match, links neben der Pause */
+#helpBtn { position: absolute; right: calc(max(12px, env(safe-area-inset-right)) + 60px); top: max(12px, env(safe-area-inset-top));
+  pointer-events: auto; width: 52px; height: 52px; padding: 0; background: var(--bg); font-weight: 900; }
+.spick .panel.help { margin: 0; border: 0; box-shadow: none; padding: 0; background: none; }
+/* Hauptmenü: Überschriften der Gruppen, Kasten „Neu hier?“ */
+h3.gruppe { max-width: 460px; margin: 16px auto 8px; font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim, #9aa6b8); }
+.neuhier { max-width: 640px; margin-left: auto; margin-right: auto; border-color: var(--accent); }
+table.erklaer td { padding: 5px 10px 5px 0; vertical-align: top; }
+table.erklaer td:first-child { white-space: nowrap; }
+/* Wer spielt? und Erste Schritte */
+.profilzeile, .lektion { display: flex; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid rgba(255, 255, 255, 0.08); flex-wrap: wrap; }
+.profilzeile:first-of-type, .lektion:first-of-type { border-top: 0; }
+.profilzeile .grow, .lektion .grow { flex: 1; min-width: 200px; }
+.lektion.ok b { color: #6fd08c; }
+.neufigur { display: flex; gap: 16px; align-items: center; }
+.neufigur canvas { width: 128px; height: 160px; border-radius: 12px; flex: none; }
+@media (max-height: 500px) { h3.gruppe { max-width: 640px; margin: 8px auto 4px; font-size: 12px; } #helpBtn { top: max(12px, env(safe-area-inset-top)); } }

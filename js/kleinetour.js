@@ -163,7 +163,9 @@ export const NACHWUCHS = Array.from({ length: NACHWUCHS_ZAHL }, (_, i) => {
   const w = (key, n) => Math.round(base + (((i * 31 + n * 47) % 7) - 3) + (key === stark ? 5 : -1));
   const model = FIGUR[i % 6];
   return {
-    id: 'nw' + i, name: first + ' ' + last, short: last, country, erfunden: true,
+    // Kurzname mit Anfangsbuchstabe des Vornamens ("J. Kessler"): Jeden Nachnamen gibt es zehnmal,
+    // sonst stünde im Turnierbaum "Kessler gegen Kessler".
+    id: 'nw' + i, name: first + ' ' + last, short: first[0] + '. ' + last, country, erfunden: true,
     rank, basePoints: punkteFuerPlatz(rank),
     stats: achtWerte({ s: w('s', 1), p: w('p', 2), t: w('t', 3), c: w('c', 4), v: w('v', 5) }, i),
     hand: i % 8 === 3 ? -1 : 1,

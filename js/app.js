@@ -32,6 +32,7 @@ import * as SE from './season.js';
 import * as PS from './profisaison.js';
 import * as SZ from './spielzuege.js';
 import * as LE from './lernen.js';
+import * as PR from './profile.js';
 import { bracketHtml, timelineHtml, raceHtml, pointsHtml, weltHtml, zeitungHtml } from './saisonansicht.js';
 
 const $ = (s) => document.querySelector(s);
@@ -116,6 +117,7 @@ window.addEventListener('keydown', (e) => {
   if ((e.key === 'Escape' || e.key.toLowerCase() === 'p') && match && session && !session.over) togglePause();
 });
 $('#pauseBtn').addEventListener('click', () => { sound.unlock(); togglePause(); });
+$('#helpBtn').addEventListener('click', () => { sound.unlock(); actions.spick(); });
 // Die vier Knöpfe für die Aufschlagart (unten in der Mitte). Die Zahl davor ist die Taste auf der Tastatur.
 $('#aufschlagWahl').innerHTML = AUFSCHLAG_ARTEN.map((a, i) => `<button data-art="${a}"><small>${i + 1}</small>${AUFSCHLAEGE[a].kurz}</button>`).join('');
 $('#aufschlagWahl').addEventListener('click', (e) => {
@@ -171,20 +173,197 @@ const back = (to = 'home') => `<button class="ghost" data-a="${to}">‹ Zurück<
 actions.home = () => {
   session = null;
   enterMenu();
+  const wer = PR.aktiv(), mehrere = PR.laden().liste.length > 1;
+  const neuHier = !ersteStand.fertig && !ersteStand.weg;
   show(`
     <div class="title"><h1>POWERSHOT</h1><p>Tennis · ATP Tour · Grand Slams · Masters · Finals</p></div>
+    <div class="center" style="margin-bottom:10px"><button class="ghost" data-a="profile">👤 ${mehrere ? 'Es spielt: <b>' + esc(wer.name) + '</b> · wechseln' : 'Wer spielt? Eigene Spielstände für jeden'}</button></div>
+    ${neuHier ? `<div class="panel neuhier"><b>👋 Neu hier?</b> In vier kurzen Lektionen lernst du Schlagen, Zielen, Aufschlagen und spielst dein erstes Match.
+      <div class="row" style="margin-top:8px"><button class="primary grow" data-a="erste">Erste Schritte starten ›</button><button data-a="ersteWeg">Kenne ich schon</button></div></div>` : ''}
+    <h3 class="gruppe">Spielen</h3>
     <div class="menu">
       <button class="big primary" data-a="free">Freies Spiel <small>Spieler wählen und loslegen</small></button>
       <button class="big" data-a="career">Karriere <small>${career ? esc(career.name) + ' · Platz ' + CA.myRank(career) : 'Eigenen Spieler aufbauen'}</small></button>
       <button class="big" data-a="saison">Saison <small>${season ? esc(SE.seasonPlayer(season).short) + ' · ATP Race Platz ' + SE.myRace(season).rank : 'Mit einem Profi durchs Jahr · ATP Race'}</small></button>
       <button class="big" data-a="tourMenu">Turnier <small>Ein Turnier mit einem Profi spielen</small></button>
-      <button class="big" data-a="training">Training <small>Ballmaschine · Aufschlag</small></button>
-      <button class="big" data-a="anlage">Turniergelände <small>Wimbledon, New York, Paris … – die echten Anlagen zum Herumlaufen</small></button>
+    </div>
+    <h3 class="gruppe">Üben und Lernen</h3>
+    <div class="menu">
+      <button class="big" data-a="erste">Erste Schritte <small>${ersteStand.fertig ? '✓ geschafft · noch einmal ansehen' : 'Das Spiel in vier kurzen Lektionen lernen'}</small></button>
+      <button class="big" data-a="training">Training <small>Ballmaschine · Aufschlag · Spielzüge</small></button>
       <button class="big" data-a="schlagbuch">Schlagarten <small>Nachlesen und ansehen · Aufnehmen mit der Uhr</small></button>
-      <button class="big" data-a="miniMenu">Mini-Spiele und Quiz <small>Alle Aufgaben vom Turniergelände frei spielen · Tennis-Quiz</small></button>
       <button class="big" data-a="wissen">Tennis-Wissen <small>Lernen und üben: Regeln, Technik, Taktik, Turniere, Geschichte …</small></button>
-      <div class="row"><button class="grow" data-a="settings" data-v="home">Einstellungen</button><button class="grow" data-a="help" data-v="home">Steuerung</button></div>
+    </div>
+    <h3 class="gruppe">Entdecken</h3>
+    <div class="menu">
+      <button class="big" data-a="anlage">Turniergelände <small>Wimbledon, New York, Paris … – die echten Anlagen zum Herumlaufen</small></button>
+      <button class="big" data-a="miniMenu">Mini-Spiele und Quiz <small>Alle Aufgaben vom Turniergelände frei spielen · Tennis-Quiz</small></button>
+    </div>
+    <div class="menu" style="margin-top:14px">
+      <div class="row"><button class="grow" data-a="settings" data-v="home">Einstellungen</button><button class="grow" data-a="help" data-v="home">Steuerung</button><button class="grow" data-a="neuImSpiel">Was ist was?</button></div>
     </div>`);
+};
+
+// ---------------------------------------------------------------
+// „Was ist was?“ – eine Seite, die jeden Menüpunkt in einem Satz erklärt
+// ---------------------------------------------------------------
+actions.neuImSpiel = () => {
+  const z = (name, text) => `<tr><td><b>${name}</b></td><td>${text}</td></tr>`;
+  show(`
+    <div class="bar">${back()}<h2>Was ist was?</h2></div>
+    <div class="panel"><h3 style="margin-top:0">Spielen</h3><table class="erklaer">
+      ${z('Freies Spiel', 'Ein einzelnes Match. Du suchst dir Spieler, Gegner und Stadion aus. Gut zum Ausprobieren.')}
+      ${z('Karriere', 'Du baust einen eigenen Spieler auf: vom Platz 2000 bis nach Wimbledon. Mit Geld, Reisen, Ausrüstung und Training. Das ist das lange Spiel.')}
+      ${z('Saison', 'Du übernimmst einen echten Profi für ein Jahr. Er kann schon alles – dafür erwarten alle etwas von ihm.')}
+      ${z('Turnier', 'Ein einzelnes großes Turnier mit einem Profi, von der ersten Runde bis zum Finale.')}
+    </table></div>
+    <div class="panel"><h3 style="margin-top:0">Üben und Lernen</h3><table class="erklaer">
+      ${z('Erste Schritte', 'Vier kurze Lektionen für den Anfang: Schlagen, Zielen, Aufschlagen, erstes Match.')}
+      ${z('Training', 'Ballmaschine und Aufschlag-Training mit Zielfeldern. Dazu die taktischen Spielzüge zum Lernen.')}
+      ${z('Schlagarten', 'Ein Buch mit allen Schlägen: Wie sieht er aus, wofür ist er gut, wie spielst du ihn.')}
+      ${z('Tennis-Wissen', 'Kapitel zum Lesen und Fragen zum Üben: Regeln, Technik, Taktik, Turniere, Geschichte.')}
+    </table></div>
+    <div class="panel"><h3 style="margin-top:0">Entdecken</h3><table class="erklaer">
+      ${z('Turniergelände', 'Herumlaufen auf den Anlagen der großen Turniere. Stempel sammeln, Sehenswürdigkeiten ansehen.')}
+      ${z('Mini-Spiele und Quiz', 'Die kleinen Spiele vom Turniertag (Kraftraum, Autogramme, Bespannen …) ohne Turnier spielen.')}
+    </table></div>
+    <div class="panel"><h3 style="margin-top:0">Gut zu wissen</h3>
+      <p><b>Schwierigkeit:</b> ${Object.keys(STUFE_TEXT).map((k) => `<b>${D.DIFFICULTY[k].name}</b> – ${STUFE_TEXT[k]}`).join(' ')}</p>
+      <p><b>Wer spielt?</b> Spielt ihr zu zweit an einem Gerät, legt für jeden ein Profil an (oben im Hauptmenü). Dann hat jeder seine eigene Karriere und seine eigene Steuerung.</p>
+      <p><b>Pause:</b> Im Match oben rechts auf „II“ tippen. Daneben zeigt „?“ deine Steuerung als Spickzettel.</p></div>`);
+};
+// Die Stufen in einem Satz (steht auch in den Einstellungen)
+const STUFE_TEXT = {
+  leicht: 'Deine Bälle bleiben im Feld. Schlägst du einmal nicht, kommt ein schwacher Hilfs-Schlag – dann greift der Gegner aber an.',
+  mittel: 'Du musst jeden Ball selbst schlagen. Wer nur in die Mitte spielt, wird angegriffen – also zielen!',
+  schwer: 'Deine Bälle können ins Aus gehen, der Gegner macht wenig Fehler und greift oft an.',
+  profi: 'Wie Schwer, aber ohne die Anzeige, wo der Ball landet.',
+};
+
+// ---------------------------------------------------------------
+// „Wer spielt?“ – Profile für mehrere Leute an einem Gerät, Spielstand als Datei sichern (siehe js/profile.js)
+// ---------------------------------------------------------------
+let profilWeg = null;          // dieses Profil soll gelöscht werden (zweimal tippen)
+actions.profile = (meldung) => {
+  const P = PR.laden();
+  show(`
+    <div class="bar">${back()}<h2>Wer spielt?</h2></div>
+    ${typeof meldung === 'string' && meldung ? `<div class="panel"><b>${meldung}</b></div>` : ''}
+    <div class="panel"><p class="dim" style="margin-top:0">Jedes Profil hat seine eigene Karriere, Saison, Einstellungen (auch die Steuerung), gelernte Spielzüge, Stempel und Bestnoten.</p>
+      ${P.liste.map((x) => `<div class="profilzeile ${x.id === P.aktiv ? 'an' : ''}">
+        <div class="grow"><b>${x.id === P.aktiv ? '▶ ' : ''}${esc(x.name)}</b><br><small class="dim">${esc(PR.inhalt(x.id))}${x.id === P.aktiv ? ' · spielt gerade' : ''}</small></div>
+        ${x.id === P.aktiv ? '' : `<button class="primary" data-a="profilWechsel" data-v="${x.id}">Spielen</button>
+          <button data-a="profilLoeschen" data-v="${x.id}">${profilWeg === x.id ? 'Wirklich löschen? Alles von ' + esc(x.name) + ' ist dann weg. Nochmal tippen' : 'Löschen'}</button>`}
+      </div>`).join('')}
+      <label>Name ändern (für „${esc(PR.aktiv().name)}“) oder neues Profil anlegen</label>
+      <div class="row"><input id="pname" type="text" maxlength="16" placeholder="Name" style="flex:1;min-width:120px">
+        <button data-a="profilName">Diesen Namen nehmen</button>
+        ${P.liste.length < PR.HOECHSTENS ? '<button class="primary" data-a="profilNeu">Neues Profil anlegen</button>' : ''}</div>
+      <p class="dim" style="font-size:13px">Ein neues Profil fängt ganz von vorne an. Beim Wechseln lädt das Spiel einmal neu.</p></div>
+    <div class="panel"><h3 style="margin-top:0">Spielstand sichern</h3>
+      <p class="dim">Alle Profile zusammen in eine Datei schreiben – zum Aufheben oder um auf einem anderen Gerät weiterzuspielen.</p>
+      <div class="row"><button data-a="standSichern">💾 In eine Datei sichern</button>
+        <button data-a="standLaden">📂 Aus einer Datei laden</button><input id="standDatei" type="file" accept=".json,application/json" hidden></div>
+      <p class="dim" style="font-size:13px">Achtung: „Aus einer Datei laden“ ersetzt alle Profile auf diesem Gerät durch die aus der Datei.</p></div>`);
+  const d = $('#standDatei');
+  if (d) d.addEventListener('change', () => {
+    const f = d.files && d.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      if (PR.einspielen(String(r.result))) location.reload();
+      else actions.profile('Das ist keine Powershot-Sicherung. Es wurde nichts geändert.');
+    };
+    r.readAsText(f);
+  });
+};
+actions.profilNeu = () => {
+  const name = ($('#pname').value || '').trim();
+  if (!name) return actions.profile('Schreib zuerst einen Namen in das Feld.');
+  const id = PR.neu(name);
+  if (!id) return actions.profile('Das hat nicht geklappt (zu viele Profile?).');
+  if (PR.wechseln(id)) location.reload(); else actions.profile('Der Speicher ist voll – das Profil gibt es jetzt, aber wechseln ging nicht.');
+};
+actions.profilName = () => {
+  const name = ($('#pname').value || '').trim();
+  actions.profile(name && PR.umbenennen(PR.laden().aktiv, name) ? '' : 'Schreib zuerst einen Namen in das Feld.');
+};
+actions.profilWechsel = (id) => { if (PR.wechseln(id)) location.reload(); else actions.profile('Wechseln ging nicht (Speicher voll?).'); };
+actions.profilLoeschen = (id) => {
+  if (profilWeg !== id) { profilWeg = id; return keepScroll(() => actions.profile()); }
+  profilWeg = null; PR.loeschen(id); actions.profile('Profil gelöscht.');
+};
+actions.standSichern = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([PR.paket()], { type: 'application/json' }));
+  a.download = `powershot-spielstand-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+};
+actions.standLaden = () => { const d = $('#standDatei'); if (d) d.click(); };
+
+// ---------------------------------------------------------------
+// „Erste Schritte“ – vier kurze Lektionen für den Anfang. Jede benutzt etwas, das es schon gibt
+// (Ballmaschine, Aufschlag-Training, ein kurzes Match), nur kürzer, auf Stufe „Leicht“ und mit Erklärung davor.
+// ---------------------------------------------------------------
+const ERSTE_KEY = 'powershot.erste.v1';
+let ersteStand = (() => { try { return JSON.parse(localStorage.getItem(ERSTE_KEY)) || {}; } catch (e) { return {}; } })();
+const ersteSichern = () => { try { localStorage.setItem(ERSTE_KEY, JSON.stringify(ersteStand)); } catch (e) { /* dann eben ohne Merken */ } };
+// So schlägt man mit jeder Steuerung (ganz kurz – die lange Fassung steht unter „Steuerung“)
+const ERSTE_TIPP = {
+  klassik: { schlag: 'Halte die <b>linke Maustaste</b> gedrückt, wenn der Ball kommt, und lass los. Länger halten = härter und tiefer.', ziel: 'Bewege die <b>Maus nach links oder rechts</b> (oder dreh das Mausrad): Der Zielpunkt auf der anderen Seite wandert mit.', aufschlag: 'Maustaste halten (der Ball fliegt hoch) und oben <b>loslassen</b>. Mit der Maus zielst du ins Aufschlagfeld.' },
+  profi: { schlag: 'Drück die <b>Leertaste</b>, wenn der Ball bei dir ist. Länger halten = härter.', ziel: 'Halte beim Schlagen <b>← oder →</b> gedrückt: Dorthin fliegt der Ball. ↑ = tief, ↓ = kurz.', aufschlag: '<b>Leertaste</b> halten und loslassen, mit ← → zielen.' },
+  touch: { schlag: '<b>Wisch nach oben</b>, wenn der Ball bei dir ist.', ziel: 'Wisch <b>schräg</b>: nach links oben = Ball nach links, nach rechts oben = Ball nach rechts. Länger wischen = tiefer.', aufschlag: '<b>Nach oben wischen.</b> Schräg wischen = Richtung.' },
+  wisch: { schlag: '<b>Wisch schräg nach oben</b>, wenn der Ball bei dir ist. Schneller wischen = härter.', ziel: 'Hier zielst du mit dem <b>Zeitpunkt</b>: früh wischen = quer über den Platz (cross), spät wischen = die Linie entlang. Die Ziellinie auf dem Platz zeigt es dir.', aufschlag: '<b>Nach oben wischen.</b> Schräg wischen = Richtung.' },
+  controller: { schlag: '<b>Schwing</b> den Controller oder drück <b>A</b>, wenn der Ball bei dir ist.', ziel: 'Der <b>Stick</b> zielt. Beim Schwingen zählt der Zeitpunkt: früh = cross, spät = die Linie entlang.', aufschlag: 'Schwingen oder <b>A</b>. Der Stick zielt.' },
+};
+const ERSTE = [
+  { id: 'schlagen', name: 'Ball treffen', mode: 'ballmaschine', balls: 8, ziel: 'Schlag 4 von 8 Bällen ins Feld zurück.', tipp: 'schlag',
+    text: 'Die Ballmaschine spielt dir 8 Bälle zu. Dein Spieler läuft von allein zum Ball – du musst nur im richtigen Moment schlagen.',
+    geschafft: (r) => r.training && (r.training.drin || 0) >= 4 },
+  { id: 'zielen', name: 'Zielen', mode: 'ballmaschine', balls: 10, ziel: 'Triff 2-mal eines der bunten Zielfelder.', tipp: 'ziel',
+    text: 'Jetzt kommt es darauf an, wohin der Ball fliegt. Auf der anderen Seite liegen drei Zielfelder: in den Ecken und hinten in der Mitte.',
+    geschafft: (r) => r.training && (r.training.treffer || 0) >= 2 },
+  { id: 'aufschlag', name: 'Aufschlag', mode: 'aufschlag', balls: 6, ziel: 'Bring 3 von 6 Aufschlägen ins Aufschlagfeld.', tipp: 'aufschlag',
+    text: 'Jeder Punkt beginnt mit einem Aufschlag. Er muss schräg gegenüber in das kleine Feld vorn am Netz – das Aufschlagfeld.',
+    geschafft: (r) => r.training && (r.training.drin || 0) >= 3 },
+  { id: 'match', name: 'Dein erstes Match', mode: 'match', ziel: 'Spiel einen kurzen Satz bis 3 zu Ende. Gewinnen ist schön, muss aber nicht sein.', tipp: 'schlag',
+    text: 'Jetzt alles zusammen: Aufschlag, schlagen, zielen. Gezählt wird 15, 30, 40, Spiel. Wer zuerst 3 Spiele hat, gewinnt. Du spielst auf Stufe „Leicht“ gegen einen Nachwuchsspieler.',
+    geschafft: (r) => !r.aborted && !r.training },
+];
+actions.erste = (meldung) => {
+  const T = ERSTE_TIPP[settings.control] || ERSTE_TIPP.touch;
+  const offen = ERSTE.findIndex((L) => !ersteStand[L.id]);
+  show(`
+    <div class="bar">${back()}<h2>Erste Schritte</h2></div>
+    ${typeof meldung === 'string' && meldung ? `<div class="panel neuhier"><b>${meldung}</b></div>` : ''}
+    <div class="panel"><p style="margin-top:0">Deine Steuerung ist <b>${CONTROL_NAMES[settings.control]}</b>. <button data-a="settings" data-v="erste">Ändern</button> <button data-a="help" data-v="erste">Alles zur Steuerung</button></p>
+      ${ERSTE.map((L, i) => `<div class="lektion ${ersteStand[L.id] ? 'ok' : ''}">
+        <div class="grow"><b>${ersteStand[L.id] ? '✓' : i + 1 + '.'} ${L.name}</b><br><span class="dim">${L.text}</span>
+          <br><span>🎯 ${L.ziel}</span><br><span>👉 ${T[L.tipp]}</span></div>
+        <button class="${i === offen ? 'primary' : ''}" data-a="ersteLos" data-v="${i}">${ersteStand[L.id] ? 'Noch einmal' : 'Los ›'}</button></div>`).join('')}
+    </div>
+    ${ersteStand.fertig ? `<div class="panel"><b>🎉 Du kannst alles, was du für den Anfang brauchst.</b> Wie wäre es jetzt mit der <b>Karriere</b> – oder einem Freien Spiel auf Stufe „Mittel“?
+      <div class="row" style="margin-top:8px"><button class="primary" data-a="career">Zur Karriere ›</button><button data-a="free">Freies Spiel</button><button data-a="training">Mehr Training</button></div></div>` : ''}`);
+};
+actions.ersteWeg = () => { ersteStand.weg = true; ersteSichern(); actions.home(); };
+actions.ersteLos = (v) => {
+  const i = +v, L = ERSTE[i];
+  const me = getPlayer('zverev');
+  const lehrling = D.PLAYERS[D.PLAYERS.length - 1];
+  const opp = L.mode === 'match' ? lehrling : { ...D.PLAYERS[59], name: 'Trainer', short: 'Trainer' };
+  startMatch({
+    me, opp, def: D.tournamentById(free.venue), mode: L.mode, balls: L.balls, title: 'Erste Schritte', difficulty: 'leicht', length: 'kurz',
+    hinweis: `Lektion ${i + 1}: ${L.ziel}`,
+    onEnd: (res) => {
+      if (res.aborted) return actions.erste();
+      if (!L.geschafft(res)) return actions.erste(`${L.name}: noch nicht ganz. Probier es gleich noch einmal – ${L.ziel}`);
+      ersteStand[L.id] = true;
+      if (ERSTE.every((x) => ersteStand[x.id])) ersteStand.fertig = true;
+      ersteSichern();
+      actions.erste(L.mode === 'match' ? (res.won ? '🏆 Gewonnen! Dein erstes Match ist geschafft.' : 'Dein erstes Match ist gespielt – beim nächsten Mal klappt es mit dem Sieg.') : `✓ ${L.name} geschafft!`);
+    },
+  });
 };
 
 function enterMenu() {
@@ -222,6 +401,7 @@ actions.settings = (v) => {
         <button data-a="kamera" data-v="settings">📷 ${settings.kamera === 'aus' ? 'Aus – einrichten …' : KAMERA_NAMES[settings.kamera] + (kameraLauf.bereit ? ' · eingemessen' : ' · noch einmessen!')}</button></div>
       ${optionRow('Laufhilfe', 'assist', ASSIST_NAMES)}
       ${optionRow('Schwierigkeit', 'difficulty', Object.fromEntries(Object.entries(D.DIFFICULTY).map(([k, d]) => [k, d.name])))}
+      <p class="dim" style="margin:6px 0 0;font-size:13px"><b>${D.DIFFICULTY[settings.difficulty].name}:</b> ${STUFE_TEXT[settings.difficulty]}</p>
       ${optionRow('Matchlänge', 'length', Object.fromEntries(Object.entries(D.LENGTHS).map(([k, d]) => [k, d.name])))}
       ${optionRow('Taktische Spielzüge', 'spielzuege', { aus: 'Aus', an: 'An' })}
       <p class="dim" style="margin:6px 0 0;font-size:13px">Mit „An“ zählen im Match die Spielzüge, die du im Training gelernt hast (${SZ.gelerntAnzahl(zugSpeicher)} von ${SZ.ZUG_IDS.length}).
@@ -374,6 +554,14 @@ const HELP = `
     <li><b>Aufschlag:</b> nach oben wischen (Richtung und Länge wie beim Schlag). Vorher unten die Art antippen: Gerade, Slice, Kick oder Von unten.</li>
     <li><b>Mit zwei Fingern nach oben wischen:</b> ans Netz laufen. <b>Mit zwei Fingern nach unten:</b> zurück an die Grundlinie. (Geht überall auf dem Bildschirm, auch schon vor dem Aufschlag.)</li>
     <li>Du kannst wischen, sobald der Gegner geschlagen hat. Der Schlag kommt, wenn der Ball bei dir ist.</li></ul></div>
+  <div class="panel help"><h3>Wischen (iPad / Handy)</h3><ul>
+    <li><b>Geschlagen wird nur mit einem Wisch</b> – irgendwo rechts auf dem Bildschirm. Der Schlag zählt in dem Moment, in dem du den Finger hebst.</li>
+    <li><b>Wann du wischst = wohin der Ball fliegt.</b> Früh = cross (quer über den Platz), spät = longline (die Linie entlang), genau richtig = Mitte. Die Ziellinie auf dem Platz wandert mit.</li>
+    <li><b>Wohin du wischst = welcher Schlag:</b> ↑ hoher Topspin · ↗ Topspin · → gerader, flacher Schlag · ↘ langer Slice · ↓ kurzer Slice (ganz langsam nach unten = Stoppball). Ob nach links oder rechts, ist egal.</li>
+    <li><b>Wie schnell du wischst = wie hart du schlägst.</b></li>
+    <li><b>Zwei Finger nach oben:</b> Lob. <b>Doppelt tippen:</b> ans Netz laufen – noch einmal doppelt tippen: zurück an die Grundlinie.</li>
+    <li><b>Laufen:</b> links auf dem Bildschirm den Finger auflegen und ziehen (Joystick). Ohne Finger läuft dein Spieler von allein zum Ball.</li>
+    <li><b>Aufschlag:</b> ↑ gerade · ↓ Slice · zwei Finger ↑ Kick · zwei Finger ↓ von unten. Wischst du dabei schräg, geht der Aufschlag in diese Richtung.</li></ul></div>
   <div class="panel help"><h3>Klassik (Maus)</h3><ul>
     <li><kbd>Mausrad</kbd> oder <kbd>←</kbd> <kbd>→</kbd>: zielen (Rad hoch = links).</li>
     <li><kbd>Linke Maustaste halten</kbd>: Kraft aufladen. Im roten Bereich geht der Ball ins Aus.</li>
@@ -437,7 +625,9 @@ actions.uhrAufnahme = () => show(`<div class="bar">${back('schlagbuch')}<h2>⌚ 
 const LERN_KEY = 'powershot.lernen.v1';
 let lernStand = (() => { try { return { ...LE.neuerStand(), ...JSON.parse(localStorage.getItem(LERN_KEY) || '{}') }; } catch (e) { return LE.neuerStand(); } })();
 const lernSichern = () => { try { localStorage.setItem(LERN_KEY, JSON.stringify(lernStand)); } catch (e) { /* voll oder gesperrt: dann eben ohne Merken */ } };
-const lernSterne = (n) => '★'.repeat(n) + '☆'.repeat(3 - n);
+// Leere Sterne sind grau, damit man auf einen Blick sieht, wie viele man schon hat
+const leereSterne = (n) => (n > 0 ? `<span class="sternleer">${'☆'.repeat(n)}</span>` : '');
+const lernSterne = (n) => '★'.repeat(n) + leereSterne(3 - n);
 const lernBalken = (anteil) => `<div class="lernbalken"><i style="width:${Math.round(anteil * 100)}%"></i></div>`;
 let lernRunde = null;               // die Übungsrunde, die gerade läuft: { thema, fragen, nr, richtig, wahl }
 
@@ -543,7 +733,17 @@ actions.wissenWeiter = () => {
       ${R.thema ? `<button data-a="wissenThema" data-v="${R.thema}">📖 Kapitel lesen</button>` : ''}<button data-a="wissen">Alle Kapitel</button></div>`);
   lernRunde = null;
 };
-actions.help = (v) => { if (v) helpBack = v; show(`<div class="bar">${back(helpBack)}<h2>Steuerung</h2></div>${HELP}`); };
+// Die Seite „Steuerung“: Der Kasten zu DEINER Steuerung steht ganz oben und ist gelb markiert, die anderen folgen darunter.
+const HELP_TITEL = { touch: 'Touch', wisch: 'Wischen', klassik: 'Klassik', profi: 'Profi', controller: 'Controller' };
+function helpHtml() {
+  const marke = '<div class="panel help"><h3>' + HELP_TITEL[settings.control];
+  const von = HELP.indexOf(marke);
+  if (von < 0) return HELP;
+  const bis = HELP.indexOf('</div>', von) + 6;
+  const meins = HELP.slice(von, bis).replace('<div class="panel help"><h3>', '<div class="panel help meins"><h3>⭐ Deine Steuerung: ');
+  return meins + HELP.slice(0, von) + HELP.slice(bis);
+}
+actions.help = (v) => { if (v) helpBack = v; show(`<div class="bar">${back(helpBack)}<h2>Steuerung</h2></div>${helpHtml()}`); };
 
 // ---------------------------------------------------------------
 // Freies Spiel
@@ -575,7 +775,7 @@ function keepScroll(fn) { const y = screen.scrollTop; fn(); screen.scrollTop = y
 actions.freeStart = () => {
   const me = getPlayer(free.me);
   const opp = free.opp === 'zufall' ? pick(pagePlayers(free.oppPage).filter((p) => p.id !== free.me)) : getPlayer(free.opp);
-  startMatch({ me, opp, def: D.tournamentById(free.venue), title: 'Freies Spiel', onEnd: () => actions.free() });
+  startMatch({ me, opp, def: D.tournamentById(free.venue), title: 'Freies Spiel', revanche: true, onEnd: () => actions.free() });
 };
 
 // ---------------------------------------------------------------
@@ -1038,7 +1238,7 @@ let miniBeste = {};
 try { miniBeste = JSON.parse(localStorage.getItem(MINI_KEY)) || {}; } catch (e) { miniBeste = {}; }
 let miniLetztes = null;                             // was nach dem letzten Spiel oben im Kasten steht
 const miniIch = () => (career ? CA.mePlayer(career) : D.PLAYERS[0]);
-const miniSterne = (note) => (note == null ? '<span class="dim">noch nicht gespielt</span>' : `<span class="gold">${'★'.repeat(note >= 0.75 ? 3 : note >= 0.4 ? 2 : 1)}${'☆'.repeat(note >= 0.75 ? 0 : note >= 0.4 ? 1 : 2)}</span> <span class="dim">beste Note ${Math.round(note * 100)} %</span>`);
+const miniSterne = (note) => (note == null ? '<span class="dim">noch nicht gespielt</span>' : `<span class="gold">${'★'.repeat(note >= 0.75 ? 3 : note >= 0.4 ? 2 : 1)}${leereSterne(note >= 0.75 ? 0 : note >= 0.4 ? 1 : 2)}</span> <span class="dim">beste Note ${Math.round(note * 100)} %</span>`);
 function miniFertig(id, note, davor = '') {
   const A = TA.AUFGABEN[id], neu = miniBeste[id] == null || note > miniBeste[id];
   if (neu) { miniBeste[id] = note; try { localStorage.setItem(MINI_KEY, JSON.stringify(miniBeste)); } catch (e) { /* dann eben ohne Merken */ } }
@@ -1375,6 +1575,8 @@ function renderCreate() {
   const sw = (key, list) => `<div class="swatches">${list.map((c) => `<button class="${draft[key] === c ? 'sel' : ''}" style="background:${hex(c)}" data-a="draft" data-v="${key}:${c}"></button>`).join('')}</div>`;
   show(`
     <div class="bar">${back()}<h2>Neue Karriere</h2></div>
+    <div class="panel neufigur"><canvas id="neufigur" width="320" height="400"></canvas>
+      <p class="dim">So sieht dein Spieler aus. Probier unten Farben und Figuren aus – das Bild ändert sich sofort.</p></div>
     <div class="panel">
       <label>Name deines Spielers</label><input id="cname" type="text" maxlength="22" placeholder="Vorname Nachname" value="${esc(draft.name)}">
       <label>Land</label><div class="row">${COUNTRIES.map((c) => `<button class="${draft.country === c ? 'sel' : ''}" data-a="draft" data-v="country:${c}">${flag(c)} ${c}</button>`).join('')}</div>
@@ -1391,6 +1593,9 @@ function renderCreate() {
     </div>
     <p class="dim">Du startest ganz unten: ungefähr Platz 2000 der Weltrangliste, ${money(CA.START_GELD)} und ${CA.START_PUNKTE} Fähigkeitspunkte. Zuerst spielst du kleine ITF-Turniere – und arbeitest dich hoch bis nach Wimbledon.</p>
     <button class="primary" data-a="createCareer">Karriere starten ›</button>`);
+  // Die Vorschau: deine Figur in 3D, sie dreht sich langsam
+  const bild = $('#neufigur');
+  if (bild) game.figurZeigen(bild, { skin: draft.skin, hair: draft.hair, shirt: draft.shirt, shorts: draft.shorts, head: draft.head, model: draft.model, pattern: draft.pattern, trim: draft.trim, shoes: 0xffffff, racket: 0x202020 }, draft.hand);
 }
 actions.draft = (v) => {
   const [k, raw] = v.split(':');
@@ -2254,7 +2459,7 @@ function startMatch(o) {
   if (settings.kamera !== 'aus' && !kameraLauf.bereit) { kameraDanach = () => startMatch(o); return actions.kamera(); }
   if (settings.kamera !== 'aus' && kameraBild.status === 'aus') kameraBild.start(kameraBild.kameraId);
   hide();
-  const len = D.LENGTHS[settings.length];
+  const len = D.LENGTHS[o.length || settings.length];        // „Erste Schritte“ geben Länge und Stufe selbst vor
   const mode = o.mode || 'match';
   menuVenue = o.def.id;
   game.loadVenue(o.def);
@@ -2271,7 +2476,7 @@ function startMatch(o) {
   const mitZuegen = !lernen && mode === 'match' && settings.spielzuege === 'an';
   session = { o, names, over: false, mode: lernen ? 'spielzug' : mode, zugScore: 0, zuege: [0, 0], mitZuegen };
   match = new Match({
-    players: [o.me, o.opp], human: 0, surface: o.def.surface, difficulty: settings.difficulty,
+    players: [o.me, o.opp], human: 0, surface: o.def.surface, difficulty: o.difficulty || settings.difficulty,
     sets: lernen ? 3 : len.sets, games: lernen ? 99 : len.games, mode, balls: o.balls, assist: settings.assist, controlMode: settings.control,
     finale: !!o.finale,      // im Endspiel heißt der Matchball "Championship Point"
     lernen, changeover: lernen ? false : undefined,
@@ -2291,6 +2496,7 @@ function startMatch(o) {
     controller: 'Schwingen oder A = Schlag · B Slice · X Lob · Y Stopp · früh = cross, spät = Linie entlang',
     profi: 'WASD laufen · Leertaste Topspin · U gerade · O hoher Topspin · K Slice · L Lob · I Stopp · Richtung beim Treffen halten',
   }[settings.control] + (settings.kamera !== 'aus' ? ' · 📷 laufen mit der Kamera' : '');
+  if (o.hinweis) $('#hint').textContent = '🎯 ' + o.hinweis + ' · ' + $('#hint').textContent;     // „Erste Schritte“: das Ziel der Lektion steht vorn
   // Auf dem Handy blendet sich der Hinweis nach ein paar Sekunden aus (siehe style.css). Dafür die Klasse neu setzen.
   $('#hint').classList.remove('kurz'); void $('#hint').offsetWidth; $('#hint').classList.add('kurz');
   hud.update();
@@ -2437,11 +2643,30 @@ function togglePause() {
       <button data-a="settings" data-v="pauseMenu">Einstellungen</button>
       <button data-a="help" data-v="pauseMenu">Steuerung</button>
       <button data-a="quit">${session.mode === 'match' ? 'Match aufgeben' : 'Training beenden'}</button></div></div>`);
+    quitArmed = false;
   } else hide();
 }
 actions.resume = () => { if (paused) togglePause(); };
+// Der Spickzettel („?“ oben rechts im Match): hält das Spiel an und zeigt nur DEINE Steuerung
+actions.spick = () => {
+  if (!match || !session || session.over) return;
+  if (!paused) togglePause();
+  if (!paused) return;
+  const alles = helpHtml(), bis = alles.indexOf('</div>') + 6;
+  show(`<div class="panel modal spick">${alles.startsWith('<div class="panel help meins">') ? alles.slice(0, bis) : alles}
+    <div class="row" style="margin-top:10px"><button class="primary grow" data-a="resume">Weiterspielen</button><button data-a="help" data-v="pauseMenu">Alle Steuerungen</button></div></div>`);
+};
 actions.pauseMenu = () => { paused = false; togglePause(); };
-actions.quit = () => {
+// „Match aufgeben“ muss man zweimal antippen – sonst verliert man aus Versehen ein ganzes Turnier.
+let quitArmed = false;
+actions.quit = (v, el) => {
+  if (session.mode === 'match' && !quitArmed && el) {
+    quitArmed = true;
+    el.textContent = 'Wirklich aufgeben? Das zählt als Niederlage. Nochmal tippen';
+    setTimeout(() => { quitArmed = false; if (el.isConnected) el.textContent = 'Match aufgeben'; }, 4000);
+    return;
+  }
+  quitArmed = false;
   const o = session.o;
   const training = match ? match.training : { score: 0 };
   session.over = true;
@@ -2460,6 +2685,7 @@ function endMatch() {
 
 function showResult(r) {
   const o = session.o;
+  const hilfen = match ? match.hilfsZahl || 0 : 0;      // Stufe „Leicht“: so oft hat das Spiel für dich geschlagen
   endMatch();
   if (r.training) {
     const tr = r.training;
@@ -2491,9 +2717,15 @@ function showResult(r) {
       ${line('Winner', (s) => s.winners)}${line('Fehler', (s) => s.errors)}
       ${line('1. Aufschlag im Feld', (s) => (s.firstTotal ? Math.round(100 * s.firstIn / s.firstTotal) + ' %' : '–'))}
       ${session.mitZuegen ? `<tr><td class="num">${session.zuege[0]}</td><td class="center dim">Spielzüge</td><td>${session.zuege[1]}</td></tr>` : ''}</table>
-    <div class="center" style="margin-top:14px"><button class="primary" data-a="resultNext">Weiter</button></div></div>`);
+    ${hilfen ? `<p class="center dim">🤝 ${hilfen}-mal hat das Spiel für dich geschlagen (Hilfs-Schlag der Stufe „Leicht“). Je öfter du selbst schlägst, desto mehr Punkte machst du.</p>` : ''}
+    <div class="center" style="margin-top:14px"><button class="primary" data-a="resultNext">Weiter</button>
+      ${o.revanche ? ` <button data-a="revanche">${won ? '🔁 Noch einmal gegen ' : '🔁 Revanche gegen '}${esc(n[1])}</button>` : ''}</div></div>`);
+  revancheO = o.revanche ? o : null;
 }
 let pendingEnd = null;
+// Freies Spiel: gleich noch einmal gegen denselben Gegner im selben Stadion
+let revancheO = null;
+actions.revanche = () => { const o = revancheO; revancheO = null; pendingEnd = null; if (!o) return actions.home(); enterMenu(); startMatch(o); };
 actions.resultNext = () => { const f = pendingEnd; pendingEnd = null; enterMenu(); if (f) f(); };
 
 // ---------------------------------------------------------------

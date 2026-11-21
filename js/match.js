@@ -31,6 +31,12 @@ const PAUSE_ERHOLT = 0.06;         // beim Seitenwechsel erholt man sich um dies
 const PRELL_TIME = 0.42;           // Ball prellen vor dem Aufschlag: so lange dauert einmal Boden und zurück (s)
 const NETZ_Z = 3.2;                // so weit vor dem Netz steht man beim Netzangriff (Meter)
 const GRUND_Z = C.L + 0.7;         // … und so weit hinten an der Grundlinie
+// Chance-Ball: Ein langsamer Ball in die Mitte ist für den Computer eine Einladung zum Angriff (wie stark, sagt aiAngriff in data.js).
+const CHANCE_SEITE = 2.6;          // so nah an der Mitte (Meter) muss der Ball beim Computer ankommen
+const CHANCE_TEMPO = 20;           // … und langsamer als so (m/s) muss er sein
+const CHANCE_GENAU = 0.45;         // so viel genauer schlägt der Computer einen bequemen Ball
+const HILFS_SPAET = 0.45;          // nach einem Hilfs-Schlag (Stufe "Leicht") läufst du so viel später los (Sekunden)
+const HILFS_SCHLAG = { type: 'drive', aimMode: 'abs', aim: 0, depth: 0.5, power: 0.25 };   // Stufe "Leicht": dieser Ball kommt, wenn du gar nicht schlägst
 export const UNTEN_TIME = 0.75;    // Aufschlag von unten: so lange dauert es vom Loslassen des Balls bis zum Treffen
 
 // Profi-Schläge aus der Karriere (siehe TECHNIKEN in ausbau.js): Die Zahlen der Schlagart werden malgenommen.
@@ -259,7 +265,7 @@ export class Match {
     this.serveBox = { x0: Math.min(0, bs * C.W), x1: Math.max(0, bs * C.W), sign: bs, zs: -srv.dz };
     for (const p of this.P) {
       p.vx = p.vz = 0; p.plan = null; p.missed = false; p.prep = 0; p.mood = null;
-      p.netRush = false; p.homeX = 0; p.homeZ = GRUND_Z;
+      p.netRush = false; p.hilfe = false; p.homeX = 0; p.homeZ = GRUND_Z;
       p.druck = 0; p.sicher = 0; p.zugPlan = null;
     }
     this.zugPunktStart(srv, rec);
@@ -459,6 +465,7 @@ export class Match {
     // (dz dreht die Zahlen für den Spieler auf der anderen Platzseite nicht um: "rechts" heißt immer rechts in Flugrichtung.)
     spin = { top: S.top || 0, seite: (S.seite || 0) * p.hand, drall: (S.drall || 0) * p.hand };
     sigma *= sigK; pNet *= netK;
+    if (intent.ruhig) { sigma *= 1 - intent.ruhig; pNet *= 1 - intent.ruhig; }     // Chance-Ball: bequem zu schlagen, also genauer
     if (this.lernZug && !p.isHuman) { sigma *= 0.4; pNet = 0; }      // der Trainer macht fast keine Fehler
     // Spielzüge: Wer vom Spielzug des Gegners unter Druck gesetzt wurde, schlägt ungenauer und schwächer.
     // Wer selbst gerade einen Spielzug geschafft hat, trifft für den Rest des Punkts genauer.
@@ -504,7 +511,7 @@ export class Match {
     opp.plan = null; opp.planAge = 9; opp.missed = false; opp.lastDist = 99;
     opp.spaetSeit = null;        // Controller: ab wann der beste Moment zum Schlagen vorbei ist
     // Taktik des Schlägers: Ein kluger Spieler verrät spät, wohin er spielt – der Gegner reagiert später.
-    opp.react = opp.isHuman ? 0.04 : this.diff.aiReact * (1.15 - 0.3 * opp.t) * (isServe ? 0.65 : 1 + TAKTIK_TARNT * (p.tak - 0.5));
+    opp.react = opp.isHuman ? (opp.hilfe ? HILFS_SPAET : this.diff.meReact ?? 0.04) : this.diff.aiReact * (1.15 - 0.3 * opp.t) * (isServe ? 0.65 : 1 + TAKTIK_TARNT * (p.tak - 0.5));
     this.zugSchlag(p, opp, from, shot, isServe);
     p.plan = null; p.prep = 0;
     p.homeX = f ? clamp(f.x * 0.2, -1.2, 1.2) : 0;
@@ -899,7 +906,12 @@ export class Match {
         if (raw.vonOben) raw = { ...raw, type: 'drive' };
         else { raw = { ...raw, type: 'lob' }; this.fx.message('Für den Smash von oben schwingen!', 'warn'); }
       }
-      if (!raw && this.diff.autoReturn) raw = { type: 'drive', aimMode: 'abs', aim: 0, depth: 0.7, power: 0.5 };
+      // Stufe "Leicht": Wer gar nicht schlägt, bekommt den Ball trotzdem zurück – aber nur als schwachen, kurzen Ball.
+      p.hilfe = false;
+      if (!raw && this.diff.autoReturn) {
+        raw = { ...HILFS_SCHLAG }; p.hilfe = true; this.hilfsZahl = (this.hilfsZahl || 0) + 1;
+        if (!this.hilfeGesagt) { this.hilfeGesagt = true; this.fx.message('Hilfs-Schlag! Schlag selbst, sonst greift der Gegner an.', 'warn'); }
+      }
       if (!raw) {
         p.missed = true;
         this.fx.message('Zu spät!', 'warn');
@@ -933,7 +945,7 @@ export class Match {
     const margin = 0.3 + (1 - p.c) * 1.0 + o.stretch * 0.5;
     const away = opp.x >= 0 ? -1 : 1;                 // weg vom Gegner
     const wide = Math.max(0.5, C.W - margin);
-    let type = 'drive', x, d, power = 0.6 + 0.4 * Math.random();
+    let type = 'drive', x, d, power = 0.6 + 0.4 * Math.random(), ruhig = 0;
 
     if (o.stretch > 0.75) {
       type = r < 0.5 ? 'slice' : 'lob';
@@ -952,9 +964,20 @@ export class Match {
       const r3 = Math.random();
       if (inside && o.stretch < 0.3 && r3 < 0.15 + 0.3 * p.p) type = 'flach';
       else if (!inside && r3 < (Math.abs(p.z) > C.L + 1.5 ? 0.3 : 0.08)) type = 'topspin';
+      // Chance-Ball: Kommt der Ball langsam und bequem in die Mitte, greift der Computer an –
+      // hart und genau in die freie Ecke. Wer nur zurückschiebt, wird dafür bestraft; wer zielt, nicht.
+      const bequem = opp.hilfe ? 1 : (this.diff.aiAngriff || 0) * clamp(1 - o.stretch / 0.3, 0, 1)
+        * clamp((CHANCE_SEITE - Math.abs(o.from.x)) / 1.4, 0, 1) * clamp((CHANCE_TEMPO - o.incoming) / 5, 0, 1);
+      if (bequem > 0 && Math.random() < bequem) {
+        x = away * wide * (0.82 + 0.18 * Math.random());
+        d = C.L * (0.72 + 0.14 * Math.random());
+        power = Math.min(1, power + 0.3);
+        type = Math.random() < 0.6 ? 'flach' : 'drive';
+        ruhig = CHANCE_GENAU;
+      }
     }
     if (inside && !p.netRush && p.v > 0.5 && Math.random() < 0.3 * p.v && GRUNDSCHLAEGE.includes(type)) p.netRush = true;
-    return { type, x, d, power: clamp(power, 0.2, 1) };
+    return { type, x, d, power: clamp(power, 0.2, 1), ruhig };
   }
 
   // ---------------------------------------------------------------
@@ -1013,6 +1036,8 @@ export class Match {
       for (const z of tr.zones) if (e.x >= z.x0 && e.x <= z.x1 && e.z >= z.z0 && e.z <= z.z1) pts = Math.max(pts, z.pts);
     }
     tr.score += pts;
+    if (ok) tr.drin = (tr.drin || 0) + 1;            // so viele Bälle waren im Feld
+    if (pts > 2) tr.treffer = (tr.treffer || 0) + 1;   // … und so viele in einem Zielfeld
     tr.done++;
     this.fx.trainingUpdate(tr, pts, ok);
     this.state = 'feedWait';
