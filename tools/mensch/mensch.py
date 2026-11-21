@@ -385,15 +385,21 @@ for o in [h] + teile:
         px = np.array(b.pixels[:], dtype=np.float32).reshape(by, bx, 4)
         deckt = px[..., 3:4] if o.get('teil') in ('Hair', 'Eyebrows', 'Eyelashes') else np.ones((by, bx, 1), np.float32)
         # (Blender rechnet hier mit Farben "wie auf dem Bildschirm", so wie sie in der Datei stehen)
-        if o['feld'] == 'haut':
+        if o['feld'] == 'haut' and 'haut' in wahl.get('bunt', []): pass      # "bunt": ["haut", "hemd"] = diese Teile behalten ihre eigenen Farben
+        elif o['feld'] == 'haut':
             mittel = px[..., :3].reshape(-1, 3).mean(0); px[..., :3] = np.clip(px[..., :3] * (HAUT_SOLL / mittel), 0, 1); print('Haut im Mittel', mittel)
-        elif not o.get('bunt'):
+        elif not o.get('bunt') and o['feld'] not in wahl.get('bunt', []):
             grau = px[..., :3] @ np.array([0.299, 0.587, 0.114], np.float32)
             m = (grau * deckt[..., 0]).sum() / max(deckt.sum(), 1); grau = np.clip(grau * (GRAU_SOLL / max(m, 0.02)), 0, 1)
             px[..., :3] = grau[..., None]
+        # "farben": {"haare": "#5a4028"} malt ein graues Teil gleich hier fest an (für Statisten, die das Spiel nicht umfärbt)
+        if o['feld'] in wahl.get('farben', {}):
+            f = wahl['farben'][o['feld']].lstrip('#'); px[..., :3] = np.clip(px[..., :3] / GRAU_SOLL * np.array([int(f[i:i + 2], 16) / 255 for i in (0, 2, 4)], np.float32), 0, 1)
         px[..., 3:4] = deckt
     else:
         px = np.ones((by, bx, 4), np.float32); px[..., :3] = HAUT_SOLL if o['feld'] == 'haut' else GRAU_SOLL
+        if o['feld'] in wahl.get('farben', {}):
+            f = wahl['farben'][o['feld']].lstrip('#'); px[..., :3] = [int(f[i:i + 2], 16) / 255 for i in (0, 2, 4)]
     atlas[y0:y0 + by, x0:x0 + bx] = px
     uv = o.data.uv_layers.active
     if uv is None: uv = o.data.uv_layers.new(name='UVMap')

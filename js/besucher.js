@@ -5,8 +5,15 @@
 // (Bauch, Kopf, Oberarm, Unterschenkel …). Alle Bäuche zusammen sind EINE Form, die ganz oft gezeichnet wird
 // (InstancedMesh), alle Köpfe auch und so weiter. Für die Bewegung gibt es EIN unsichtbares Gelenk-Gerüst.
 // Es wird für jeden Besucher kurz in seine Haltung gebogen, dann merkt sich jedes Teil, wo es hingehört.
+//
+// Seit 21.11.2026 sehen die Besucher wie echte Menschen aus: sieben Menschen aus MakeHuman (CC0, assets/besucher/b1.glb … b7.glb,
+// siehe assets/QUELLEN_MENSCHEN.md). Auch sie haben im Spiel keine Knochen – jeder ist vorher in 13 Haltungen „gebacken“ worden
+// (acht Bilder eines Doppelschritts, Stehen, Handy, Foto, Hände in den Hüften, Reden; tools/mensch/menge.mjs).
+// Das Spiel zeigt für jeden Besucher immer die Form, die gerade passt. Bis die Dateien geladen sind, bei Qualität „niedrig“
+// und mit ?altebesucher in der Adresse laufen die einfachen Figuren aus 15 Teilen herum.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { frei, naechsteFreie, weg } from './wege.js';
 
 // ---- Zahlen zum Einstellen ----
@@ -25,6 +32,24 @@ const HEMD = [0xf4f2ec, 0xf4f2ec, 0x24365a, 0x9cc0e4, 0xd8483c, 0x2e7a52, 0xf0d8
 const HOSE = [0xd8cdb4, 0x2a3450, 0x4a6a94, 0xf0eee8, 0x6a6e74, 0x3a3a3e, 0x8a7a5a, 0x5a6a4a];
 const SCHUH = [0xf2f2f2, 0xf2f2f2, 0x2a2a2e, 0x6a4a30, 0x3a4a7a, 0xc84a3a];
 const HUT = [0xf4f0e6, 0x24365a, 0xd8483c, 0xe8d8a8, 0x2e2e32, 0xd8c8a0];
+
+// ---- Die Menschen aus MakeHuman ----
+const MAENNER = ['b1', 'b2', 'b3'], FRAUEN = ['b4', 'b5', 'b6'], KIND = 'b7';
+const OHNE_FARBE = ['b4'];     // diese tragen fertig bunte Kleidung; bei allen anderen ist das Hemd weiß und bekommt bei jedem Besucher eine andere Farbe
+const SCHRITT_BILDER = 8;      // die ersten acht Formen jeder Datei sind ein Doppelschritt, danach kommen:
+const STEH = 8, HANDY = 9, FOTO = 10, HUEFTEN = 11, REDEN = 12;
+const MENSCH_GROSS = 1.75 / 1.78;      // die Menschen sind 1,78 m groß gebaut, die Größe 1 der Besucher bedeutet 1,75 m
+const ALTE_BESUCHER = typeof location !== 'undefined' && /[?&]altebesucher/.test(location.search);
+let menschen = null;
+// Lädt die sieben Dateien (nur einmal). Ergebnis: { b1: { bilder: [13 Formen], map }, … } oder null, wenn etwas fehlt.
+function ladeMenschen() {
+  if (!menschen) menschen = Promise.all([...MAENNER, ...FRAUEN, KIND].map((name) => new GLTFLoader().loadAsync(`assets/besucher/${name}.glb`).then((gltf) => {
+    const bilder = []; let map = null;
+    gltf.scene.traverse((o) => { if (o.isMesh) { bilder.push(o.geometry); map = o.material.map; } });
+    return [name, { bilder, map }];
+  }))).then((alle) => Object.fromEntries(alle)).catch((e) => { console.warn('Besucher-Menschen konnten nicht geladen werden:', e); return null; });
+  return menschen;
+}
 
 const zwischen = (a, b, t) => a + (b - a) * t;
 const klemm = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -82,7 +107,8 @@ function geruest() {
 export class Besucher {
   // plan = Lageplan · gitter = wo man laufen kann · n = wie viele · schatten = werfen sie Schatten?
   constructor(plan, gitter, n, schatten = true) {
-    this.plan = plan; this.gitter = gitter; this.n = n;
+    this.plan = plan; this.gitter = gitter; this.n = n; this.schatten = schatten;
+    this.echt = null;        // die Menschen aus MakeHuman, sobald sie geladen sind (siehe menschenBauen)
     this.gruppe = new THREE.Group();
     this.g = geruest();
     this.zeit = 0;
@@ -131,7 +157,8 @@ export class Besucher {
         eigen: zf() * 100,                                                                // damit nicht alle im gleichen Takt wackeln
         da: true,
       };
-      const haut = aus(HAUT), hemd = aus(HEMD), hose = aus(HOSE), kleid = frau && !kind && zf() < 0.28, kurz = kleid || zf() < 0.55, aermel = zf() < 0.2;
+      p.wer = kind ? KIND : aus(frau ? FRAUEN : MAENNER);
+      const haut = aus(HAUT), hemd = p.hemd = aus(HEMD), hose = aus(HOSE), kleid = frau && !kind && zf() < 0.28, kurz = kleid || zf() < 0.55, aermel = zf() < 0.2;
       farbe('rumpf', i, hemd); farbe('becken', i, kleid ? hemd : hose); farbe('kopf', i, haut);
       farbe('rock', i, hemd); p.rock = kleid;
       for (const s of [0, 1]) {
@@ -165,6 +192,53 @@ export class Besucher {
     }
     for (const m of Object.values(this.teil)) if (m.instanceColor) m.instanceColor.needsUpdate = true;
     this.bewege(0);
+    // Die echten Menschen nachladen (nicht bei Qualität „niedrig“ – dort ist schatten aus – und nicht mit ?altebesucher)
+    if (schatten && !ALTE_BESUCHER) ladeMenschen().then((M) => { if (M && this.gruppe.parent) this.menschenBauen(M); });
+  }
+
+  // Die Menschen sind da: Für jeden Menschen und jede seiner 13 Haltungen gibt es eine Form, die ganz oft gezeichnet werden kann.
+  // Die 15 einfachen Teile werden unsichtbar.
+  menschenBauen(M) {
+    const zahl = {};
+    for (const p of this.leute) zahl[p.wer] = (zahl[p.wer] || 0) + 1;
+    this.echt = {}; this.echtMat = [];
+    const weiss = new THREE.Color(1, 1, 1);
+    for (const [name, n] of Object.entries(zahl)) {
+      const mat = new THREE.MeshLambertMaterial({ map: M[name].map, alphaTest: 0.45, side: THREE.DoubleSide });
+      // Die Farbe des Besuchers kommt nur aufs Hemd. Das Hemd erkennt man an seiner Stelle im Bild (wie bei den Spielern in figur.js).
+      mat.onBeforeCompile = (sh) => {
+        sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', `
+          #ifdef USE_COLOR
+          { vec2 f = vec2(vMapUv.x, 1.0 - vMapUv.y); if (f.x >= 0.5 && f.x <= 0.75 && f.y >= 0.5) diffuseColor.rgb *= vColor; }
+          #endif`);
+      };
+      this.echtMat.push(mat);
+      this.echt[name] = M[name].bilder.map((geo) => {
+        const m = new THREE.InstancedMesh(geo, mat, n);
+        m.setColorAt(0, weiss); m.count = 0; m.frustumCulled = false; m.castShadow = this.schatten;
+        this.gruppe.add(m);
+        return m;
+      });
+    }
+    for (const m of Object.values(this.teil)) m.visible = false;
+    this.hilf = new THREE.Object3D(); this.farbe = new THREE.Color();
+    this.bewege(0);
+  }
+
+  // Einen Besucher als Menschen zeigen: die passende Haltung aussuchen und an seine Stelle setzen
+  zeige(p, t) {
+    let bild = STEH;
+    if (p.gang > 0.5) bild = Math.floor((((p.takt / 6.283) % 1) + 1) % 1 * SCHRITT_BILDER) % SCHRITT_BILDER;
+    else if (p.plaudert) bild = p.geste % 2 ? REDEN : STEH;
+    else if (p.geste === 1) bild = HUEFTEN;
+    else if (p.geste === 2) bild = HANDY;
+    else if (p.geste === 3) bild = Math.sin((t + p.eigen) * 0.35) > 0.2 ? FOTO : STEH;
+    const m = this.echt[p.wer][bild], h = this.hilf, k = p.gross * MENSCH_GROSS;
+    const b = 0.93 + 0.14 * (p.eigen % 1);      // ein bisschen schmaler oder breiter
+    h.position.set(p.x, 0, p.z); h.rotation.y = p.dreh; h.scale.set(k * b, k, k * b); h.updateMatrix();
+    m.setMatrixAt(m.count, h.matrix);
+    m.setColorAt(m.count, OHNE_FARBE.includes(p.wer) ? this.farbe.setRGB(1, 1, 1) : this.farbe.setHex(p.hemd));
+    m.count++;
   }
 
   // Ein neues Ziel für einen Besucher: meistens eine Tür in der Nähe, manchmal eine ganz woanders
@@ -185,6 +259,7 @@ export class Besucher {
     this.zeit += dt;
     const g = this.g, T = this.teil, t = this.zeit;
     let gesucht = false;
+    if (this.echt) for (const bilder of Object.values(this.echt)) for (const m of bilder) m.count = 0;
     for (const p of this.leute) {
       if (!p.da) continue;
       // ---- Wohin? ----
@@ -216,6 +291,7 @@ export class Besucher {
       p.dreh += dw * Math.min(1, dt * (geht ? DREH_TEMPO : 2.5));
       p.gang += ((geht ? 1 : 0) - p.gang) * Math.min(1, dt * 6);                // 0 = steht, 1 = geht (weicher Übergang)
       p.takt += dt * p.tempo / (SCHRITT * p.gross) * 6.283;
+      if (this.echt) { this.zeige(p, t); continue; }      // als Mensch aus MakeHuman – das Gerüst für die einfachen Teile braucht es dann nicht
 
       // ---- Haltung: erst das Gehen, dann das Stehen, gemischt nach p.gang ----
       const G = p.gang, S = 1 - G, s = Math.sin(p.takt), c = Math.cos(p.takt), e = t + p.eigen;
@@ -268,6 +344,7 @@ export class Besucher {
         T.osch.setMatrixAt(j, b.bein.matrixWorld); T.usch.setMatrixAt(j, b.knie.matrixWorld); T.fuss.setMatrixAt(j, b.fuss.matrixWorld);
       }
     }
+    if (this.echt) { for (const bilder of Object.values(this.echt)) for (const m of bilder) { m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; } return; }
     for (const m of Object.values(T)) m.instanceMatrix.needsUpdate = true;
   }
 
@@ -275,6 +352,7 @@ export class Besucher {
   weg() {
     for (const m of Object.values(this.teil)) m.geometry.dispose();
     this.teil.rumpf.material.dispose(); this.teil.rock.material.dispose();
+    for (const m of this.echtMat || []) m.dispose();      // (die Formen und Bilder der Menschen bleiben geladen – sie werden beim nächsten Gelände wieder gebraucht)
     this.gruppe.removeFromParent();
   }
 }

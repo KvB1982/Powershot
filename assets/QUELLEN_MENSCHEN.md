@@ -1,4 +1,4 @@
-# Woher die Menschen kommen (assets/mensch_*.glb)
+# Woher die Menschen kommen (assets/mensch_*.glb, ballkind.glb, linienrichter.glb, besucher/*.glb)
 
 Alle Figuren sind mit **MakeHuman / MPFB2** gebaut (https://static.makehumancommunity.org/), so wie Dr. Thomsen im
 Schwester-Spiel Police Quest. Körper, Haut, Haare und Kleidung stammen aus den Paketen der MakeHuman-Community.
@@ -10,6 +10,8 @@ Die Gesichter sind aus Reglern (Alter, Gewicht, Muskeln, Herkunft) entstanden, n
 | `makehuman_system_assets_cc0` | Körper, Augen, Augenbrauen, Haut (`young_caucasian_male`, `young_caucasian_male2`, `young_african_male`, `young_asian_male`), Haare (`short01`, `short02`, `short04`, `afro01`, `ponytail01`), Schuhe (`shoes05`) |
 | `shirts01_cc0` | Polohemd (`namuhekam_male_polo_shirt`), T-Shirt (`elvs_crude_t-shirt_male`) |
 | `pants01_cc0` | Hose (`cortu_cargo_pants`, im Bau-Skript zur kurzen Hose abgeschnitten) |
+| `makehuman_system_assets_cc0` (Besucher) | Haut `middleage_…`, `old_…`, `young_…_female`, Haare `long01`, `bob01`, `braid01`, Kleidung `female_casualsuit01`, Hut `fedora01`, Schuhe `shoes02`, `shoes04` |
+| `shirts01_cc0`, `pants01_cc0` (Besucher) | `toigo_camisole_top`, `toigo_keyhole_tank_top`, `toigo_wool_pants` |
 | `hats01_cc0` | Kappe (`toigo_maga_hat` – nur die Form; die Aufschrift ist entfernt, die Kappe ist einfarbig) |
 
 Stirnband und Schweißbänder baut `tools/mensch/mensch.py` selbst.

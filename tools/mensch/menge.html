@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Powershot – Besucher backen</title>
+  <base href="../../">
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
+  <style>body { margin: 0; background: #20304f; color: #fff; font: 15px sans-serif; } canvas { display: block; } p { position: fixed; left: 12px; top: 4px; }</style>
+</head>
+<body>
+  <p id="text">lädt …</p>
+  <canvas id="bild" width="1300" height="520"></canvas>
+  <!--
+    Die Besucher auf dem Turniergelände sind viele (bis 130). Damit das iPad das schafft, hat keiner von ihnen Knochen:
+    Diese Seite stellt einen (schon klein gerechneten) Menschen aus MakeHuman in 13 Haltungen und merkt sich jede als feste Form –
+    acht Bilder eines Doppelschritts (aus der Geh-Aufnahme assets/gang.json), dazu Stehen, Handy, Foto, Hände in den Hüften, Reden.
+    Das Spiel zeigt dann immer die Form, die gerade passt (js/besucher.js). tools/mensch/menge.mjs holt das Ergebnis hier ab.
+    Ansehen:  http://localhost:8765/tools/mensch/menge.html?wer=b1
+  -->
+  <script type="module">
+    import * as THREE from 'three';
+    import { ladeMenschAls, loadFigure } from './js/figur.js';
+    import { loadGang } from './js/mocap.js';
+    import { Avatar } from './js/avatar.js';
+    import { gelenke } from './js/minibuehne.js';
+
+    const SCHRITT_BILDER = 8, GEH_TEMPO = 1.04, GEH_WEG = 1.353;      // Tempo und Weg eines Doppelschritts der Geh-Aufnahme (stehen in assets/gang.json)
+    // Die Haltungen im Stehen, in [vor, seite, hoch] (seite: + = rechts), erklärt bei gelenke() in js/minibuehne.js
+    const HALTUNGEN = [
+      ['steh', { fR: [0.02, 0.11, 0.09], fL: [-0.02, -0.11, 0.09] }],
+      ['handy', { hR: [0.27, 0.1, 1.22], eR: [-0.2, 0.6, -1], blick: [1, 0.05, -0.55] }],
+      ['foto', { hR: [0.33, 0.09, 1.52], hL: [0.33, -0.09, 1.52], eR: [0, 1, -0.6], eL: [0, -1, -0.6] }],
+      ['hueften', { hR: [0.0, 0.21, 0.99], hL: [0.0, -0.21, 0.99], eR: [-0.4, 1, 0], eL: [-0.4, -1, 0], fR: [0, 0.14, 0.09], fL: [0, -0.14, 0.09] }],
+      ['reden', { hR: [0.3, 0.2, 1.12], eR: [-0.2, 1, -0.6], blick: [1, 0.1, 0] }],
+    ];
+    const wunsch = new URLSearchParams(location.search), wer = wunsch.get('wer') || 'b1';
+    const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('bild'), antialias: true });
+    const szene = new THREE.Scene(); szene.background = new THREE.Color(0x20304f);
+    szene.add(new THREE.HemisphereLight(0xffffff, 0x556070, 1.8));
+    const licht = new THREE.DirectionalLight(0xfff4d8, 2.2); licht.position.set(2, 5, 3); szene.add(licht);
+    const kamera = new THREE.PerspectiveCamera(30, 1300 / 520, 0.05, 80);
+
+    await Promise.all([loadFigure(), loadGang()]);
+    await ladeMenschAls('statist', `tools/mensch/statisten/klein/${wer}.glb`);
+    const av = new Avatar({ model: 'statist', skin: 0xad8068 }, 0, 1, true);
+    let figur = null; av.group.traverse((o) => { if (o.isSkinnedMesh) figur = o; else if (o.isMesh) o.visible = false; });
+    const g = figur.geometry, P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv, I = g.attributes.skinIndex, W = g.attributes.skinWeight, n = P.count;
+
+    // Die Figur, wie sie gerade steht, als feste Form: jeden Punkt mit seinen (bis zu vier) Knochen an seine Stelle rechnen
+    function backen() {
+      av.group.updateMatrixWorld(true); figur.skeleton.update();
+      const BM = figur.skeleton.boneMatrices, pos = new Float32Array(n * 3), nor = new Int8Array(n * 4);
+      const M = new THREE.Matrix4(), M1 = new THREE.Matrix4(), v = new THREE.Vector3(), w = new THREE.Vector3();
+      for (let i = 0; i < n; i++) {
+        M.elements.fill(0);
+        for (let k = 0; k < 4; k++) {
+          const gw = W.getComponent(i, k); if (!gw) continue;
+          M1.fromArray(BM, I.getComponent(i, k) * 16);
+          for (let e = 0; e < 16; e++) M.elements[e] += M1.elements[e] * gw;
+        }
+        v.fromBufferAttribute(P, i).applyMatrix4(M); w.fromBufferAttribute(N, i).transformDirection(M);
+        pos.set([v.x, v.y, v.z], i * 3); nor.set([Math.round(w.x * 127), Math.round(w.y * 127), Math.round(w.z * 127), 0], i * 4);
+      }
+      return { pos, nor };
+    }
+    const bilder = [];
+    // ---- Gehen: erst ein paar Schritte einlaufen, dann genau einen Doppelschritt in acht Bildern festhalten
+    const st = { x: 0, z: 0, vx: 0, vz: GEH_TEMPO, walk: true }, dt = GEH_WEG / GEH_TEMPO / SCHRITT_BILDER / 12;
+    for (let i = 0; i < SCHRITT_BILDER * 12 * 3; i++) av.update(dt, st);
+    for (let b = 0; b < SCHRITT_BILDER; b++) { bilder.push(['geh' + b, backen()]); for (let i = 0; i < 12; i++) av.update(dt, st); }
+    // ---- Stehen und die kleinen Gesten
+    for (const [name, pose] of HALTUNGEN) { av.stelle(gelenke({ hip: [0, 0, 0.93], ...pose }), { faust: 0.3 }); bilder.push([name, backen()]); }
+
+    // ---- Das Bild: Die Farben sind schon fertig (tools/mensch/mensch.py, "bunt" und "farben"); nur die Schuhe sind noch grau und werden weiß
+    const BW = 512, BH = 256, cv = document.createElement('canvas'); cv.width = BW; cv.height = BH;
+    const cx = cv.getContext('2d'); cx.drawImage(figur.material.map.image, 0, 0, BW, BH);
+    const dat = cx.getImageData(0, 0, BW, BH), d = dat.data;
+    for (let y = 0; y < BH; y++) for (let x = 0; x < BW; x++) {
+      const fx = (x + 0.5) / BW, fy = 1 - (y + 0.5) / BH, o = (y * BW + x) * 4;
+      if (fx >= 0.75 && fx < 0.875 && fy >= 0.25 && fy < 0.5) for (let k = 0; k < 3; k++) d[o + k] = Math.min(255, d[o + k] / 0.68);
+    }
+    cx.putImageData(dat, 0, 0);
+
+    // ---- Zeigen (alle Haltungen nebeneinander) und für menge.mjs bereitlegen
+    const uv = new Float32Array(n * 2); for (let i = 0; i < n; i++) uv.set([U.getX(i), U.getY(i)], i * 2);
+    const tex = new THREE.CanvasTexture(cv); tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.85 });
+    bilder.forEach(([, b], i) => {
+      const f = new THREE.BufferGeometry(); f.setAttribute('position', new THREE.BufferAttribute(b.pos, 3));
+      f.setAttribute('normal', new THREE.BufferAttribute(b.nor, 4, true)); f.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); f.setIndex(g.index.clone());
+      const m = new THREE.Mesh(f, mat); m.position.x = (i - (bilder.length - 1) / 2) * 0.95; szene.add(m);
+    });
+    kamera.position.set(3, 2.2, 13); kamera.lookAt(0, 0.85, 0); renderer.render(szene, kamera);
+    document.getElementById('text').textContent = `${wer}: ${n} Punkte, ${g.index.count / 3} Dreiecke, ${bilder.length} Haltungen`;
+    const b64 = (a) => { const u = new Uint8Array(a.buffer, a.byteOffset, a.byteLength); let s = ''; for (let i = 0; i < u.length; i += 32768) s += String.fromCharCode(...u.subarray(i, i + 32768)); return btoa(s); };
+    window.__menge = { daten: () => ({ uv: b64(uv), idx: b64(new Uint16Array(g.index.array)), bild: cv.toDataURL('image/webp', 0.85), bilder: bilder.map(([name, b]) => ({ name, pos: b64(b.pos), nor: b64(b.nor) })) }) };
+  </script>
+</body>
+</html>
