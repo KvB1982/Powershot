@@ -629,3 +629,9 @@ table.erklaer td:first-child { white-space: nowrap; }
   #einlaufKarte p { margin-top: 4px; padding-top: 4px; }
   #einlaufTitel { padding: 5px 16px 6px; bottom: calc(7vh + 8px); }
 }
+
+/* iPhone im Querformat: Der Hinweis „Tippen = weiter“ steht rechts über dem Überspringen-Knopf,
+   damit er nicht in die Titelkarte unten links hineinragt. */
+@media (max-height: 500px) {
+  #einlaufTipp { left: auto; right: max(14px, env(safe-area-inset-right)); bottom: calc(7vh + 12px + 46px); text-align: right; }
+}
