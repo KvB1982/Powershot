@@ -495,6 +495,11 @@ table.planer td.frv .frische { display: block; margin: 3px 0; }
 #mini .kopf button { padding: 6px 10px; font-size: 14px; min-height: 0; }
 #mini canvas { display: block; width: 100%; aspect-ratio: 5 / 3; background: #1a2340; border-radius: 12px; touch-action: none; cursor: pointer; }
 #mini.ohneBild canvas, #mini.vor canvas { display: none; }
+#mini.drei { background: #060a16; }
+#mini.streifen canvas { aspect-ratio: 3 / 1; object-fit: cover; cursor: default; }
+#mini.streifen .kasten { width: min(760px, 100%); }
+#mini.streifen .knoepfe { flex-direction: column; }
+#mini.streifen .knoepfe button { flex: none; text-align: left; }
 #mini.fertig canvas { display: none; }
 #mini.vor .kasten, #mini.fertig .kasten, #mini.ohneBild .kasten { width: min(720px, 100%); }
 #mini .text { margin-top: 6px; font-size: 16px; line-height: 1.4; }
@@ -515,3 +520,27 @@ table.planer td.frv .frische { display: block; margin: 3px 0; }
 #mini .zeit i { display: block; height: 100%; width: 100%; background: var(--accent); }
 /* Vor dem Start und am Ende ist das Bild ausgeblendet, damit Erklärung und Knopf ohne Rollen zu sehen sind */
 @media (max-height: 700px) { #mini .text { font-size: 14px; } #mini .kasten { width: min(940px, 100%, calc((100vh - 190px) * 1.667)); } }
+
+/* ---------- Tennis-Wissen (Lernmodus) ---------- */
+.grid.lern { grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); margin-bottom: 14px; }
+.lernkarte { background: var(--panel); display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; text-align: left; padding: 14px 16px; align-items: center; }
+.lernkarte b { font-size: 18px; }
+.lernkarte small, .lernkarte .lernbalken { grid-column: 1 / -1; font-weight: 500; line-height: 1.35; white-space: normal; }
+.lernbalken { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.lernbalken i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.3s; }
+.lernreiter { margin-bottom: 12px; }
+.lernreiter button { font-size: 14px; padding: 8px 12px; }
+.lernseite { font-size: 17px; line-height: 1.55; }
+.lernseite p { margin: 0 0 10px; }
+.lernseite dl { margin: 0; }
+.lernseite dt { font-weight: 700; color: var(--accent); margin-top: 12px; }
+.lernseite dd { margin: 2px 0 0; }
+.lernbild { display: block; width: min(100%, 620px); margin: 4px auto 14px; border-radius: 10px; background: #18233f; font-family: inherit; }
+.merke { margin-top: 12px; padding: 10px 14px; border-radius: 12px; background: rgba(55, 195, 255, 0.13); border: 1px solid rgba(55, 195, 255, 0.4); }
+.merke ul { margin: 4px 0 0; padding-left: 20px; }
+.lernfrage h3 { font-size: 21px; color: #fff; }
+.antworten { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.antworten button { font-size: 17px; padding: 14px 16px; text-align: left; white-space: normal; }
+.antworten button:disabled { opacity: 0.75; cursor: default; }
+.antworten button.gut { background: rgba(53, 224, 106, 0.28); outline: 3px solid #35e06a; opacity: 1; }
+.antworten button.falsch { background: rgba(255, 90, 70, 0.28); outline: 3px solid #ff5a46; opacity: 1; }

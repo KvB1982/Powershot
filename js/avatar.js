@@ -42,6 +42,8 @@ const mirror = (p) => [p[0], -p[1], p[2]];
 function boneFrames(J) {
   const F = {};
   F.pelvis = upright(J.hip, J.hipYaw || 0);
+  // (Mini-Spiele: Liegt oder sitzt die Figur, sagt hipUp, wohin das Becken zeigt, und hipX, wo rechts ist)
+  if (J.hipUp) F.pelvis = frame(J.hip, J.hipUp, J.hipX || [0, 1, 0]);
   F.chest = frame(J.hip, sub(J.neck, J.hip), sub(J.shR, J.shL));
   F.head = upright(J.neck, J.yaw || 0, J.nod || 0);
   if (J.headF) {
@@ -59,6 +61,7 @@ function boneFrames(J) {
     F['thigh' + s] = frame(hip, sub(kn, hip), k);
     F['shin' + s] = frame(kn, sub(ft, kn), k);
     F['foot' + s] = upright(ft, J['footYaw' + s] || 0, J['footNod' + s] || 0);
+    if (J['footUp' + s]) F['foot' + s] = frame(ft, J['footUp' + s], J.footX || [0, 1, 0]);
   }
   return F;
 }
@@ -711,6 +714,38 @@ export class Avatar {
     M.racket.visible = !st.ohneSchlaeger;          // bei der Siegerehrung liegt der Schläger in der Tasche
     this.handRWorld = M.racket.position;
     M.racket.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, Z));
+  }
+
+  // ---------------------------------------------------------------
+  // Für die Mini-Spiele: Die Figur wird wie eine Gliederpuppe hingestellt.
+  // ---------------------------------------------------------------
+  // J = alle Gelenke als [vor, seite, hoch] (seite: + = rechte Hand), ausgerechnet in minibuehne.js.
+  // o = { x, y, z: wo die Figur steht · face: wohin sie schaut (0 = zur Kamera, also nach +z) ·
+  //       schlaeger: { d: Richtung Griff → Kopf, n: wohin die Bespannung zeigt } oder nichts = ohne Schläger }
+  // So kann die Figur auch liegen, sitzen oder hocken – das kann update() nicht.
+  stelle(J, o = {}) {
+    if (!this.real) return;
+    const f = o.face || 0, cf = Math.cos(f), sf = Math.sin(f), G = this.gross, GB = G * this.breit;
+    const bx = o.x || 0, by = o.y || 0, bz = o.z || 0;
+    const D = (p) => new THREE.Vector3(p[0] * sf - p[1] * cf, p[2], p[0] * cf + p[1] * sf);
+    const W = (p) => D(p).multiplyScalar(G).add(new THREE.Vector3(bx, by, bz));
+    this.welt = W; this.richtung = D;
+    const F = boneFrames(J);
+    for (let i = 0; i < BONES.length; i++) {
+      const fr = F[BONES[i]], b = this.bones[i];
+      const dick = i === 2 || i > 10 ? G : GB;
+      b.matrix.makeBasis(D(fr.ex).multiplyScalar(dick), D(fr.ey).multiplyScalar(G), D(fr.ez).multiplyScalar(dick)).setPosition(W(fr.o));
+      b.matrixWorldNeedsUpdate = true;
+    }
+    const rk = this.m.racket;
+    rk.visible = !!o.schlaeger;
+    if (o.schlaeger) {
+      const Y = D(o.schlaeger.d).normalize(), Z = D(o.schlaeger.n || [0, 0, 1]);
+      const X = new THREE.Vector3().crossVectors(Y, Z).normalize();
+      Z.crossVectors(X, Y).normalize();
+      rk.position.copy(W(J.handR));
+      rk.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, Z));
+    }
   }
 
   dispose() {

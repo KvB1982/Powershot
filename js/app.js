@@ -19,6 +19,7 @@ import * as TT from './turniertag.js';
 import * as QZ from './quiz.js';
 import * as TA from './aufgaben.js';
 import * as MS from './minispiele.js';
+import { MiniBuehne } from './minibuehne.js';
 import * as GL from './gelaende.js';
 import { hotelArt, hotelFuer } from './hotelfahrt.js';
 import { stadtGelaende, sterneFuer } from './hotelweg.js';
@@ -30,6 +31,7 @@ import * as PL from './planer.js';
 import * as SE from './season.js';
 import * as PS from './profisaison.js';
 import * as SZ from './spielzuege.js';
+import * as LE from './lernen.js';
 import { bracketHtml, timelineHtml, raceHtml, pointsHtml, weltHtml, zeitungHtml } from './saisonansicht.js';
 
 const $ = (s) => document.querySelector(s);
@@ -179,6 +181,7 @@ actions.home = () => {
       <button class="big" data-a="training">Training <small>Ballmaschine · Aufschlag</small></button>
       <button class="big" data-a="anlage">Turniergelände <small>Wimbledon, New York, Paris … – die echten Anlagen zum Herumlaufen</small></button>
       <button class="big" data-a="schlagbuch">Schlagarten <small>Nachlesen und ansehen · Aufnehmen mit der Uhr</small></button>
+      <button class="big" data-a="wissen">Tennis-Wissen <small>Lernen und üben: Regeln, Technik, Taktik, Turniere, Geschichte …</small></button>
       <div class="row"><button class="grow" data-a="settings" data-v="home">Einstellungen</button><button class="grow" data-a="help" data-v="home">Steuerung</button></div>
     </div>`);
 };
@@ -426,6 +429,119 @@ actions.schlagbuch = (v) => {
   show(`<div class="bar">${back('home')}<h2>Schlagarten</h2><button data-a="uhrAufnahme">⌚ Mit der Uhr aufnehmen – so geht's</button></div>${schlagbuchHtml(schlagWahl)}`);
 };
 actions.uhrAufnahme = () => show(`<div class="bar">${back('schlagbuch')}<h2>⌚ Schläge mit der Uhr aufnehmen</h2></div>${uhrHtml()}`);
+
+// ---------------------------------------------------------------
+// Tennis-Wissen: der Lernmodus (Texte und Lernstand in js/lernen.js, Fragen aus js/quiz.js)
+// ---------------------------------------------------------------
+const LERN_KEY = 'powershot.lernen.v1';
+let lernStand = (() => { try { return { ...LE.neuerStand(), ...JSON.parse(localStorage.getItem(LERN_KEY) || '{}') }; } catch (e) { return LE.neuerStand(); } })();
+const lernSichern = () => { try { localStorage.setItem(LERN_KEY, JSON.stringify(lernStand)); } catch (e) { /* voll oder gesperrt: dann eben ohne Merken */ } };
+const lernSterne = (n) => '★'.repeat(n) + '☆'.repeat(3 - n);
+const lernBalken = (anteil) => `<div class="lernbalken"><i style="width:${Math.round(anteil * 100)}%"></i></div>`;
+let lernRunde = null;               // die Übungsrunde, die gerade läuft: { thema, fragen, nr, richtig, wahl }
+
+// Übersicht: zehn Kapitel
+actions.wissen = () => {
+  enterMenu();
+  lernRunde = null;
+  const alles = LE.fortschritt(lernStand);
+  show(`
+    <div class="bar">${back('home')}<h2>Tennis-Wissen</h2></div>
+    <div class="panel">
+      <p style="margin-top:0">Hier lernst du alles rund ums Tennis – in zehn Kapiteln. Lies ein Kapitel und <b>übe</b> es danach mit Fragen.
+        Was du falsch hattest, kommt beim nächsten Mal zuerst wieder dran. Das Wissen hilft dir auch beim Quiz mit dem Trainer auf dem Turniergelände.</p>
+      <p class="dim" style="margin-bottom:6px">Du kannst <b>${alles.gekonnt} von ${alles.fragen}</b> Fragen · ${alles.gelesen} von ${alles.seiten} Seiten gelesen</p>
+      ${lernBalken(alles.anteil)}
+      <div class="row" style="margin-top:12px"><button class="primary" data-a="wissenUeben" data-v="alles">🎲 Bunt gemischt üben</button></div>
+    </div>
+    <div class="grid lern">${Object.keys(LE.KAPITEL).map((id) => {
+      const f = LE.fortschritt(lernStand, id);
+      return `<button class="lernkarte" data-a="wissenThema" data-v="${id}">
+        <b>${LE.THEMEN[id]}</b><span class="gold">${lernSterne(f.sterne)}</span>
+        <small>${esc(LE.KAPITEL[id].kurz)}</small>
+        ${lernBalken(f.anteil)}<small class="dim">${f.gekonnt} von ${f.fragen} Fragen gekonnt · ${f.gelesen} von ${f.seiten} Seiten gelesen</small></button>`;
+    }).join('')}</div>
+    <p class="dim">Regeln, Maße und Geschichte sind nachgeschlagen (Tennisregeln der ITF und ATP-Regelbuch 2026, Wimbledon, Wikipedia). Technik, Taktik und Training sind allgemeines Trainer-Wissen – dein Trainer darf es anders sehen.</p>`);
+};
+// Ein Kapitel lesen. v = 'thema' oder 'thema:seite'
+actions.wissenThema = (v) => {
+  const [id, nr] = String(v).split(':'), K = LE.KAPITEL[id];
+  if (!K) return actions.wissen();
+  const seite = Math.max(0, Math.min(K.seiten.length - 1, +nr || 0)), S = K.seiten[seite], f = LE.fortschritt(lernStand, id);
+  LE.gelesen(lernStand, id, seite); lernSichern();
+  show(`
+    <div class="bar">${back('wissen')}<h2>${LE.THEMEN[id]}</h2><span class="gold">${lernSterne(f.sterne)}</span></div>
+    <div class="row lernreiter">${K.seiten.map((s, i) => `<button class="${i === seite ? 'sel' : ''}" data-a="wissenThema" data-v="${id}:${i}">${(lernStand.g[id] || []).includes(i) ? '✓ ' : ''}${esc(s.titel)}</button>`).join('')}</div>
+    <div class="panel lernseite">
+      <h3 style="margin-top:0">${esc(S.titel)}</h3>
+      ${S.bild && LE.BILDER[S.bild] ? LE.BILDER[S.bild]() : ''}
+      ${(S.text || []).map((t) => `<p>${t}</p>`).join('')}
+      ${S.liste ? `<dl>${S.liste.map(([w, e]) => `<dt>${esc(w)}</dt><dd>${esc(e)}</dd>`).join('')}</dl>` : ''}
+      ${S.merke ? `<div class="merke"><b>📌 Merke dir</b><ul>${S.merke.map((m) => `<li>${esc(m)}</li>`).join('')}</ul></div>` : ''}
+    </div>
+    <div class="row">
+      ${seite > 0 ? `<button data-a="wissenThema" data-v="${id}:${seite - 1}">‹ Zurückblättern</button>` : ''}
+      ${seite < K.seiten.length - 1 ? `<button class="primary grow" data-a="wissenThema" data-v="${id}:${seite + 1}">Weiter: ${esc(K.seiten[seite + 1].titel)} ›</button>`
+        : `<button class="primary grow" data-a="wissenUeben" data-v="${id}">🎯 Jetzt üben (${f.gekonnt} von ${f.fragen} gekonnt)</button>`}
+    </div>
+    <div class="row" style="margin-top:10px"><button data-a="wissenUeben" data-v="${id}">🎯 Üben</button><button data-a="wissenKarten" data-v="${id}">📋 Alle ${f.fragen} Fragen mit Antworten</button></div>`);
+};
+// Alle Fragen eines Kapitels mit Antwort zum Nachlesen
+actions.wissenKarten = (id) => {
+  if (!LE.KAPITEL[id]) return actions.wissen();
+  const zeichen = (n) => (n >= LE.SICHER ? '✅' : n >= 1 ? '🙂' : n === 0 ? '❌' : '▫️');
+  show(`
+    <div class="bar">${back('wissen')}<h2>${LE.THEMEN[id]} – alle Fragen</h2><button data-a="wissenThema" data-v="${id}">📖 Zum Kapitel</button></div>
+    <p class="dim">✅ sitzt · 🙂 einmal richtig · ❌ zuletzt falsch · ▫️ noch nicht geübt</p>
+    <div class="panel lernseite"><dl>${LE.karten(id).map((k) => `<dt>${zeichen(lernStand.f[k.id])} ${esc(k.frage)}</dt><dd><b>${esc(k.antwort)}</b> – ${esc(k.erkl)}</dd>`).join('')}</dl></div>
+    <div class="row"><button class="primary grow" data-a="wissenUeben" data-v="${id}">🎯 Üben</button></div>`);
+};
+// Üben: eine Runde Fragen. v = Thema oder 'alles'
+actions.wissenUeben = (v) => {
+  const thema = LE.KAPITEL[v] ? v : null;
+  lernRunde = { thema, fragen: LE.naechste(lernStand, thema), nr: 0, richtig: 0, wahl: null };
+  lernFrage();
+};
+function lernFrage() {
+  const R = lernRunde, F = R.fragen[R.nr], fertig = R.wahl != null;
+  show(`
+    <div class="bar"><button class="ghost" data-a="${R.thema ? 'wissenThema' : 'wissen'}" data-v="${R.thema || ''}">‹ Aufhören</button><h2>${R.thema ? LE.THEMEN[R.thema] : '🎲 Bunt gemischt'}</h2><span class="dim">Frage ${R.nr + 1} von ${R.fragen.length} · ${R.richtig} richtig</span></div>
+    ${lernBalken((R.nr + (fertig ? 1 : 0)) / R.fragen.length)}
+    <div class="panel lernfrage">
+      ${R.thema ? '' : `<p class="dim" style="margin:0 0 6px">${LE.THEMEN[F.thema]}</p>`}
+      <h3 style="margin-top:0">${esc(F.frage)}</h3>
+      <div class="antworten">${F.antworten.map((a, i) => `<button class="${fertig ? (i === F.richtig ? 'gut' : i === R.wahl ? 'falsch' : '') : ''}" ${fertig ? 'disabled' : `data-a="wissenAntwort" data-v="${i}"`}>${esc(a)}</button>`).join('')}</div>
+      ${fertig ? `<div class="merke"><b>${R.wahl === F.richtig ? '✅ Richtig!' : '❌ Leider falsch.'}</b> ${esc(F.erkl)}</div>` : ''}
+    </div>
+    ${fertig ? `<div class="row"><button class="primary grow" data-a="wissenWeiter">${R.nr + 1 < R.fragen.length ? 'Nächste Frage ›' : 'Zum Ergebnis ›'}</button></div>` : ''}`);
+}
+actions.wissenAntwort = (v) => {
+  const R = lernRunde; if (!R || R.wahl != null) return;
+  const F = R.fragen[R.nr]; R.wahl = +v;
+  const stimmt = R.wahl === F.richtig;
+  if (stimmt) R.richtig++;
+  LE.eintragen(lernStand, F.id, stimmt); lernSichern();
+  sound.ui && sound.ui();
+  lernFrage();
+};
+actions.wissenWeiter = () => {
+  const R = lernRunde; if (!R) return actions.wissen();
+  if (R.nr + 1 < R.fragen.length) { R.nr++; R.wahl = null; return lernFrage(); }
+  const f = LE.fortschritt(lernStand, R.thema), q = R.richtig / R.fragen.length;
+  show(`
+    <div class="bar">${back('wissen')}<h2>Ergebnis</h2></div>
+    <div class="panel" style="text-align:center">
+      <div style="font-size:56px">${q === 1 ? '🏆' : q >= 0.75 ? '😀' : q >= 0.5 ? '🙂' : '💪'}</div>
+      <h3>${R.richtig} von ${R.fragen.length} richtig</h3>
+      <p>${q === 1 ? 'Perfekt – alles gewusst!' : q >= 0.75 ? 'Stark! Nur noch Kleinigkeiten.' : q >= 0.5 ? 'Gut gemacht. Die falschen Fragen kommen gleich noch einmal dran.' : 'Kein Problem: Lies das Kapitel noch einmal und probiere es wieder.'}</p>
+      <p class="dim">${R.thema ? LE.THEMEN[R.thema] : 'Alle Kapitel'}: ${f.gekonnt} von ${f.fragen} Fragen gekonnt, ${f.sicher} sitzen richtig <span class="gold">${lernSterne(f.sterne)}</span></p>
+      ${lernBalken(f.anteil)}
+      <p class="dim" style="font-size:13px">★ ab der Hälfte · ★★ ab 8 von 10 · ★★★ wenn du jede Frage ${LE.SICHER}-mal hintereinander richtig hattest</p>
+    </div>
+    <div class="row"><button class="primary grow" data-a="wissenUeben" data-v="${R.thema || 'alles'}">Noch eine Runde ›</button>
+      ${R.thema ? `<button data-a="wissenThema" data-v="${R.thema}">📖 Kapitel lesen</button>` : ''}<button data-a="wissen">Alle Kapitel</button></div>`);
+  lernRunde = null;
+};
 actions.help = (v) => { if (v) helpBack = v; show(`<div class="bar">${back(helpBack)}<h2>Steuerung</h2></div>${HELP}`); };
 
 // ---------------------------------------------------------------
@@ -690,6 +806,7 @@ function quizMerken(ids) {
   try { localStorage.setItem(QUIZ_KEY, JSON.stringify(quizGesehen)); } catch (e) { /* voller Speicher: dann wiederholen sich Fragen eben eher */ }
 }
 MS.klaenge({ gut: () => sound.coin(), tipp: () => sound.click() });
+MS.setzeBuehne(new MiniBuehne(game.renderer));      // die Mini-Spiele bekommen ihr Bild in 3D (minibuehne.js)
 // Die Liste „Aufgaben vom Team“ (wie das Aufgabenbuch im Reitturnier). mitWeg = mit Knöpfen „Hinlaufen“
 function aufgabenHtml(phase, mitWeg = true) {
   const c = lebenC(), L = TA.liste(c, phase);
@@ -903,6 +1020,7 @@ actions.aufgabe = (v) => {
     titel: `${A.bild} ${A.name}`, wer: TA.werSagt(c, A.von), auftrag: TA.auftragText(v, phase), phase,
     farbe: typeof hemd === 'number' ? '#' + hemd.toString(16).padStart(6, '0') : undefined,
     anzahl: A.anzahl, gesehen: quizGesehen, themen: A.themen && A.themen[phase],
+    look: ichJetzt().look,
   }, (r) => {
     if (!r.abbruch) {
       if (r.ids) quizMerken(r.ids);

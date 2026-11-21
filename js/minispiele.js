@@ -1,7 +1,10 @@
 // Powershot – Die Mini-Spiele für die Aufgaben vom Team (Turniergelände).
 //
-// Jedes Mini-Spiel läuft in einem eigenen Fenster über dem Gelände und wird mit einfachen Strichen und Formen gemalt
-// (2D, kein three.js). Am Ende kommt eine Note heraus: 0 = gar nicht geschafft, 1 = perfekt.
+// Jedes Mini-Spiel läuft in einem eigenen Fenster über dem Gelände. Hier stehen die Regeln (Zeiten, Punkte, Knöpfe) und
+// alles, was obendrauf gemalt wird (Zahlen, Balken, Schrift). Das Bild selbst kommt in 3D von der Bühne (minibuehne.js):
+// deine echte Spielerfigur an selbst gebauten Geräten. Gibt es keine Bühne (Spielermodelle nicht geladen), malt diese Datei
+// wie früher alles selbst mit Strichfiguren – sie braucht dafür kein three.js.
+// Am Ende kommt eine Note heraus: 0 = gar nicht geschafft, 1 = perfekt.
 // Was die Note bringt, steht in aufgaben.js – hier wird nur gespielt.
 //
 //   nachmachen = Warmmachen: Der Trainer macht Übungen vor, du machst sie in derselben Reihenfolge nach
@@ -30,6 +33,11 @@ let el = null, bild = null, g = null, textEl = null, knopfEl = null, infoEl = nu
 let spiel = null, laeuft = false, zuletzt = 0, fertigRuf = null, klang = { gut() {}, tipp() {} };
 let farbe = '#37c3ff';                   // Trikotfarbe der eigenen Figur
 export function klaenge(k) { klang = { ...klang, ...k }; }
+// Die 3D-Bühne (minibuehne.js). app.js gibt sie hier herein; ohne sie (oder solange die Spielermodelle nicht geladen sind)
+// wird alles wie früher in 2D gemalt. drei = läuft das Mini-Spiel gerade in 3D?
+let buehne = null, drei = false;
+export function setzeBuehne(b) { buehne = b; }
+const frage3 = (name, ...a) => (drei && buehne.spiel && buehne.spiel[name] ? buehne.spiel[name](...a) : null);
 
 function bauen() {
   if (el) return;
@@ -82,6 +90,8 @@ const sterne = (note) => (note >= 0.75 ? '⭐⭐⭐' : note >= 0.4 ? '⭐⭐' : 
 
 function schluss(ergebnis) {
   laeuft = false; spiel = null;
+  if (buehne) buehne.schliesse();
+  drei = false;
   el.classList.remove('on');
   const f = fertigRuf; fertigRuf = null;
   if (f) f(ergebnis);
@@ -107,11 +117,13 @@ function schleife(jetzt) {
 // Ein Stück Zeit weiterrechnen und malen (auch von Hand aufrufbar: window.__mini.schritt, für Tests im Browser)
 function schritt(dt) {
   if (!laeuft || !spiel) return;
-  if (spiel.malen) {
+  if (spiel.malen || drei) {
     g.setTransform(2, 0, 0, 2, 0, 0);
     g.clearRect(0, 0, W, H);
     g.lineCap = 'round'; g.lineJoin = 'round';
   }
+  // In 3D: erst das Bild von der Bühne, darüber malt das Spiel dann Zahlen, Balken und Schrift
+  if (drei) buehne.zeige(g, spiel.szene ? spiel.szene() : {}, dt);
   spiel.bild(dt);
 }
 
@@ -122,9 +134,10 @@ export function starte(art, opt, fertig) {
   if (!bauer) return fertig({ abbruch: true });
   fertigRuf = fertig;
   farbe = opt.farbe || '#37c3ff';
+  drei = !!(buehne && buehne.oeffne(art, { look: opt.look, phase: opt.phase }));
   const S = bauer(opt);
   spiel = S; laeuft = false;
-  el.className = 'on vor' + (S.malen ? '' : ' ohneBild');
+  el.className = 'on vor' + (S.malen ? '' : drei ? ' streifen' : ' ohneBild') + (drei ? ' drei' : '');
   el.querySelector('.titel').textContent = opt.titel || S.titel;
   info('');
   if (S.malen) { g.setTransform(2, 0, 0, 2, 0, 0); g.clearRect(0, 0, W, H); }
@@ -136,7 +149,7 @@ export function starte(art, opt, fertig) {
     S.start();
     requestAnimationFrame(schleife);
   });
-  if (typeof window !== 'undefined') window.__mini = { get spiel() { return spiel; }, get laeuft() { return laeuft; }, schritt };
+  if (typeof window !== 'undefined') window.__mini = { get spiel() { return spiel; }, get laeuft() { return laeuft; }, get drei() { return drei; }, schritt };
 }
 export const offen = () => !!el && el.classList.contains('on');
 
@@ -172,7 +185,14 @@ function figur(F, trikot = farbe) {
 // Die Figur steht einfach da (x = wo, u = wie weit die Füße auseinander)
 const stehen = (x, u = 14) => ({ hueft: [x, BODEN - 94], schulter: [x, BODEN - 164], handL: [x - 26, BODEN - 96], handR: [x + 26, BODEN - 96], fussL: [x - u, BODEN], fussR: [x + u, BODEN], knie: -1 });
 function boden(farbeBoden = '#2b3a5c') { g.fillStyle = farbeBoden; g.fillRect(0, BODEN + 6, W, H - BODEN); }
-function schrift(t, x, y, gr = 22, f = '#f2f5fb', wo = 'center') { g.font = `600 ${gr}px system-ui, sans-serif`; g.textAlign = wo; g.fillStyle = f; g.fillText(t, x, y); }
+function schrift(t, x, y, gr = 22, f = '#f2f5fb', wo = 'center') {
+  g.font = `600 ${gr}px system-ui, sans-serif`; g.textAlign = wo; g.fillStyle = f;
+  if (drei) { g.shadowColor = 'rgba(0,0,0,.85)'; g.shadowBlur = 7; g.shadowOffsetY = 1; g.fillText(t, x, y); }      // über dem 3D-Bild braucht Schrift einen Schatten
+  g.fillText(t, x, y);
+  g.shadowColor = 'transparent'; g.shadowBlur = 0; g.shadowOffsetY = 0;
+}
+// Eine dunkle Tafel hinter Schrift und Balken – nur über dem 3D-Bild, damit man alles lesen kann
+function tafel(x, y, b, h, r = 12) { if (!drei) return; g.fillStyle = 'rgba(8,12,26,.62)'; rund(x, y, b, h, r); g.fill(); }
 function rund(x, y, b, h, r) { g.beginPath(); g.roundRect(x, y, b, h, r); }
 // Ein Zeitbalken oben (rest von gesamt Sekunden)
 function zeitBalken(rest, gesamt) {
@@ -208,9 +228,10 @@ SPIELE.nachmachen = () => {
     hilfe: 'Die Trainerin macht eine Folge von Übungen vor. Merk sie dir – und mach sie dann <b>in derselben Reihenfolge</b> nach (Knöpfe unten oder Tasten 1 bis 4). Es gibt drei Folgen, jede ist eine Übung länger.',
     start: neueRunde,
     taste(code, runter) { const i = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(code); if (runter && i >= 0) tipp(i); },
+    szene() { const zg = dran === 'trainer' && t >= 0 && zeige < folge.length; return { trainer: zg ? folge[zeige] : -1, ts: Math.sin(Math.min(1, Math.max(0, t) / WARM_ZEIGT) * Math.PI), tt: t, ich: meine >= 0 && meineT < 0.6 ? meine : -1, is: Math.sin(meineT / 0.6 * Math.PI), it: meineT }; },
     bild(dt) {
       t += dt; meineT += dt;
-      boden();
+      if (!drei) boden();
       if (dran === 'trainer') {
         if (t > WARM_ZEIGT) { t = 0; zeige++; if (zeige >= folge.length) { dran = 'du'; knoepfe(UEBUNGEN.map((u, i) => `${u.bild} ${u.name} <small>${i + 1}</small>`), tipp); } }
       } else if (pause > 0) {
@@ -220,9 +241,10 @@ SPIELE.nachmachen = () => {
       // Links die Trainerin, rechts du
       const zeigt = dran === 'trainer' && t >= 0 && zeige < folge.length ? UEBUNGEN[folge[zeige]] : null;
       const s = Math.sin(Math.min(1, Math.max(0, t) / WARM_ZEIGT) * Math.PI);
-      figur(zeigt ? zeigt.pose(270, s, t) : stehen(270), '#e86a9a');
-      const ich = meine >= 0 && meineT < 0.6 ? UEBUNGEN[meine].pose(630, Math.sin(meineT / 0.6 * Math.PI), meineT) : stehen(630);
-      figur(ich);
+      if (!drei) {
+        figur(zeigt ? zeigt.pose(270, s, t) : stehen(270), '#e86a9a');
+        figur(meine >= 0 && meineT < 0.6 ? UEBUNGEN[meine].pose(630, Math.sin(meineT / 0.6 * Math.PI), meineT) : stehen(630));
+      }
       schrift('Trainerin', 270, BODEN + 40, 18, '#9fb0cc'); schrift('Du', 630, BODEN + 40, 18, '#9fb0cc');
       if (zeigt) schrift(`${zeigt.bild} ${zeigt.name}`, 270, 120, 30, '#e8f04a');
       schrift(dran === 'trainer' ? 'Schau genau hin …' : falsch ? '✗ Das war die falsche Übung!' : nr >= folge.length ? '✓ Super!' : `Jetzt du! Übung ${nr + 1} von ${folge.length}`, W / 2, 60, 26, falsch && dran === 'du' ? '#ff6b5a' : '#f2f5fb');
@@ -241,7 +263,7 @@ const HOCH_BAELLE = 3;                   // so oft darf der Ball herunterfallen
 const SCHWERE = 950;                     // so stark zieht es den Ball nach unten (Bildpunkte pro Sekunde²)
 SPIELE.hochhalten = () => {
   let x = W / 2, xAlt = W / 2, vSchl = 0, ball, n = 0, rest = HOCH_BAELLE, links = false, rechts = false, blitz = 0, wort = '';
-  const SY = 440, BREIT = 74;
+  const SY = 440, BREIT = drei ? 60 : 74;      // in 3D ist der Schläger so groß wie ein echter – also etwas schmaler
   const neu = () => { ball = { x: x + (Math.random() - 0.5) * 60, y: 90, vx: 0, vy: 0 }; };
   return {
     titel: 'Ball hochhalten', malen: true, get zustand() { return { ball, x, n, rest }; },
@@ -250,6 +272,7 @@ SPIELE.hochhalten = () => {
     zieh(px) { x = begrenzen(px, 50, W - 50); },
     unten(px) { x = begrenzen(px, 50, W - 50); },
     taste(code, runter) { if (code === 'ArrowLeft') links = runter; if (code === 'ArrowRight') rechts = runter; },
+    szene: () => ({ x, ball }),
     bild(dt) {
       if (links) x = Math.max(50, x - 620 * dt);
       if (rechts) x = Math.min(W - 50, x + 620 * dt);
@@ -269,13 +292,15 @@ SPIELE.hochhalten = () => {
       if (ball.y > H + 40) { rest--; if (rest <= 0) return ende(n / HOCH_ZIEL, `${n} von ${HOCH_ZIEL} Berührungen.`); neu(); }
       blitz -= dt;
       // malen: Schläger von der Seite (Griff nach rechts unten), Ball, Zähler
+      if (!drei) {
       boden('#24507a');
       g.strokeStyle = '#c8ccd4'; g.lineWidth = 8; g.beginPath(); g.moveTo(x + BREIT, SY + 4); g.lineTo(x + BREIT + 70, SY + 26); g.stroke();
       g.strokeStyle = blitz > 0 ? '#e8f04a' : '#f2f5fb'; g.lineWidth = 7; g.beginPath(); g.ellipse(x, SY, BREIT, 9, 0, 0, 7); g.stroke();
       g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.ellipse(x, SY, BREIT, 9, 0, 0, 7); g.fill();
       g.fillStyle = '#d8ee3a'; g.beginPath(); g.arc(ball.x, ball.y, 14, 0, 7); g.fill();
       g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.arc(ball.x - 9, ball.y, 12, -0.9, 0.9); g.stroke();
-      schrift(String(n), W / 2, 130, 90, 'rgba(255,255,255,.22)');
+      }
+      schrift(String(n), drei ? 90 : W / 2, 130, 90, drei ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.22)');
       if (blitz > 0 && wort) schrift(wort, x, SY - 40, 22, wort === 'Mitte!' ? '#4ade80' : '#ff6b5a');
       info(`Berührungen: ${n} von ${HOCH_ZIEL} · Bälle: ${'🎾'.repeat(rest)}`);
     },
@@ -347,6 +372,7 @@ SPIELE.kraft = () => {
     unten() { haelt = true; los(); },
     hoch() { haelt = false; lassen(); },
     taste(code, runter) { if (code !== 'Space') return; haelt = runter; if (runter) los(); else lassen(); },
+    szene: () => ({ ue: reihe[Math.min(ue, reihe.length - 1)], p }),
     bild(dt) {
       t += dt; warte -= dt;
       if (haelt) los();                          // wer schon in der kurzen Pause drückt, hebt gleich danach los
@@ -362,8 +388,8 @@ SPIELE.kraft = () => {
           neu();
         }
       }
-      boden('#3a3340');
-      U.mal(begrenzen(p, 0, 1));
+      if (!drei) { boden('#3a3340'); U.mal(begrenzen(p, 0, 1)); }
+      tafel(24, 34, 560, wort ? 122 : 82); tafel(736, 96, 94, 372);
       schrift(U.name, 40, 70, 30, '#e8f04a', 'left'); schrift(U.tipp, 40, 100, 16, '#9fb0cc', 'left');
       if (wort) schrift(wort, 40, 140, 22, wortGut ? '#4ade80' : '#ff6b5a', 'left');
       // rechts der Balken mit dem grünen Feld
@@ -389,16 +415,20 @@ SPIELE.massage = () => {
   const reihe = STELLEN.map((_, i) => i).sort(() => Math.random() - 0.5).slice(0, MASSAGE_STELLEN);
   let offen = [], naechste = 0, fertig = 0, rest = MASSAGE_ZEIT, alt = null, t = 0, locker = [];
   const nach = () => { while (offen.length < 2 && naechste < reihe.length) offen.push({ nr: reihe[naechste++], weg: 0 }); };
+  // Wo ist eine Stelle im Bild? In 3D sagt es die Bühne (dort liegt ja eine echte Figur), sonst steht es in der Liste oben.
+  const orte = frage3('stellen');
+  const wo = (nr) => (orte ? orte[nr] : STELLEN[nr].slice(1));
   const reib = (x, y, drueckt) => {
     if (!drueckt) { alt = null; return; }
     if (alt) {
       const d = Math.hypot(x - alt[0], y - alt[1]);
-      for (const s of offen) if (Math.hypot(x - STELLEN[s.nr][1], y - STELLEN[s.nr][2]) < 46) s.weg += d;
+      for (const s of offen) if (Math.hypot(x - wo(s.nr)[0], y - wo(s.nr)[1]) < 46) s.weg += d;
     }
     alt = [x, y];
   };
   return {
-    titel: 'Massage', malen: true, get zustand() { return { offen: offen.map((s) => STELLEN[s.nr].slice(1)), fertig }; },
+    titel: 'Massage', malen: true, get zustand() { return { offen: offen.map((s) => wo(s.nr)), fertig }; },
+    szene: () => ({ zeiger: alt, wo: offen[0] && wo(offen[0].nr) }),
     hilfe: `Auf der Liege liegt dein Spieler. Die <b>roten Stellen</b> sind verspannt. Reibe mit dem Finger (oder mit gedrückter Maustaste) über einer roten Stelle <b>hin und her</b>, bis sie grün wird. Schaffst du alle ${MASSAGE_STELLEN} Stellen in ${MASSAGE_ZEIT} Sekunden?`,
     start: nach,
     unten(x, y) { alt = [x, y]; },
@@ -410,6 +440,7 @@ SPIELE.massage = () => {
       if (fertig >= MASSAGE_STELLEN) return ende(1, `Alle ${MASSAGE_STELLEN} Stellen sind locker – und noch ${Math.ceil(rest)} Sekunden übrig!`);
       if (rest <= 0) return ende(fertig / MASSAGE_STELLEN, `${fertig} von ${MASSAGE_STELLEN} Stellen gelockert.`);
       // Liege und Spieler von oben (Kopf links)
+      if (!drei) {
       g.fillStyle = '#1f6f66'; rund(120, 150, 680, 240, 30); g.fill();
       g.fillStyle = '#f2f5fb'; rund(140, 222, 70, 96, 20); g.fill();                    // Kissen
       g.strokeStyle = '#e8b48a'; g.lineWidth = 34;
@@ -418,10 +449,11 @@ SPIELE.massage = () => {
       g.fillStyle = '#e8b48a'; rund(250, 196, 250, 148, 46); g.fill();                  // Rücken
       g.fillStyle = '#27324d'; rund(470, 204, 70, 132, 24); g.fill();                   // Hose
       g.fillStyle = '#6a4a2a'; g.beginPath(); g.arc(196, 270, 36, 0, 7); g.fill();     // Hinterkopf
-      for (const nr of locker) { const [, x, y] = STELLEN[nr]; g.fillStyle = 'rgba(74,222,128,.55)'; g.beginPath(); g.arc(x, y, 24, 0, 7); g.fill(); schrift('✓', x, y + 8, 22, '#fff'); }
+      }
+      for (const nr of locker) { const [x, y] = wo(nr); g.fillStyle = 'rgba(74,222,128,.55)'; g.beginPath(); g.arc(x, y, 24, 0, 7); g.fill(); schrift('✓', x, y + 8, 22, '#fff'); }
       for (const s of offen) {
-        const [name, x, y] = STELLEN[s.nr], puls = 30 + 5 * Math.sin(t * 6);
-        g.fillStyle = 'rgba(255,90,70,.75)'; g.beginPath(); g.arc(x, y, puls, 0, 7); g.fill();
+        const name = STELLEN[s.nr][0], [x, y] = wo(s.nr), puls = (drei ? 22 : 30) + 5 * Math.sin(t * 6);
+        g.fillStyle = drei ? 'rgba(255,70,50,.6)' : 'rgba(255,90,70,.75)'; g.beginPath(); g.arc(x, y, puls, 0, 7); g.fill();
         g.strokeStyle = '#4ade80'; g.lineWidth = 7; g.beginPath(); g.arc(x, y, 40, -1.57, -1.57 + 6.283 * begrenzen(s.weg / MASSAGE_REIBEN, 0, 1)); g.stroke();
         schrift(name, x, y - 52, 17);
       }
@@ -463,6 +495,7 @@ SPIELE.buffet = (opt) => {
     titel: 'Am Buffet', malen: true, get zustand() { return { band: band.map((b) => [b.x, b.essen[1]]), teller: teller.map((e) => e[1]), ok: erfuellt() }; },
     hilfe: `Das Essen fährt auf dem Band vorbei. <b>Tippe an</b>, was auf deinen Teller soll (es passen ${TELLER} Sachen drauf). Unter jedem Essen steht, was drin ist: ⚡ Kohlenhydrate (Energie), 💪 Eiweiß (für die Muskeln), 🧈 Fett, 💧 Trinken. Oben siehst du, ob dein Teller passt: Der Balken muss <b>im grünen Bereich</b> sein. Etwas Falsches erwischt? Tippe es auf dem Teller an, dann kommt es wieder weg.`,
     start() { knopf(); },
+    szene: () => ({ band: band.map((b) => [b.x, b.essen[0]]), teller: teller.map((e) => e[0]), lauf: (BUFFET_ZEIT - rest) * 135 }),
     unten(x, y) {
       // Etwas vom Band nehmen …
       const e = band.find((b) => Math.hypot(x - b.x, y - 262) < 50);
@@ -482,6 +515,7 @@ SPIELE.buffet = (opt) => {
       band = band.filter((b) => b.x > -70);
       // Ziele oben: Balken mit grünem Bereich
       const ok = erfuellt();
+      tafel(24, 34, W - 48, 60);
       ziel.forEach(([name, sp, mind, max], i) => {
         const x = 40 + i * 215, wert = summe(sp), voll = 12;
         schrift(name, x, 58, 16, ok[i] ? '#4ade80' : '#f2f5fb', 'left');
@@ -490,21 +524,27 @@ SPIELE.buffet = (opt) => {
         g.fillStyle = ok[i] ? '#4ade80' : '#ff8a5a'; rund(x, 71, Math.max(6, 190 * Math.min(wert, voll) / voll), 10, 5); g.fill();
       });
       // das Band
-      g.fillStyle = '#3a4258'; rund(0, 200, W, 150, 0); g.fill();
-      g.fillStyle = 'rgba(255,255,255,.06)'; for (let i = 0; i < 12; i++) g.fillRect(((i * 90 - (BUFFET_ZEIT - rest) * 135) % (W + 90) + W + 90) % (W + 90) - 45, 200, 4, 150);
+      if (!drei) {
+        g.fillStyle = '#3a4258'; rund(0, 200, W, 150, 0); g.fill();
+        g.fillStyle = 'rgba(255,255,255,.06)'; for (let i = 0; i < 12; i++) g.fillRect(((i * 90 - (BUFFET_ZEIT - rest) * 135) % (W + 90) + W + 90) % (W + 90) - 45, 200, 4, 150);
+      }
       for (const b of band) {
         const [bildE, name, k, e, f, w] = b.essen;
-        g.fillStyle = '#f2f5fb'; g.beginPath(); g.arc(b.x, 256, 42, 0, 7); g.fill();
-        g.font = '46px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText(bildE, b.x, 273);
+        if (!drei) {
+          g.fillStyle = '#f2f5fb'; g.beginPath(); g.arc(b.x, 256, 42, 0, 7); g.fill();
+          g.font = '46px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText(bildE, b.x, 273);
+        }
+        tafel(b.x - 52, 300, 104, 46, 10);
         schrift(name, b.x, 318, 15);
         schrift([k && `⚡${k}`, e && `💪${e}`, f && `🧈${f}`, w && `💧${w}`].filter(Boolean).join(' '), b.x, 338, 14, '#e8f04a');
       }
       // der Teller unten
-      g.fillStyle = '#e8ecf4'; rund(W / 2 - TELLER * 45 - 14, 400, TELLER * 90 + 28, 100, 50); g.fill();
+      if (!drei) { g.fillStyle = '#e8ecf4'; rund(W / 2 - TELLER * 45 - 14, 400, TELLER * 90 + 28, 100, 50); g.fill(); }
       for (let i = 0; i < TELLER; i++) {
+        if (drei && teller[i]) continue;
         const x = W / 2 - TELLER * 45 + 45 + i * 90;
         if (teller[i]) { g.font = '50px system-ui, sans-serif'; g.textAlign = 'center'; g.fillStyle = '#000'; g.fillText(teller[i][0], x, 468); }
-        else { g.strokeStyle = 'rgba(0,0,0,.18)'; g.lineWidth = 3; g.setLineDash([6, 6]); g.beginPath(); g.arc(x, 450, 30, 0, 7); g.stroke(); g.setLineDash([]); }
+        else { g.strokeStyle = drei ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.18)'; g.lineWidth = 3; g.setLineDash([6, 6]); g.beginPath(); g.arc(x, 450, 30, 0, 7); g.stroke(); g.setLineDash([]); }
       }
       zeitBalken(rest, BUFFET_ZEIT);
       info(`${opt.phase === 'nach' ? 'Essen nach dem Match' : 'Essen vor dem Match'} · noch ${Math.ceil(rest)} s`);
@@ -546,6 +586,7 @@ SPIELE.bespannen = (opt) => {
     titel: 'An der Besaitungsmaschine', malen: true, get zustand() { return { teil, drueber: drueber(reihe, nr), kg, zielKg, haelt, warte }; },
     hilfe: `<b>1. Flechten:</b> Die Quersaite muss abwechselnd <b>über</b> und <b>unter</b> den Längssaiten durch. Drücke bei jeder Kreuzung den richtigen Knopf (oder Pfeiltaste ↑ / ↓). Achtung: Jede neue Reihe fängt anders an als die Reihe davor!<br><b>2. Spannen:</b> Halte den Hebel gedrückt, bis die Anzeige <b>${zielKg} kg</b> zeigt, und lass genau dann los (${SPANN_SAITEN} Saiten).`,
     start() { knoepfe(['⬆ drüber', '⬇ drunter'], (i) => flecht(i === 0)); },
+    szene: () => ({ teil, reihe, nr, kg }),
     unten() { druck = true; spannLos(); },
     hoch() { druck = false; spannLassen(); },
     taste(code, runter) {
@@ -566,6 +607,7 @@ SPIELE.bespannen = (opt) => {
         spannStart();
       }
       // Die Maschine: Tisch, Klemmen und der Schlägerkopf
+      if (!drei) {
       g.fillStyle = '#4a5368'; rund(90, 420, 480, 26, 8); g.fill(); g.fillRect(300, 446, 60, 60);
       g.fillStyle = '#8a93a8'; rund(108, 236, 30, 28, 6); g.fill(); rund(522, 236, 30, 28, 6); g.fill();
       g.strokeStyle = '#e8f04a'; g.lineWidth = 12; g.beginPath(); g.ellipse(MX, MY, 185, 205, 0, 0, 7); g.stroke();
@@ -582,10 +624,12 @@ SPIELE.bespannen = (opt) => {
         g.strokeStyle = '#ffb347'; g.lineWidth = 4; g.beginPath(); g.moveTo(MX - breite(y), y); g.lineTo(bis, y); g.stroke();
         for (let i = 0; i < n; i++) if (!drueber(r, i)) laengs(i, y - 9, y + 9);
       }
+      }
       if (teil === 'flechten') {
         // die Kreuzung, die gerade dran ist
-        const x = lx(nr), y = qy(reihe);
+        const [x, y] = frage3('kreuz', reihe, nr) || [lx(nr), qy(reihe)];
         g.strokeStyle = rot > 0 ? '#ff6b5a' : '#37c3ff'; g.lineWidth = 4; g.beginPath(); g.arc(x, y, 15, 0, 7); g.stroke();
+        tafel(590, 116, 260, 226);
         schrift(`Reihe ${reihe + 1} von ${QUER}`, 720, 150, 26, '#e8f04a');
         schrift(nr === 0 ? `Diese Reihe beginnt mit „${drueber(reihe, 0) ? 'drüber' : 'drunter'}“` : 'Immer abwechselnd!', 720, 190, 18);
         schrift(rot > 0 ? '✗ Falsch herum!' : '', 720, 230, 22, '#ff6b5a');
@@ -593,6 +637,7 @@ SPIELE.bespannen = (opt) => {
         info('Teil 1 von 2: Flechten');
       } else {
         // Anzeige der Maschine
+        tafel(596, 96, 258, 284);
         g.fillStyle = '#10141f'; rund(610, 110, 230, 110, 14); g.fill();
         schrift(kg.toFixed(1) + ' kg', 725, 185, 54, Math.abs(kg - zielKg) <= 0.5 ? '#4ade80' : '#e8f04a');
         schrift(`Ziel: ${zielKg} kg`, 725, 262, 26);
@@ -638,19 +683,20 @@ SPIELE.autogramm = () => {
   };
   return {
     titel: 'Autogramme', malen: true, get zustand() { return { nr, feld: sachen[Math.min(nr, AUTO_KINDER - 1)].feld, wechsel }; },
-    hilfe: `${AUTO_KINDER} Kinder halten dir etwas hin. <b>Unterschreibe mit dem Finger</b> (oder mit gedrückter Maustaste) im <b>weißen Feld</b> – so, wie du wirklich unterschreiben würdest. Bleib im Feld! Wenn du kurz absetzt, ist die Unterschrift fertig und das nächste Kind ist dran. Du hast ${AUTO_ZEIT} Sekunden.`,
+    hilfe: `${AUTO_KINDER} Fans halten dir etwas hin. <b>Unterschreibe mit dem Finger</b> (oder mit gedrückter Maustaste) im <b>weißen Feld</b> – so, wie du wirklich unterschreiben würdest. Bleib im Feld! Wenn du kurz absetzt, ist die Unterschrift fertig und der nächste Fan ist dran. Du hast ${AUTO_ZEIT} Sekunden.`,
     start() {},
+    szene: () => ({ sache: SACHEN.indexOf(sachen[Math.min(nr, AUTO_KINDER - 1)]), nr, schieb: wechsel > 0 ? -(0.55 - wechsel) * 1700 : 0 }),
     unten(x, y) { if (wechsel <= 0) { malt = true; striche.push([[x, y]]); still = 0; } },
     zieh(x, y, drueckt) { if (malt && drueckt && wechsel <= 0) { striche[striche.length - 1].push([x, y]); still = 0; } },
     hoch() { malt = false; },
     bild(dt) {
       rest -= dt;
-      if (wechsel > 0) { wechsel -= dt; if (wechsel <= 0) { nr++; striche = []; if (nr >= AUTO_KINDER) return ende(punkte / AUTO_KINDER, `${gesichter.join(' ')} – ${gesichter.filter((x) => x === '😀').length} von ${AUTO_KINDER} Kindern haben ein richtig schönes Autogramm.`); } }
+      if (wechsel > 0) { wechsel -= dt; if (wechsel <= 0) { nr++; striche = []; if (nr >= AUTO_KINDER) return ende(punkte / AUTO_KINDER, `${gesichter.join(' ')} – ${gesichter.filter((x) => x === '😀').length} von ${AUTO_KINDER} Fans haben ein richtig schönes Autogramm.`); } }
       else if (!malt && striche.length) { still += dt; if (still > AUTO_WARTEN && laenge() >= AUTO_LANG) werten(); }
       if (rest <= 0) return ende(punkte / AUTO_KINDER, `Die Zeit ist um. ${gesichter.join(' ') || 'Niemand hat ein Autogramm bekommen.'}`);
       const S = sachen[Math.min(nr, AUTO_KINDER - 1)];
       g.save(); g.translate(wechsel > 0 ? -(0.55 - wechsel) * 1700 : 0, 0);
-      S.mal();
+      if (!drei) S.mal();
       // das Feld zum Unterschreiben
       const [fx, fy, fb, fh] = S.feld;
       g.fillStyle = 'rgba(255,255,255,.92)'; g.strokeStyle = '#27324d'; g.lineWidth = 2; g.setLineDash([8, 6]);
@@ -664,7 +710,7 @@ SPIELE.autogramm = () => {
       if (striche.length && !malt && laenge() < AUTO_LANG) schrift('Das ist noch zu kurz für eine Unterschrift – schreib weiter!', W / 2, 520, 17, '#e8f04a');
       schrift(gesichter.join(' '), 30, 520, 26, '#fff', 'left');
       zeitBalken(rest, AUTO_ZEIT);
-      info(`Kind ${Math.min(nr + 1, AUTO_KINDER)} von ${AUTO_KINDER} · noch ${Math.ceil(rest)} s`);
+      info(`Fan ${Math.min(nr + 1, AUTO_KINDER)} von ${AUTO_KINDER} · noch ${Math.ceil(rest)} s`);
     },
   };
 };
@@ -689,6 +735,7 @@ SPIELE.dehnen = () => {
     zieh(x, y, drueckt) { if (drueckt && zeiger) zeiger = x < W / 2 ? -1 : 1; },
     hoch() { zeiger = 0; },
     taste(code, runter) { if (code === 'ArrowLeft') links = runter; if (code === 'ArrowRight') rechts = runter; },
+    szene: () => ({ nr, m }),
     bild(dt) {
       rest -= dt; stossT -= dt;
       if (stossT <= 0) { stoss = (Math.random() - 0.5) * (2.2 + nr * 0.7); stossT = 0.35 + Math.random() * 0.5; }   // alle halbe Sekunde zieht es woandershin
@@ -699,10 +746,12 @@ SPIELE.dehnen = () => {
       gesamt += dt; if (Math.abs(m) <= DEHN_FELD) gut += dt;
       if (rest <= 0) { nr++; rest = DEHN_ZEIT; m = 0; v = 0; if (nr >= DEHNUNGEN.length) { const anteil = gut / gesamt; return ende(anteil / 0.8, `Du hast ${Math.round(anteil * 100)} % der Zeit ruhig gehalten.`); } }
       const D = DEHNUNGEN[nr];
-      boden('#2f5a3a');
-      g.save(); g.translate(450, BODEN); g.rotate(m * 0.2); g.translate(-450, -BODEN);
-      figur(D.pose(450));
-      g.restore();
+      if (!drei) {
+        boden('#2f5a3a');
+        g.save(); g.translate(450, BODEN); g.rotate(m * 0.2); g.translate(-450, -BODEN);
+        figur(D.pose(450));
+        g.restore();
+      }
       schrift(D.name, W / 2, 70, 30, '#e8f04a'); schrift(D.tipp, W / 2, 100, 17, '#9fb0cc');
       // die Leiste unten
       const lx0 = 200, lb = 500, ly = 492;
@@ -722,7 +771,7 @@ SPIELE.dehnen = () => {
 const QUIZ_ZEIT = 20;                    // Sekunden je Frage
 SPIELE.quiz = (opt) => {
   const fragen = ziehe(opt.anzahl || 5, opt.gesehen || [], Math.random, opt.themen || null);
-  let nr = 0, richtig = 0, rest = QUIZ_ZEIT, beantwortet = false;
+  let nr = 0, richtig = 0, rest = QUIZ_ZEIT, beantwortet = false, stimmte = false;
   const frage = () => {
     const F = fragen[nr];
     beantwortet = false; rest = QUIZ_ZEIT;
@@ -733,6 +782,7 @@ SPIELE.quiz = (opt) => {
     if (beantwortet) return;
     beantwortet = true;
     const F = fragen[nr], ok = i === F.richtig;
+    stimmte = ok;
     if (ok) { richtig++; klang.gut(); }
     [...knopfEl.children].forEach((b, k) => { b.disabled = true; if (k === F.richtig) b.classList.add('richtig'); else if (k === i) b.classList.add('falsch'); });
     text(`<p class="dim">${THEMEN[F.thema]} · Frage ${nr + 1} von ${fragen.length}</p><h3>${F.frage}</h3><p><b class="${ok ? 'plus' : 'minus'}">${ok ? '✓ Richtig!' : i < 0 ? '⏰ Zeit um!' : '✗ Leider falsch.'}</b> ${F.erkl}</p>`);
@@ -745,6 +795,7 @@ SPIELE.quiz = (opt) => {
     titel: 'Tennis-Quiz', malen: false, get zustand() { return { richtig: fragen[nr] && fragen[nr].richtig, beantwortet }; },
     hilfe: `${fragen.length} Fragen rund ums Tennis. Zu jeder Frage gibt es vier Antworten – nur eine stimmt. Du hast ${QUIZ_ZEIT} Sekunden pro Frage. Nach jeder Frage steht da, warum die Antwort richtig ist.`,
     start: frage,
+    szene: () => ({ stimmung: beantwortet ? (stimmte ? 'gut' : 'schlecht') : null, denkt: !beantwortet }),
     taste(code, runter) { const i = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(code); if (runter && i >= 0) antwort(i); },
     bild(dt) {
       if (beantwortet) return;
@@ -792,6 +843,7 @@ SPIELE.presse = () => {
     titel: 'Pressekonferenz', malen: false, get zustand() { return { nett: fragen[nr] && fragen[nr].antworten.findIndex((a) => a[0] === 'nett'), beantwortet }; },
     hilfe: `Die Reporter stellen dir ${PRESSE_FRAGEN_ZAHL} Fragen. Such dir jedes Mal eine Antwort aus: <b>freundlich</b> kommt immer gut an, ein <b>Witz</b> klappt oft (aber nicht immer), <b>patzig</b> gibt Ärger. Antworte in ${PRESSE_ZEIT} Sekunden – sonst fängst du an zu stottern.`,
     start: frage,
+    szene: () => ({ spricht: beantwortet, fragt: nr % 3 }),
     taste(code, runter) { const i = ['Digit1', 'Digit2', 'Digit3'].indexOf(code); if (runter && i >= 0 && !beantwortet) antwort(i); },
     bild(dt) {
       if (beantwortet) return;

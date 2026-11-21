@@ -96,4 +96,43 @@ for (const [name, def, n] of [['ITF', itf, 3], ['Challenger', ch, 3], ['ATP 250'
   pruefe(TA.nachAufgaben(c, ao, 'ao:2') !== N, 'Nach dem nächsten Sieg muss es neue Aufgaben geben');
 }
 console.log(fehler ? `${fehler} Fehler` : 'Alles in Ordnung.');
-process.exit(fehler ? 1 : 0);
+if (fehler) process.exitCode = 1;
+
+// ---------- Tennis-Wissen (Lernmodus) ----------
+{
+  const LE = await import('../js/lernen.js');
+  const Q = await import('../js/quiz.js');
+  let fehler = 0;
+  const falsch = (t) => { fehler++; console.log('  ✗ ' + t); };
+  let seiten = 0;
+  for (const id of Object.keys(Q.THEMEN)) {
+    const K = LE.KAPITEL[id];
+    if (!K) { falsch(`Kapitel fehlt: ${id}`); continue; }
+    if (!K.kurz || K.seiten.length < 3) falsch(`Kapitel ${id}: zu wenig Seiten`);
+    for (const S of K.seiten) {
+      seiten++;
+      if (!S.titel || !((S.text && S.text.length) || (S.liste && S.liste.length))) falsch(`${id}: Seite ohne Inhalt (${S.titel})`);
+      if (S.bild && !LE.BILDER[S.bild]) falsch(`${id}: Bild fehlt (${S.bild})`);
+      if (S.bild && !LE.BILDER[S.bild]().startsWith('<svg')) falsch(`${id}: Bild ist kein SVG (${S.bild})`);
+    }
+  }
+  for (const id of Object.keys(LE.KAPITEL)) if (!Q.THEMEN[id]) falsch(`Kapitel ohne Quiz-Thema: ${id}`);
+  // Üben: Falsches kommt zuerst wieder, und wer alles zweimal richtig hat, bekommt drei Sterne
+  const st = LE.neuerStand();
+  let zahl = 1; const zufall = () => (zahl = (zahl * 16807) % 2147483647) / 2147483647;
+  const erste = LE.naechste(st, 'regeln', LE.RUNDE, zufall);
+  if (erste.length !== LE.RUNDE) falsch('Übungsrunde hat nicht ' + LE.RUNDE + ' Fragen');
+  for (const f of erste) { if (f.antworten.length !== 4 || f.antworten[f.richtig] !== Q.ALLE.find((a) => a.id === f.id).zeile[1]) falsch('richtige Antwort verrutscht: ' + f.id); }
+  LE.eintragen(st, erste[0].id, false); for (const f of erste.slice(1)) LE.eintragen(st, f.id, true);
+  const zweite = LE.naechste(st, 'regeln', LE.RUNDE, zufall);
+  if (!zweite.some((f) => f.id === erste[0].id)) falsch('falsch beantwortete Frage kommt nicht wieder');
+  if (zweite.some((f) => erste.slice(1).some((e) => e.id === f.id))) falsch('schon gekonnte Frage kommt vor neuen Fragen');
+  let runden = 0;
+  while (LE.fortschritt(st, 'regeln').sterne < 3 && runden++ < 100) for (const f of LE.naechste(st, 'regeln', LE.RUNDE, zufall)) LE.eintragen(st, f.id, true);
+  if (LE.fortschritt(st, 'regeln').sterne !== 3) falsch('drei Sterne nicht erreichbar');
+  if (LE.fortschritt(st).sterne !== 0) falsch('Sterne für alle Kapitel zu früh');
+  LE.gelesen(st, 'regeln', 0); LE.gelesen(st, 'regeln', 0);
+  if (LE.fortschritt(st, 'regeln').gelesen !== 1) falsch('gelesene Seiten falsch gezählt');
+  console.log(`\nTennis-Wissen: ${Object.keys(LE.KAPITEL).length} Kapitel, ${seiten} Seiten, drei Sterne im Kapitel „Regeln“ nach ${runden} Runden – ${fehler ? fehler + ' Fehler' : 'alles in Ordnung'}`);
+  if (fehler) process.exitCode = 1;
+}
