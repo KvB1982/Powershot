@@ -616,3 +616,53 @@ body.foto #anlage .oben, body.foto #anlage .panel, body.foto #anlage .kam, body.
 @keyframes fotoBlitz { from { opacity: 0.85; } to { opacity: 0; } }
 @media (max-height: 760px) { #anlage .kam { grid-template-columns: 1fr 1fr; } }
 #radar.stadt::after { content: none; }
+/* ---------- Einlaufszene vor dem Match: Titel oben, Steckbrief rechts ---------- */
+#einlauf { position: fixed; inset: 0; z-index: 12; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+#einlauf[hidden] { display: none; }
+/* Schwarze Balken oben und unten wie im Kino */
+#einlauf::before, #einlauf::after { content: ''; position: absolute; left: 0; right: 0; height: 7vh; background: #000; opacity: 0.82; }
+#einlauf::before { top: 0; } #einlauf::after { bottom: 0; }
+#einlaufTitel { position: absolute; left: max(4vw, env(safe-area-inset-left)); bottom: calc(7vh + 18px); transform: translate(-24px, 0); text-align: left; white-space: nowrap;
+  padding: 10px 26px 12px; border-radius: 14px; background: linear-gradient(180deg, rgba(10, 16, 32, 0.9), rgba(10, 16, 32, 0.72));
+  border: 1px solid var(--line); border-bottom: 3px solid var(--accent); opacity: 0; transition: opacity 0.45s, transform 0.45s; }
+#einlaufTitel.on { opacity: 1; transform: translate(0, 0); }
+#einlaufTitel small { display: block; color: var(--accent); font-size: clamp(11px, 1.5vw, 15px); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+#einlaufTitel b { display: block; font-size: clamp(20px, 3.6vw, 40px); font-weight: 800; letter-spacing: 0.02em; }
+#einlaufTitel b i { font-style: normal; font-weight: 500; font-size: 0.55em; color: var(--dim); margin: 0 0.35em; vertical-align: middle; }
+#einlaufTitel.klein { padding: 6px 16px 7px; }
+#einlaufTitel.klein small, #einlaufTitel.klein b { display: none; }
+#einlaufTitel.klein span { color: var(--text); font-weight: 700; }
+#einlaufTitel span { display: block; color: var(--dim); font-size: clamp(11px, 1.5vw, 15px); }
+/* Die Karte gleitet von rechts herein */
+#einlaufKarte { --hemd: #fff; position: absolute; right: max(4vw, env(safe-area-inset-right)); top: 50%; width: min(440px, 46vw);
+  transform: translate(40px, -50%); opacity: 0; background: linear-gradient(160deg, rgba(16, 24, 46, 0.95), rgba(10, 16, 32, 0.9));
+  border: 1px solid var(--line); border-left: 8px solid var(--hemd); border-radius: 16px; padding: 16px 18px 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); }
+#einlaufKarte.on { opacity: 1; transform: translate(0, -50%); transition: opacity 0.5s 0.25s, transform 0.5s 0.25s; }
+#einlaufKarte .kopf { display: flex; align-items: center; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+#einlaufKarte .flagge { font-size: clamp(30px, 4.4vw, 46px); line-height: 1; }
+#einlaufKarte .wer { flex: 1; min-width: 0; }
+#einlaufKarte .wer small { display: block; color: var(--accent); font-size: clamp(10px, 1.3vw, 13px); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+#einlaufKarte .wer b { display: block; font-size: clamp(18px, 2.7vw, 30px); font-weight: 800; line-height: 1.1; }
+#einlaufKarte .platz { text-align: center; font-size: clamp(24px, 3.6vw, 40px); font-weight: 800; color: var(--accent); line-height: 1; }
+#einlaufKarte .platz small { display: block; color: var(--dim); font-size: clamp(9px, 1.1vw, 12px); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 3px; }
+#einlaufKarte table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: clamp(12px, 1.7vw, 17px); }
+#einlaufKarte td { padding: 4px 0; vertical-align: top; }
+#einlaufKarte td:first-child { color: var(--dim); white-space: nowrap; padding-right: 14px; }
+#einlaufKarte td:last-child { font-weight: 700; text-align: right; }
+#einlaufKarte p { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--line); color: var(--text); font-size: clamp(11px, 1.5vw, 15px); font-style: italic; }
+#einlaufSkip { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: calc(7vh + 12px); background: rgba(10, 16, 32, 0.8); }
+#einlaufTipp { position: absolute; left: 0; right: 0; bottom: calc(max(7vh, env(safe-area-inset-bottom, 0px)) + 10px); z-index: 1; text-align: center; color: #fff; opacity: 0.7; font-size: 13px;
+  text-shadow: 0 1px 4px #000; pointer-events: none; }
+@media (max-height: 480px) {
+  #einlaufKarte { padding: 9px 12px 8px; width: min(380px, 48vw); }
+  #einlaufKarte td { padding: 1px 0; }
+  #einlaufKarte p { margin-top: 4px; padding-top: 4px; }
+  #einlaufTitel { padding: 5px 16px 6px; bottom: calc(7vh + 8px); }
+}
+
+/* iPhone im Querformat: Der Hinweis „Tippen = weiter“ steht rechts über dem Überspringen-Knopf,
+   damit er nicht in die Titelkarte unten links hineinragt. */
+@media (max-height: 500px) {
+  #einlaufTipp { left: auto; right: max(14px, env(safe-area-inset-right)); bottom: calc(7vh + 12px + 46px); text-align: right; }
+}

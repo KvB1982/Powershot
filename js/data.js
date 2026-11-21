@@ -281,6 +281,7 @@ const EINHAND = ['tsitsipas', 'musetti', 'shapovalov', 'altmaier', 'kovacevic', 
 // Die Gesichter im Spiel sind erfunden – niemand soll aussehen wie der echte Spieler.
 // Erkennen kann man die Spieler trotzdem, nämlich an ihrem Stil:
 //   groesse  = Körpergröße in cm (so groß wird die Figur gezeichnet; große Spieler treffen den Aufschlag weiter oben)
+//   jahr     = Geburtsjahr (steht im Steckbrief der Einlaufszene, siehe einlauf.js)
 //   statur   = 'schlank', 'normal' oder 'kraeftig'
 //   modell   = welche der sechs Figuren (siehe figur.js): a = kurze Haare · b = längere Haare mit Stirnband ·
 //              c = Locken, ärmelloses Hemd · d = Bart, sehr kurze Haare · e = Kappe · f = Haarknoten
@@ -292,27 +293,27 @@ const EINHAND = ['tsitsipas', 'musetti', 'shapovalov', 'altmaier', 'kovacevic', 
 // Djokovic bekannt (beide sehr oft – im Spiel höchstens 5-mal, sonst dauert es zu lange); der Rest ist geschätzt.
 // Haarfarbe, Hemd und Hose stehen oben in der Liste STARS. Die Kleiderfarben sind frei gewählt.
 export const STIL = {
-  zverev:     { groesse: 198, statur: 'schlank',  modell: 'b', prellen: 5, jubel: 'bruellen', merkmal: 'Sehr groß, Stirnband, prellt den Ball lange' },
-  sinner:     { groesse: 191, statur: 'schlank',  modell: 'e', prellen: 3, jubel: 'ruhig',    merkmal: 'Rote Haare unter der Kappe, bleibt ganz ruhig' },
-  alcaraz:    { groesse: 183, statur: 'kraeftig', modell: 'a', prellen: 3, jubel: 'ohr',      merkmal: 'Kräftig und blitzschnell, Hand ans Ohr: „Ich hör euch nicht!“' },
-  shelton:    { groesse: 193, statur: 'kraeftig', modell: 'c', prellen: 2, jubel: 'telefon',  merkmal: 'Linkshänder, ärmellos, legt beim Jubeln den „Telefonhörer“ auf' },
-  medvedev:   { groesse: 198, statur: 'schlank',  modell: 'a', prellen: 2, jubel: 'ruhig',    merkmal: 'Sehr groß und dünn, jubelt fast gar nicht' },
-  cobolli:    { groesse: 183, statur: 'normal',   modell: 'e', prellen: 3, jubel: 'faust',    merkmal: 'Immer mit Kappe (in echt verkehrt herum)', unsicher: 'Jubel' },
-  fils:       { groesse: 185, statur: 'kraeftig', modell: 'd', prellen: 3, jubel: 'muskel',   merkmal: 'Sehr kräftig, zeigt gern seine Muskeln', unsicher: 'Kopfbedeckung, Jubel' },
-  tiafoe:     { groesse: 188, statur: 'kraeftig', modell: 'b', prellen: 3, jubel: 'arme',     merkmal: 'Stirnband, bunte Hemden, feiert mit dem Publikum', unsicher: 'Jubel' },
-  deminaur:   { groesse: 183, statur: 'schlank',  modell: 'e', prellen: 4, jubel: 'faust',    merkmal: 'Schmal, Kappe, der schnellste Läufer' },
-  jodar:      { groesse: 191, statur: 'schlank',  modell: 'a', prellen: 3, jubel: 'faust',    merkmal: 'Jung, groß und schlank', unsicher: 'Größe, Frisur, Jubel' },
-  djokovic:   { groesse: 188, statur: 'schlank',  modell: 'a', prellen: 5, jubel: 'bruellen', merkmal: 'Prellt den Ball ewig, brüllt nach großen Punkten' },
-  fritz:      { groesse: 196, statur: 'normal',   modell: 'b', prellen: 3, jubel: 'ruhig',    merkmal: 'Sehr groß, lange Haare mit Stirnband' },
-  fauger:     { groesse: 193, statur: 'kraeftig', modell: 'a', prellen: 4, jubel: 'faust',    merkmal: 'Groß und athletisch, gewaltiger Aufschlag', unsicher: 'Jubel' },
-  paul:       { groesse: 185, statur: 'normal',   modell: 'e', prellen: 3, jubel: 'ruhig',    merkmal: 'Kappe, lässig und flink', unsicher: 'Jubel' },
-  lehecka:    { groesse: 185, statur: 'kraeftig', modell: 'e', prellen: 3, jubel: 'faust',    merkmal: 'Kappe, harte Schläge', unsicher: 'Kopfbedeckung, Jubel' },
-  mensik:     { groesse: 196, statur: 'schlank',  modell: 'a', prellen: 4, jubel: 'faust',    merkmal: 'Sehr groß, einer der härtesten Aufschläge', unsicher: 'Kopfbedeckung, Jubel' },
-  davidovich: { groesse: 183, statur: 'normal',   modell: 'b', prellen: 2, jubel: 'faust',    merkmal: 'Blonde Haare, wirft sich nach jedem Ball', unsicher: 'Kopfbedeckung, Jubel' },
-  nakashima:  { groesse: 188, statur: 'normal',   modell: 'e', prellen: 3, jubel: 'ruhig',    merkmal: 'Kappe, zeigt nie Gefühle', unsicher: 'Kopfbedeckung' },
-  tien:       { groesse: 180, statur: 'schlank',  modell: 'e', prellen: 3, jubel: 'ruhig',    merkmal: 'Linkshänder, eher klein, Kappe' },
-  cerundolo:  { groesse: 185, statur: 'normal',   modell: 'b', prellen: 3, jubel: 'faust',    merkmal: 'Riesige Vorhand', unsicher: 'Kopfbedeckung, Jubel' },
-  ruud:       { groesse: 183, statur: 'normal',   modell: 'e', prellen: 4, jubel: 'faust',    merkmal: 'Viel Topspin mit der Vorhand', unsicher: 'Kopfbedeckung, Jubel' },
+  zverev:     { groesse: 198, jahr: 1997, statur: 'schlank',  modell: 'b', prellen: 5, jubel: 'bruellen', merkmal: 'Sehr groß, Stirnband, prellt den Ball lange' },
+  sinner:     { groesse: 191, jahr: 2001, statur: 'schlank',  modell: 'e', prellen: 3, jubel: 'ruhig',    merkmal: 'Rote Haare unter der Kappe, bleibt ganz ruhig' },
+  alcaraz:    { groesse: 183, jahr: 2003, statur: 'kraeftig', modell: 'a', prellen: 3, jubel: 'ohr',      merkmal: 'Kräftig und blitzschnell, Hand ans Ohr: „Ich hör euch nicht!“' },
+  shelton:    { groesse: 193, jahr: 2002, statur: 'kraeftig', modell: 'c', prellen: 2, jubel: 'telefon',  merkmal: 'Linkshänder, ärmellos, legt beim Jubeln den „Telefonhörer“ auf' },
+  medvedev:   { groesse: 198, jahr: 1996, statur: 'schlank',  modell: 'a', prellen: 2, jubel: 'ruhig',    merkmal: 'Sehr groß und dünn, jubelt fast gar nicht' },
+  cobolli:    { groesse: 183, jahr: 2002, statur: 'normal',   modell: 'e', prellen: 3, jubel: 'faust',    merkmal: 'Immer mit Kappe (in echt verkehrt herum)', unsicher: 'Jubel' },
+  fils:       { groesse: 185, jahr: 2004, statur: 'kraeftig', modell: 'd', prellen: 3, jubel: 'muskel',   merkmal: 'Sehr kräftig, zeigt gern seine Muskeln', unsicher: 'Kopfbedeckung, Jubel' },
+  tiafoe:     { groesse: 188, jahr: 1998, statur: 'kraeftig', modell: 'b', prellen: 3, jubel: 'arme',     merkmal: 'Stirnband, bunte Hemden, feiert mit dem Publikum', unsicher: 'Jubel' },
+  deminaur:   { groesse: 183, jahr: 1999, statur: 'schlank',  modell: 'e', prellen: 4, jubel: 'faust',    merkmal: 'Schmal, Kappe, der schnellste Läufer' },
+  jodar:      { groesse: 191, jahr: 2006, statur: 'schlank',  modell: 'a', prellen: 3, jubel: 'faust',    merkmal: 'Jung, groß und schlank', unsicher: 'Größe, Frisur, Jubel' },
+  djokovic:   { groesse: 188, jahr: 1987, statur: 'schlank',  modell: 'a', prellen: 5, jubel: 'bruellen', merkmal: 'Prellt den Ball ewig, brüllt nach großen Punkten' },
+  fritz:      { groesse: 196, jahr: 1997, statur: 'normal',   modell: 'b', prellen: 3, jubel: 'ruhig',    merkmal: 'Sehr groß, lange Haare mit Stirnband' },
+  fauger:     { groesse: 193, jahr: 2000, statur: 'kraeftig', modell: 'a', prellen: 4, jubel: 'faust',    merkmal: 'Groß und athletisch, gewaltiger Aufschlag', unsicher: 'Jubel' },
+  paul:       { groesse: 185, jahr: 1997, statur: 'normal',   modell: 'e', prellen: 3, jubel: 'ruhig',    merkmal: 'Kappe, lässig und flink', unsicher: 'Jubel' },
+  lehecka:    { groesse: 185, jahr: 2001, statur: 'kraeftig', modell: 'e', prellen: 3, jubel: 'faust',    merkmal: 'Kappe, harte Schläge', unsicher: 'Kopfbedeckung, Jubel' },
+  mensik:     { groesse: 196, jahr: 2005, statur: 'schlank',  modell: 'a', prellen: 4, jubel: 'faust',    merkmal: 'Sehr groß, einer der härtesten Aufschläge', unsicher: 'Kopfbedeckung, Jubel' },
+  davidovich: { groesse: 183, jahr: 1999, statur: 'normal',   modell: 'b', prellen: 2, jubel: 'faust',    merkmal: 'Blonde Haare, wirft sich nach jedem Ball', unsicher: 'Kopfbedeckung, Jubel' },
+  nakashima:  { groesse: 188, jahr: 2001, statur: 'normal',   modell: 'e', prellen: 3, jubel: 'ruhig',    merkmal: 'Kappe, zeigt nie Gefühle', unsicher: 'Kopfbedeckung' },
+  tien:       { groesse: 180, jahr: 2005, statur: 'schlank',  modell: 'e', prellen: 3, jubel: 'ruhig',    merkmal: 'Linkshänder, eher klein, Kappe' },
+  cerundolo:  { groesse: 185, jahr: 1998, statur: 'normal',   modell: 'b', prellen: 3, jubel: 'faust',    merkmal: 'Riesige Vorhand', unsicher: 'Kopfbedeckung, Jubel' },
+  ruud:       { groesse: 183, jahr: 1998, statur: 'normal',   modell: 'e', prellen: 4, jubel: 'faust',    merkmal: 'Viel Topspin mit der Vorhand', unsicher: 'Kopfbedeckung, Jubel' },
 };
 
 PLAYERS.forEach((p, i) => {

@@ -14,6 +14,7 @@ import { loadFigure } from './figur.js';
 import { ladeRequisiten } from './requisiten.js';
 import { loadMocap, loadGang, mocapClip } from './mocap.js';
 import { SHOW } from './showschlaege.js';
+import { steckbrief } from './einlauf.js';
 import { schlagbuchHtml, uhrHtml } from './schlagbuch.js';
 import * as D from './data.js';
 import * as TN from './tournament.js';
@@ -56,6 +57,7 @@ const settings = Object.assign({
   spielzuege: 'aus',       // taktische Spielzüge im Match: 'aus' oder 'an'
   blick: 'tv',             // Blick auf den Platz im Match: 'tv' (wie im Fernsehen) oder 'nah' (dicht hinter dir)
   tempo: 'schnell',        // Spieltempo im Match: 'echt', 'schnell' oder 'turbo' (siehe TEMPO_MAL)
+  einlauf: 'an',           // Einlaufszene vor dem Match: 'an' (ganz), 'kurz' (nur Steckbriefe) oder 'aus'
 }, (() => { try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch (e) { return {}; } })());
 // Welche Spielzüge hast du schon gelernt? { id: { t: im Training geschafft, m: im Match geschafft } }
 const ZUG_KEY = 'powershot.spielzuege.v1';
@@ -134,6 +136,8 @@ document.addEventListener('click', (e) => {
 });
 document.addEventListener('pointerdown', () => sound.unlock(), { once: true });
 window.addEventListener('keydown', (e) => {
+  // Einlaufszene: Leertaste oder Eingabetaste = nächster Teil, Esc = gleich zum Match
+  if (game.einlauf && game.einlauf.an && !paused && (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape')) { e.preventDefault(); return einlaufTipp(e.key === 'Escape'); }
   if ((e.key === 'Escape' || e.key.toLowerCase() === 'p') && match && session && !session.over) togglePause();
 });
 $('#pauseBtn').addEventListener('click', () => { sound.unlock(); togglePause(); });
@@ -374,6 +378,7 @@ actions.ersteLos = (v) => {
   const opp = L.mode === 'match' ? lehrling : { ...D.PLAYERS[59], name: 'Trainer', short: 'Trainer' };
   startMatch({
     me, opp, def: D.tournamentById(free.venue), mode: L.mode, balls: L.balls, title: 'Erste Schritte', difficulty: 'leicht', length: 'kurz', ohneHilfe: L.mode !== 'match',
+    ohneEinlauf: true,       // in den Lektionen geht es gleich los
     hinweis: `Lektion ${i + 1}: ${L.ziel}`,
     onEnd: (res) => {
       if (res.aborted) return actions.erste();
@@ -393,6 +398,7 @@ function enterMenu() {
   game.detach();
   game.loadVenue(D.tournamentById(menuVenue));
   hudEl.hidden = true;
+  $('#einlauf').hidden = true;
   sound.setCrowd(0.02);
 }
 
@@ -441,6 +447,9 @@ actions.settings = (v) => {
         etwas weniger scharf und läuft dafür flüssig. Läuft es wieder gut, wird es von selbst wieder schärfer.</p>
       ${optionRow('Spielerfiguren', 'figures', { echt: 'Realistisch', einfach: 'Einfach' })}
       ${optionRow('Blick auf den Platz', 'blick', { tv: 'Wie im Fernsehen', nah: 'Nah am Spieler' })}
+      ${optionRow('Einlaufen vor dem Match', 'einlauf', { an: 'Ganze Szene', kurz: 'Nur Steckbriefe', aus: 'Aus' })}
+      <p class="dim" style="margin:6px 0 0;font-size:13px">Vor jedem Match kommen die Spieler auf den Platz, spielen sich kurz ein und werden mit einem Steckbrief vorgestellt.
+        Ein Tipp auf den Bildschirm springt zum nächsten Teil, „Überspringen“ gleich zum Match.</p>
       ${optionRow('Spieltempo', 'tempo', { echt: 'Echt', schnell: 'Schnell', turbo: 'Turbo' })}
       <p class="dim" style="margin:6px 0 0;font-size:13px">Wie schnell die Zeit im Match läuft. „Schnell“ spielt alles 10 % flotter ab (Ball und Spieler zusammen),
         „Turbo“ 22 %. Je schneller, desto weniger Zeit hast du zum Schlagen.</p>
@@ -1031,6 +1040,7 @@ actions.tourPlay = () => {
   startMatch({
     me: ctxT.season ? ichJetzt(oppId) : getPlayer(T.humanId), opp: getPlayer(oppId), def, title: def.cat === 'LIGA' ? def.name : `${def.name} · ${D.ROUND_NAMES[TN.currentLabel(T)]}`,
     finale: def.cat !== 'LIGA' && TN.currentLabel(T) === 'F',
+    bilanz: ctxT.season && season && season.profi ? season.profi.h2h[oppId] : null,      // Saison: deine Siege und Niederlagen gegen diesen Gegner (für den Steckbrief)
     onEnd: (res) => {
       TN.playRound(T, { winner: res.won ? T.humanId : oppId, score: res.score, setDiff: res.setDiff });
       let danach = renderTournament;
@@ -2706,7 +2716,78 @@ function startMatch(o) {
   hud.update();
   hud.message(o.title || '', 'info');
   sound.setCrowd(0.05);
+  // Vor einem richtigen Match: die Einlaufszene (Einstellungen → „Einlaufen vor dem Match“)
+  if (mode === 'match' && !lernen && !o.ohneEinlauf && settings.einlauf !== 'aus') einlaufLos(o);
 }
+
+// ---------------------------------------------------------------
+// Einlaufszene vor dem Match: Die Spieler kommen auf den Platz, spielen sich ein und werden vorgestellt.
+// Der Ablauf steht in einlauf.js, gezeichnet wird in game3d.js. Hier: Titel, Steckbrief-Karte, Antippen.
+// ---------------------------------------------------------------
+const einlaufEl = $('#einlauf');
+let einlaufSeit = 0;        // wann der Teil begonnen hat, der gerade läuft (damit ein Doppeltipp nicht gleich zwei Teile überspringt)
+const einlaufAn = () => !!(game.einlauf && game.einlauf.an);
+function einlaufLos(o) {
+  controls.enabled = false;
+  hudEl.hidden = true;
+  einlaufEl.hidden = false;
+  // Was im Steckbrief steht, das die Spieler-Daten nicht wissen: dein Platz in der Karriere, deine Turniersiege, die Bilanz
+  const inKarriere = career && o.me.me;
+  const ichMehr = { du: true };
+  if (inKarriere) {
+    const ich = CA.ranking(career).find((p) => p.me);
+    Object.assign(ichMehr, { platz: ich.rank, punkte: ich.points, titel: career.titles });
+  }
+  const karten = [steckbrief(o.me, ichMehr), steckbrief(o.opp, { bilanz: o.bilanz })];
+  const farbe = (p) => '#' + ((p.look && p.look.shirt) ?? 0xffffff).toString(16).padStart(6, '0');
+  const titel = (klein) => { $('#einlaufTitel').innerHTML = `<small>${esc(o.title || '')}</small><b>${esc(o.me.short)} <i>gegen</i> ${esc(o.opp.short)}</b><span>${klein}</span>`; };
+  game.einlaufStart(settings.einlauf === 'kurz' ? 'kurz' : 'an', [o.me, o.opp], (name, info) => {
+    if (name === 'fertig') return einlaufFertig(o);
+    if (name !== 'teil') return;
+    einlaufSeit = performance.now();
+    const karte = $('#einlaufKarte');
+    if (info.seite == null) {
+      karte.className = '';
+      titel(info.teil === 'einlaufen' ? 'Die Spieler kommen auf den Platz' : 'Einspielen');
+      $('#einlaufTitel').className = info.teil === 'einlaufen' ? 'on' : 'on klein';      // beim Einspielen nur ein kleines Schild, damit man die Spieler sieht
+      if (info.teil === 'einlaufen') sound.say('Bitte begrüßen Sie die Spieler!');
+      return;
+    }
+    // Steckbrief: Wer wird gerade gezeigt?
+    const k = karten[info.seite], p = info.seite === 0 ? o.me : o.opp;
+    $('#einlaufTitel').className = '';
+    karte.style.setProperty('--hemd', farbe(p));
+    karte.innerHTML = `<div class="kopf"><span class="flagge">${flag(k.land)}</span>
+        <div class="wer"><small>${k.du ? 'Das bist du' : 'Dein Gegner'}${k.land ? ' · ' + esc(k.land) : ''}</small><b>${esc(k.name)}</b></div>
+        ${k.platz ? `<div class="platz"><small>Platz</small>${k.platz}</div>` : ''}</div>
+      <table>${k.zeilen.map((z) => `<tr><td>${esc(z[0])}</td><td>${esc(z[1])}</td></tr>`).join('')}</table>
+      ${k.merkmal ? `<p>${esc(k.merkmal)}</p>` : ''}`;
+    karte.className = '';
+    void karte.offsetWidth;           // kurz „ausschalten“, damit die Karte jedes Mal neu hereingleitet
+    karte.className = 'on';
+    sound.say(k.name);
+  });
+}
+// Die Szene ist vorbei (oder übersprungen): Jetzt beginnt das Match.
+function einlaufFertig(o) {
+  einlaufEl.hidden = true;
+  $('#einlaufKarte').className = ''; $('#einlaufTitel').className = '';
+  if (!match) return;
+  match.timer = 1.2;                // kurz durchatmen, dann kommt der erste Aufschlag
+  hudEl.hidden = false;
+  controls.enabled = !paused;
+  $('#hint').classList.remove('kurz'); void $('#hint').offsetWidth; $('#hint').classList.add('kurz');
+  hud.message(o.title || '', 'info');
+}
+// Antippen (irgendwo) = zum nächsten Teil, Knopf „Überspringen“ = gleich zum Match
+function einlaufTipp(alles) {
+  if (!einlaufAn() || paused) return;
+  sound.unlock();
+  if (alles) return game.einlauf.ueberspringen();
+  if (performance.now() - einlaufSeit < 350) return;
+  game.einlauf.weiter();
+}
+einlaufEl.addEventListener('pointerdown', (e) => { e.stopPropagation(); einlaufTipp(!!e.target.closest('#einlaufSkip')); });
 
 let msgTimer = 0, toastTimer = 0, speedTimer = 0;
 const hud = {
@@ -2846,7 +2927,7 @@ function hudFrame(dt) {
 function togglePause() {
   if (!match || !session || session.over) return;
   paused = !paused;
-  controls.enabled = !paused;
+  controls.enabled = !paused && !einlaufAn();
   if (paused) {
     show(`<div class="panel modal"><h2>Pause</h2><div class="menu">
       <button class="primary" data-a="resume">Weiterspielen</button>
@@ -2976,7 +3057,7 @@ function loop(now) {
   // Im Match läuft die Zeit nach dem eingestellten Spieltempo. Bei einem langen Bild rechnen wir in zwei halben Schritten,
   // damit ein sehr schneller Ball nicht in einem einzigen Schritt am Schläger vorbeifliegt.
   const dm = match ? dt * tempoMal() : dt;
-  if (match && !paused) {
+  if (match && !paused && !einlaufAn()) {
     controls.update(dt);       // die Steuerung rechnet in echter Zeit: Die Zeitfenster zum Schlagen werden durch das Spieltempo nicht kürzer
     const teile = dm > 0.022 ? 2 : 1;
     for (let i = 0; i < teile; i++) match.update(dm / teile);
@@ -2992,7 +3073,7 @@ function loop(now) {
 // Für Tests: das Spiel von Hand um n Bilder weiterdrehen
 function step(n = 60) {
   for (let i = 0; i < n; i++) {
-    if (match && !paused) { controls.update(1 / 60); match.update(1 / 60); }
+    if (match && !paused && !einlaufAn()) { controls.update(1 / 60); match.update(1 / 60); }
     game.frame(1 / 60);
     gelaendeFrame();
     gelaendeTon(1 / 60);
@@ -3012,6 +3093,8 @@ document.addEventListener('visibilitychange', () => {
 // Ein Knopf ist "ausgewählt" (gelber Rahmen, Klasse .fokus). Der Stick springt zum nächsten Knopf
 // in der gedrückten Richtung, A drückt den Knopf, B drückt "Zurück".
 function menuTaste(was) {
+  // Einlaufszene: A = nächster Teil, B = gleich zum Match
+  if (einlaufAn() && !paused && (was === 'ok' || was === 'zurueck')) return einlaufTipp(was === 'zurueck');
   if (!screen.classList.contains('on')) return;
   const knoepfe = [...screen.querySelectorAll('button:not(:disabled)')];
   if (!knoepfe.length) return;
