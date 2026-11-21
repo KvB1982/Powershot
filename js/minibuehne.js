@@ -110,7 +110,8 @@ class Puppe {
   setze(P, dt, schlaeger = null) {
     const J = gelenke(P);
     this.J = this.J && dt > 0 ? mischJ(this.J, J, 1 - Math.exp(-dt * this.flink)) : J;
-    this.av.stelle(this.J, { ...this.o, schlaeger });
+    // P.faust (0 = flache Hand … 1 = Faust) und P.stange (Richtung einer Stange in beiden Händen) gehen an die Hände weiter
+    this.av.stelle(this.J, { ...this.o, schlaeger, faust: P.faust, stange: P.stange });
   }
   // Ein Punkt der Figur in der Welt, und umgekehrt: ein Punkt der Welt aus Sicht der Figur
   welt(p) { return this.av.welt(p); }
@@ -503,14 +504,14 @@ SZENEN.kraft = (B) => {
     for (const m of [-1, 1]) { T.K(EISEN, [-0.5, m * 0.56, 0.6], [0.06, 0.06, 1.2]); T.K(EISEN, [-0.5, m * 0.56, 0.03], [0.5, 0.07, 0.05]); T.K(STAHL, [-0.44, m * 0.56, 1.02], [0.1, 0.05, 0.03], { metall: 0.7 }); T.K(STAHL, [-0.4, m * 0.56, 1.05], [0.02, 0.05, 0.08], { metall: 0.7 }); }
     T.K(EISEN, [-0.5, 0, 0.3], [0.05, 1.12, 0.05]);
     const hantel = langhantel(T);
-    U.push({ S, pose: (p) => ({ hip: [0.25, 0, 0.585], auf: [-1, 0, 0], hR: [-0.22, 0.34, 0.81 + 0.36 * p], hL: [-0.22, -0.34, 0.81 + 0.36 * p], eR: [0.25, 1, -0.5], eL: [0.25, -1, -0.5], fR: [0.8, 0.25, 0.09], fL: [0.8, -0.25, 0.09], kR: [0.3, 0.3, 1], kL: [0.3, -0.3, 1], blick: [0, 0, 1], kopfAuf: [-1, 0, 0] }),
+    U.push({ S, pose: (p) => ({ faust: 0.9, stange: [0, 1, 0], hip: [0.25, 0, 0.585], auf: [-1, 0, 0], hR: [-0.22, 0.34, 0.81 + 0.36 * p], hL: [-0.22, -0.34, 0.81 + 0.36 * p], eR: [0.25, 1, -0.5], eL: [0.25, -1, -0.5], fR: [0.8, 0.25, 0.09], fL: [0.8, -0.25, 0.09], kR: [0.3, 0.3, 1], kL: [0.3, -0.3, 1], blick: [0, 0, 1], kopfAuf: [-1, 0, 0] }),
       nach(J) { hantel.position.copy(ort(plus(misch3(J.handR, J.handL, 0.5), [0, 0, 0.03]))); } }); }
 
   // --- Kreuzheben ---
   { const S = station(Math.PI / 2 - 0.62, -0.4, 0.5), T = S.T; matte(S, 1.5, 2.5);
     for (const m of [-1, 1]) T.K(HOLZ, [0.16, m * 0.72, 0.03], [0.6, 0.5, 0.03]);
     const hantel = langhantel(T);
-    U.push({ S, pose: (p) => { const q = weich(p); return { hip: misch3([-0.31, 0, 0.56], [0, 0, 0.9], q), auf: norm(misch3([0.8, 0, 0.6], [0.02, 0, 1], q)), hR: [0.17, 0.27, misch(0.26, 0.8, q)], hL: [0.17, -0.27, misch(0.26, 0.8, q)], fR: [0, 0.15, 0.09], fL: [0, -0.15, 0.09], kR: [1, 0.3, 0.1], kL: [1, -0.3, 0.1], blick: norm([1, 0, misch(-0.25, 0, q)]) }; },
+    U.push({ S, pose: (p) => { const q = weich(p); return { faust: 0.9, stange: [0, 1, 0], hip: misch3([-0.31, 0, 0.56], [0, 0, 0.9], q), auf: norm(misch3([0.8, 0, 0.6], [0.02, 0, 1], q)), hR: [0.17, 0.27, misch(0.26, 0.8, q)], hL: [0.17, -0.27, misch(0.26, 0.8, q)], fR: [0, 0.15, 0.09], fL: [0, -0.15, 0.09], kR: [1, 0.3, 0.1], kL: [1, -0.3, 0.1], blick: norm([1, 0, misch(-0.25, 0, q)]) }; },
       nach(J) { const m = misch3(J.handR, J.handL, 0.5); hantel.position.copy(ort([m[0] + 0.01, 0, Math.max(0.225, m[2] - 0.02)])); } }); }
 
   // --- Kniebeuge mit Stange ---
@@ -519,7 +520,7 @@ SZENEN.kraft = (B) => {
     T.K(EISEN, [-0.42, 0, 1.88], [0.07, 1.3, 0.07]);
     const hantel = langhantel(T);
     let stange = [0, 0, 1.45];
-    U.push({ S, pose: (p) => { const q = weich(p), hip = misch3([-0.27, 0, 0.5], [0, 0, 0.9], q), auf = norm(misch3([0.52, 0, 0.86], [0.03, 0, 1], q)), vor = [auf[2], 0, -auf[0]]; stange = plus(plus(hip, auf, 0.56), vor, -0.115); return { hip, auf, hR: plus(stange, [0.03, 0.4, -0.03]), hL: plus(stange, [0.03, -0.4, -0.03]), eR: [-0.2, 0.25, -1], eL: [-0.2, -0.25, -1], fR: [0.02, 0.23, 0.09], fL: [0.02, -0.23, 0.09], kR: [1, 0.55, 0.1], kL: [1, -0.55, 0.1], blick: [1, 0, 0.05] }; },
+    U.push({ S, pose: (p) => { const q = weich(p), hip = misch3([-0.27, 0, 0.5], [0, 0, 0.9], q), auf = norm(misch3([0.52, 0, 0.86], [0.03, 0, 1], q)), vor = [auf[2], 0, -auf[0]]; stange = plus(plus(hip, auf, 0.56), vor, -0.115); return { faust: 0.9, stange: [0, 1, 0], hip, auf, hR: plus(stange, [0.03, 0.4, -0.03]), hL: plus(stange, [0.03, -0.4, -0.03]), eR: [-0.2, 0.25, -1], eL: [-0.2, -0.25, -1], fR: [0.02, 0.23, 0.09], fL: [0.02, -0.23, 0.09], kR: [1, 0.55, 0.1], kL: [1, -0.55, 0.1], blick: [1, 0, 0.05] }; },
       nach() { hantel.position.copy(ort(stange)); } }); }
 
   // --- Beinpresse ---
@@ -547,7 +548,7 @@ SZENEN.kraft = (B) => {
     T.K(POLSTER, [-0.02, 0, 0.44], [0.42, 0.4, 0.09], { rau: 0.6 }); T.K(POLSTER, [-0.25, 0, 0.82], [0.08, 0.36, 0.62], { dreh: [-0.1, 0, 0], rau: 0.6 });
     T.K(EISEN, [-0.05, 0, 0.2], [0.07, 0.07, 0.4]); T.K(EISEN, [-0.05, 0, 0.03], [0.6, 0.5, 0.05]); T.K(EISEN, [-0.28, 0, 0.6], [0.05, 0.06, 1.0], { dreh: [-0.1, 0, 0] });
     const hR = kurzhantel(T), hL = kurzhantel(T);
-    U.push({ S, pose: (p) => { const q = weich(p), h = [misch(0.08, 0.03, q), misch(0.37, 0.25, q), misch(1.12, 1.6, q)]; return { hip: [0, 0, 0.575], auf: [-0.04, 0, 1], hR: h, hL: sp(h), eR: [0.1, 1, -0.5], eL: [0.1, -1, -0.5], fR: [0.42, 0.2, 0.09], fL: [0.42, -0.2, 0.09], kR: [0.3, 0.2, 1], kL: [0.3, -0.2, 1], blick: [1, 0, 0.03] }; },
+    U.push({ S, pose: (p) => { const q = weich(p), h = [misch(0.08, 0.03, q), misch(0.37, 0.25, q), misch(1.12, 1.6, q)]; return { faust: 0.9, hip: [0, 0, 0.575], auf: [-0.04, 0, 1], hR: h, hL: sp(h), eR: [0.1, 1, -0.5], eL: [0.1, -1, -0.5], fR: [0.42, 0.2, 0.09], fL: [0.42, -0.2, 0.09], kR: [0.3, 0.2, 1], kL: [0.3, -0.2, 1], blick: [1, 0, 0.03] }; },
       nach(J) { hR.position.copy(ort(plus(J.handR, [0, 0, 0.02]))); hL.position.copy(ort(plus(J.handL, [0, 0, 0.02]))); } }); }
 
   let alt = -1;

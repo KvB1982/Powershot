@@ -13,9 +13,13 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const SIZE = 1.83;                   // Körpergröße in Metern (das Modell selbst ist 1 Einheit hoch)
 
-// Reihenfolge der Knochen
+// Reihenfolge der Knochen. Die ersten 13 sind der Körper, danach kommen je Arm sieben Knochen für die Hand:
+//   dreh = das vordere Stück vom Unterarm (dreht sich mit der Hand mit), hand = Handfläche,
+//   fin…1/2/3 = die drei Glieder der vier Finger (alle vier Finger krümmen sich gemeinsam), daum…1/2 = Daumen
 export const BONES = ['pelvis', 'chest', 'head', 'upperR', 'foreR', 'upperL', 'foreL',
-  'thighR', 'shinR', 'thighL', 'shinL', 'footR', 'footL'];
+  'thighR', 'shinR', 'thighL', 'shinL', 'footR', 'footL',
+  'drehR', 'handR', 'finR1', 'finR2', 'finR3', 'daumR1', 'daumR2',
+  'drehL', 'handL', 'finL1', 'finL2', 'finL3', 'daumL1', 'daumL2'];
 
 // Gelenke des Modells in der T-Pose, als [vor, seite, hoch] in Metern (seite: + = rechts)
 export const REST = {
@@ -24,10 +28,19 @@ export const REST = {
   leg: [0, 0.09, 0.93], knee: [-0.022, 0.124, 0.512], ankle: [-0.062, 0.146, 0.09],
 };
 
+// Die Hand des Modells in der T-Pose: Sie liegt flach, die Finger zeigen zur Seite, der Daumen nach vorn.
+// Alle Zahlen sind Abstände von der Körpermitte zur Seite in Metern (an Modell a ausgemessen).
+export const HAND = {
+  gelenk: 0.745,                 // hier sitzt das Handgelenk
+  finger: [0.835, 0.865, 0.89],  // Knöchel, mittleres Gelenk, vorderes Gelenk der Finger
+  daumen: [0.775, 0.045],        // Wurzel des Daumens: [zur Seite, nach vorn]
+  daumenKnick: [0.798, 0.078],   // Gelenk in der Mitte des Daumens
+};
+
 const ss = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
-// Gewichte für einen Punkt (s = seitlich, h = Höhe)
-function weights(s, h) {
+// Gewichte für einen Punkt (s = seitlich, h = Höhe, v = nach vorn)
+function weights(s, h, v) {
   const w = new Array(BONES.length).fill(0);
   const scale = (f) => { for (let i = 0; i < w.length; i++) w[i] *= f; };
   const chest = ss(0.98, 1.18, h);
@@ -40,6 +53,27 @@ function weights(s, h) {
     scale(1 - arm);
     const o = s > 0 ? 3 : 5;
     w[o] = arm * (1 - fore); w[o + 1] = arm * fore;
+    // Unterarm und Hand: Zum Handgelenk hin folgt der Unterarm immer mehr der Drehung der Hand (wie in echt:
+    // Elle und Speiche drehen sich umeinander). Ab dem Handgelenk gehört der Punkt zur Hand.
+    const a = Math.abs(s), q = s > 0 ? 13 : 20;
+    const dreh = ss(0.50, 0.73, a), hand = ss(HAND.gelenk - 0.022, HAND.gelenk + 0.018, a);
+    const unter = w[o + 1];
+    w[o + 1] = unter * (1 - dreh);
+    w[q] = unter * dreh * (1 - hand);
+    let rest = unter * dreh * hand;
+    if (rest > 0) {
+      // Daumen: alles, was vorn über die Handkante hinausragt (die Kante läuft schräg, deshalb die Rechnung mit a)
+      const kante = 0.052 + (a - 0.76) * 0.12;
+      const daum = ss(kante - 0.012, kante + 0.012, v) * (1 - ss(0.826, 0.842, a));
+      const spitze = ss(-0.008, 0.008, (a - HAND.daumenKnick[0]) * 0.55 + (v - HAND.daumenKnick[1]) * 0.83);
+      w[q + 5] = rest * daum * (1 - spitze); w[q + 6] = rest * daum * spitze;
+      rest *= 1 - daum;
+      // Finger: drei Glieder hintereinander
+      const f1 = ss(HAND.finger[0] - 0.012, HAND.finger[0] + 0.012, a);
+      const f2 = ss(HAND.finger[1] - 0.008, HAND.finger[1] + 0.008, a);
+      const f3 = ss(HAND.finger[2] - 0.007, HAND.finger[2] + 0.007, a);
+      w[q + 1] = rest * (1 - f1); w[q + 2] = rest * f1 * (1 - f2); w[q + 3] = rest * f1 * f2 * (1 - f3); w[q + 4] = rest * f1 * f2 * f3;
+    }
   }
   const leg = 1 - ss(0.76, 1.0, h);
   if (leg > 0) {
@@ -60,7 +94,7 @@ function rig(geo) {
   const pos = geo.attributes.position, n = pos.count;
   const idx = new Uint16Array(n * 4), wt = new Float32Array(n * 4);
   for (let i = 0; i < n; i++) {
-    const w = weights(pos.getX(i), pos.getY(i));
+    const w = weights(pos.getX(i), pos.getY(i), -pos.getZ(i));
     const best = w.map((v, k) => [v, k]).sort((a, b) => b[0] - a[0]).slice(0, 4);
     const sum = best.reduce((a, b) => a + b[0], 0) || 1;
     best.forEach(([v, k], j) => { idx[i * 4 + j] = k; wt[i * 4 + j] = v / sum; });

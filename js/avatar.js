@@ -4,7 +4,7 @@
 // Angaben als [vor, seite, hoch] in Metern aus Sicht der Figur (seite: + = Schlaghand).
 
 import * as THREE from 'three';
-import { figureReady, makeFigure, REST, BONES } from './figur.js';
+import { figureReady, makeFigure, REST, BONES, HAND } from './figur.js';
 import { requisit } from './requisiten.js';
 import { mocapClip, mocapFrame, mocapLoop, mocapGang } from './mocap.js';
 import { SHOW, showFuer } from './showschlaege.js';
@@ -37,7 +37,107 @@ function upright(o, yaw = 0, nod = 0) {
 const ARM_BEND = [-0.4, 0.6, -1], KNEE_BEND = [1, 0.15, 0.2];
 const mirror = (p) => [p[0], -p[1], p[2]];
 
-// Alle 13 Knochen-Rahmen aus den Gelenkpunkten (J) berechnen. Dieselbe Funktion gilt für die
+// --- Hände: Hier kannst du einstellen, wie die Hand greift ---
+const GRIFF = {
+  schraeg: 0.35,       // der Schlägergriff liegt schräg in der Hand (Bogenmaß; 0 = genau quer zu den Fingern)
+  drehMax: 1.9,        // so weit kann sich der Unterarm mit der Hand drehen (Bogenmaß, etwa 110°)
+  knickMax: 0.95,      // so weit kann das Handgelenk abknicken (etwa 55°)
+  finger: [1.35, 1.6, 1.1],   // so weit krümmen sich die drei Fingerglieder bei einer Faust (Bogenmaß)
+  daumen: [1.2, 0.7],  // Daumen: so weit klappt er zur Handfläche und knickt in der Mitte
+  mitte: [0.066, 0.032],      // Mitte der Faust: so weit vor dem Handgelenk und so weit unter der Handfläche (Meter)
+  fest: 0.9,           // Hand am Schläger: fast ganz zu
+  locker: 0.3,         // freie Hand: Finger leicht gekrümmt
+  ball: 0.5,           // Hand mit Ball oder am Schlägerhals: halb zu
+};
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const plus = (a, b, k = 1) => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
+const stufe = (a, b, x) => { const u = Math.max(0, Math.min(1, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
+// Einen Pfeil v um die Achse k (Länge 1) um den Winkel w drehen
+function drehe(v, k, w) {
+  const c = Math.cos(w), s = Math.sin(w), kv = cross(k, v), kd = dot(k, v) * (1 - c);
+  return [v[0] * c + kv[0] * s + k[0] * kd, v[1] * c + kv[1] * s + k[1] * kd, v[2] * c + kv[2] * s + k[2] * kd];
+}
+// Der Unterarm in der T-Pose (damit die Hand weiß, wie sie „gerade“ am Arm sitzt)
+const ruheArm = {};
+function ruheUnterarm(s) {
+  if (!ruheArm[s]) {
+    const m = s === 'R' ? 1 : -1, sp = (p) => (m > 0 ? p : mirror(p));
+    const n = cross([-1, 0, 0], norm(sub(sp(REST.grip), sp(REST.sh))));
+    ruheArm[s] = frame(sp(REST.elbow), sub(sp(REST.grip), sp(REST.elbow)), n);
+  }
+  return ruheArm[s];
+}
+const HAND_AB = (HAND.gelenk - REST.elbow[1]) / (REST.grip[1] - REST.elbow[1]) * Math.hypot(REST.grip[0] - REST.elbow[0], REST.grip[1] - REST.elbow[1]);
+
+// Die sieben Knochen einer Hand. In J darf stehen:
+//   faustR / faustL = wie weit die Hand zu ist (0 = flach, 1 = Faust)
+//   griffR / griffL = { y: Richtung des Schlägergriffs, k: 0…1, an: true = an den Griff der anderen Hand rücken }
+//   glatt = { R, L, k } – die Drehung des Unterarms vom letzten Bild (damit nichts springt)
+function handRahmen(F, J, s, m) {
+  const el = J['el' + s], fo = F['fore' + s], ru = ruheUnterarm(s), e = fo.ey;
+  // Richtung aus der T-Pose in die jetzige Pose mitnehmen (so, als wäre die Hand steif am Unterarm)
+  const mit = (v) => { const a = dot(v, ru.ex), b = dot(v, ru.ey), c = dot(v, ru.ez); return [fo.ex[0] * a + fo.ey[0] * b + fo.ez[0] * c, fo.ex[1] * a + fo.ey[1] * b + fo.ez[1] * c, fo.ex[2] * a + fo.ey[2] * b + fo.ez[2] * c]; };
+  let X = mit([1, 0, 0]), Y = mit([0, m, 0]);       // X = zum Daumen hin, Y = wohin die Finger zeigen
+  let gelenk = plus(el, e, HAND_AB);
+  const g = J['griff' + s], gk = g ? g.k : 0;
+  const ca = Math.cos(GRIFF.schraeg), sa = Math.sin(GRIFF.schraeg);
+  // 1. Der Unterarm dreht sich, bis der Griff möglichst gut in der Hand liegt
+  let dreh = 0;
+  if (gk > 0) {
+    const a0 = [X[0] * ca + Y[0] * sa, X[1] * ca + Y[1] * sa, X[2] * ca + Y[2] * sa];
+    const ap = plus(a0, e, -dot(a0, e)), yp = plus(g.y, e, -dot(g.y, e));
+    dreh = Math.atan2(dot(e, cross(ap, yp)), dot(ap, yp)) * stufe(0.12, 0.4, Math.hypot(yp[0], yp[1], yp[2]));
+    dreh = Math.max(-GRIFF.drehMax, Math.min(GRIFF.drehMax, dreh)) * gk;
+  }
+  if (J.glatt) {
+    if (J.glatt[s] != null) dreh = J.glatt[s] + (dreh - J.glatt[s]) * J.glatt.k;
+    J.glatt[s] = dreh;
+  }
+  if (dreh) { X = drehe(X, e, dreh); Y = drehe(Y, e, dreh); }
+  F['dreh' + s] = frame(el, e, X);
+  // 2. Den Rest macht das Handgelenk: Es knickt ab, so weit es kann
+  if (gk > 0) {
+    const a1 = [X[0] * ca + Y[0] * sa, X[1] * ca + Y[1] * sa, X[2] * ca + Y[2] * sa];
+    const ax = cross(a1, g.y), sl = Math.hypot(ax[0], ax[1], ax[2]);
+    if (sl > 1e-4) {
+      const w = Math.min(Math.atan2(sl, dot(a1, g.y)), GRIFF.knickMax) * gk, k = [ax[0] / sl, ax[1] / sl, ax[2] / sl];
+      X = drehe(X, k, w); Y = drehe(Y, k, w);
+    }
+  }
+  X = norm(plus(X, Y, -dot(X, Y)));
+  const Z = cross(X, Y), innen = [-Z[0] * m, -Z[1] * m, -Z[2] * m];      // innen = wohin die Handfläche schaut
+  let mitte = plus(plus(gelenk, Y, GRIFF.mitte[0]), innen, GRIFF.mitte[1]);
+  // Zweite Hand am Griff: Sie rückt das letzte Stück an den Schläger heran
+  if (gk > 0 && g.an && F.faustR) {
+    const ziel = plus(F.faustR, g.y, Math.max(0.085, dot(sub(mitte, F.faustR), g.y)));
+    let weg = sub(ziel, mitte);
+    const l = Math.hypot(weg[0], weg[1], weg[2]);
+    if (l > 0.05) weg = [weg[0] * 0.05 / l, weg[1] * 0.05 / l, weg[2] * 0.05 / l];
+    gelenk = plus(gelenk, weg, gk); mitte = plus(mitte, weg, gk);
+  }
+  F['hand' + s] = { o: gelenk, ex: X, ey: Y, ez: Z };
+  F['faust' + s] = mitte;
+  // Finger: drei Glieder, jedes krümmt sich ein Stück weiter zur Handfläche
+  const zu = J['faust' + s] || 0;
+  let o = plus(gelenk, Y, HAND.finger[0] - HAND.gelenk), w = 0;
+  for (let i = 0; i < 3; i++) {
+    w += GRIFF.finger[i] * zu;
+    const c = Math.cos(w), si = Math.sin(w), ey = [Y[0] * c + innen[0] * si, Y[1] * c + innen[1] * si, Y[2] * c + innen[2] * si];
+    F['fin' + s + (i + 1)] = { o, ex: X, ey, ez: cross(X, ey) };
+    if (i < 2) o = plus(o, ey, HAND.finger[i + 1] - HAND.finger[i]);
+  }
+  // Daumen: klappt zur Handfläche und knickt in der Mitte
+  const d1 = GRIFF.daumen[0] * zu, c1 = Math.cos(d1), s1 = Math.sin(d1);
+  const dx = [X[0] * c1 + innen[0] * s1, X[1] * c1 + innen[1] * s1, X[2] * c1 + innen[2] * s1];
+  const o1 = plus(plus(gelenk, Y, HAND.daumen[0] - HAND.gelenk), X, HAND.daumen[1]);
+  F['daum' + s + '1'] = { o: o1, ex: dx, ey: Y, ez: cross(dx, Y) };
+  const o2 = plus(plus(o1, Y, HAND.daumenKnick[0] - HAND.daumen[0]), dx, HAND.daumenKnick[1] - HAND.daumen[1]);
+  const d2 = d1 + GRIFF.daumen[1] * zu, c2 = Math.cos(d2), s2 = Math.sin(d2);
+  const dx2 = [X[0] * c2 + innen[0] * s2, X[1] * c2 + innen[1] * s2, X[2] * c2 + innen[2] * s2];
+  F['daum' + s + '2'] = { o: o2, ex: dx2, ey: Y, ez: cross(dx2, Y) };
+}
+
+// Alle Knochen-Rahmen aus den Gelenkpunkten (J) berechnen. Dieselbe Funktion gilt für die
 // Ruhe-Pose des Modells und für jede Pose im Spiel – so passt beides genau zusammen.
 function boneFrames(J) {
   const F = {};
@@ -56,6 +156,7 @@ function boneFrames(J) {
     const n = cross(J['armBend' + s], norm(sub(hd, sh)));
     F['upper' + s] = frame(sh, sub(el, sh), n);
     F['fore' + s] = frame(el, sub(hd, el), n);
+    handRahmen(F, J, s, m);
     const hip = J['hip' + s], kn = J['knee' + s], ft = J['foot' + s];
     const k = cross(J['kneeBend' + s] || [KNEE_BEND[0], KNEE_BEND[1] * m, KNEE_BEND[2]], norm(sub(ft, hip)));
     F['thigh' + s] = frame(hip, sub(kn, hip), k);
@@ -689,9 +790,49 @@ export class Avatar {
     if (st.ball) yaw = clamp(Math.atan2((st.ball.x - px) * d, Math.abs(st.ball.z - pz) + 2), -0.7, 0.7);
     // Beim Seitenwechsel schaut niemand dem Ball nach: Der Kopf schaut geradeaus und sieht sich gemütlich etwas um.
     yaw = yaw * (1 - walkK) + Math.sin(a.time * 0.6 + a.rnd * 6) * 0.22 * walkK;
+    // Schläger: wohin der Griff zeigt (Y) und wohin die Bespannung schaut (Z)
+    const rl = Math.hypot(pose.d[0], pose.d[1], pose.d[2]) || 1;
+    const r1 = [pose.d[0] / rl, pose.d[1] / rl, pose.d[2] / rl];
+    let r2 = [0, r1[2], -r1[1]];
+    const r2l = Math.hypot(r2[1], r2[2]);
+    r2 = r2l < 0.2 ? [0, 1, 0] : [0, r2[1] / r2l, r2[2] / r2l];
+    const Y = D(r1).normalize();
+    const X = D(r2).normalize();
+    const Z = new THREE.Vector3().crossVectors(X, Y).normalize();
+    for (const [m, w, , gehen] of layers) {
+      if (gehen) continue;
+      // Schläger aus der Aufnahme: Richtung des Griffs (d) und der Schlagfläche (n)
+      const Zm = D(m.n);
+      if (Zm.dot(Z) < 0) Zm.negate();
+      Y.lerp(D(m.d), w).normalize();
+      Z.lerp(Zm, w).normalize();
+    }
+    X.crossVectors(Y, Z).normalize();
+    Z.crossVectors(X, Y).normalize();
+    let faustMitte = null;
     if (this.real) {
+      // Hände: Die Schlaghand greift den Schläger. Die andere Hand ist locker, greift mit zu (beidhändige Rückhand),
+      // stützt den Schläger am Hals, hält den Ball oder ballt beim Jubeln die Faust.
+      const mitSchlaeger = !st.ohneSchlaeger;
+      const yF = [(Y.x * sf - Y.z * cf) * d, (Y.x * cf + Y.z * sf) * d * hand, Y.y];     // Griff-Richtung aus Sicht der Figur
+      const zurHand = sub(handL, handR), lang = dot(zurHand, yF);
+      const quer = Math.hypot(zurHand[0] - yF[0] * lang, zurHand[1] - yF[1] * lang, zurHand[2] - yF[2] * lang);
+      const amSchlaeger = mitSchlaeger && lang > 0 && lang < 0.45 ? 1 - stufe(0.05, 0.12, quer) : 0;
+      const amGriff = amSchlaeger * (1 - stufe(0.16, 0.24, lang));
+      let zuL = GRIFF.locker + (GRIFF.fest - GRIFF.locker) * amGriff + (GRIFF.ball - GRIFF.locker) * (amSchlaeger - amGriff);
+      if (st.serveK != null || st.prellK != null) zuL = Math.max(zuL, GRIFF.ball);     // der Ball liegt in der Hand
+      if (a.mood === 'cheer' && this.jubel.pose !== 'cheer_ohr') zuL += (1 - zuL) * smooth(a.moodK);   // Faust!
+      if (!mitSchlaeger) zuL = GRIFF.locker + 0.25 * jw;
+      const zuR = mitSchlaeger ? GRIFF.fest : zuL;
+      const flink = Math.min(1, dt * 14);
+      a.zuL = a.zuL == null ? zuL : a.zuL + (zuL - a.zuL) * flink;
+      a.zuR = a.zuR == null ? zuR : a.zuR + (zuR - a.zuR) * flink;
+      a.glatt = a.glatt || { R: null, L: null, k: 1 };
+      a.glatt.k = dt > 0 ? Math.min(1, dt * 20) : 1;
       // Realistisches Modell: nur die Knochen einstellen, die Oberfläche folgt von allein
       const F = boneFrames({
+        faustR: a.zuR, faustL: a.zuL, glatt: a.glatt,
+        griffR: mitSchlaeger ? { y: yF, k: 1 } : null, griffL: amGriff > 0.01 ? { y: yF, k: amGriff, an: true } : null,
         hip: hipMid, neck, shR, shL, elR, elL, handR, handL, armBendR, armBendL, hipR, hipL, kneeR, kneeL, footR, footL,
         kneeBendR, kneeBendL, footYawR, footYawL, footNodR, footNodL, headF, headU,
         hipYaw, yaw: yaw * hand, nod: a.mood === 'sad' ? 0.35 * a.moodK : 0,
@@ -699,11 +840,12 @@ export class Avatar {
       for (let i = 0; i < BONES.length; i++) {
         const fr = F[BONES[i]], b = this.bones[i];
         // Jeder Knochen wird so lang wie die Körpergröße verlangt – und je nach Statur etwas dicker oder dünner (Kopf und Füße nicht)
-        const dick = i === 2 || i > 10 ? G : GB;
+        const dick = i === 2 || i === 11 || i === 12 ? G : GB;
         b.matrix.makeBasis(D(fr.ex).multiplyScalar(dick), D(fr.ey).multiplyScalar(G), D(fr.ez).multiplyScalar(dick)).setPosition(W(fr.o));
         b.matrixWorldNeedsUpdate = true;
       }
       this.handLWorld = W(handL);
+      faustMitte = W(F.faustR);
     } else {
     const limb = (mesh, a3, b3, t0 = 0, t1 = 1) => {
       const A = W(a3), B = W(b3);
@@ -742,26 +884,9 @@ export class Avatar {
     this.handLWorld = M.handL.position;
     }
 
-    // Schläger
-    const rl = Math.hypot(pose.d[0], pose.d[1], pose.d[2]) || 1;
-    const r1 = [pose.d[0] / rl, pose.d[1] / rl, pose.d[2] / rl];
-    let r2 = [0, r1[2], -r1[1]];
-    const r2l = Math.hypot(r2[1], r2[2]);
-    r2 = r2l < 0.2 ? [0, 1, 0] : [0, r2[1] / r2l, r2[2] / r2l];
-    const Y = D(r1).normalize();
-    const X = D(r2).normalize();
-    const Z = new THREE.Vector3().crossVectors(X, Y).normalize();
-    for (const [m, w, , gehen] of layers) {
-      if (gehen) continue;
-      // Schläger aus der Aufnahme: Richtung des Griffs (d) und der Schlagfläche (n)
-      const Zm = D(m.n);
-      if (Zm.dot(Z) < 0) Zm.negate();
-      Y.lerp(D(m.d), w).normalize();
-      Z.lerp(Zm, w).normalize();
-    }
-    X.crossVectors(Y, Z).normalize();
-    Z.crossVectors(X, Y).normalize();
-    M.racket.position.copy(W(handR));
+    // Der Griff liegt mitten in der Faust (das Griffende schaut unten ein Stück heraus)
+    if (faustMitte) M.racket.position.copy(faustMitte).addScaledVector(Y, -0.03);
+    else M.racket.position.copy(W(handR));
     M.racket.visible = !st.ohneSchlaeger;          // bei der Siegerehrung liegt der Schläger in der Tasche
     this.handRWorld = M.racket.position;
     M.racket.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, Z));
@@ -781,10 +906,19 @@ export class Avatar {
     const D = (p) => new THREE.Vector3(p[0] * sf - p[1] * cf, p[2], p[0] * cf + p[1] * sf);
     const W = (p) => D(p).multiplyScalar(G).add(new THREE.Vector3(bx, by, bz));
     this.welt = W; this.richtung = D;
-    const F = boneFrames(J);
+    // Hände: locker, wenn die Pose nichts anderes sagt (J.faustR / J.faustL: 0 = flach, 1 = Faust); mit Schläger greift die rechte Hand zu
+    // o.faust = Zahl oder [rechts, links]; o.stange = Richtung einer Stange, die beide Hände von oben greifen (Daumen zeigen zueinander)
+    const griff = o.schlaeger ? norm(o.schlaeger.d) : null, st = o.stange ? norm(o.stange) : null;
+    const zu = Array.isArray(o.faust) ? o.faust : [o.faust, o.faust];
+    this.glattS = this.glattS || { R: null, L: null, k: 0.35 };
+    const F = boneFrames({
+      ...J, glatt: this.glattS,
+      faustR: zu[0] ?? (griff ? GRIFF.fest : GRIFF.locker), faustL: zu[1] ?? GRIFF.locker,
+      griffR: griff ? { y: griff, k: 1 } : st ? { y: [-st[0], -st[1], -st[2]], k: 1 } : null, griffL: st ? { y: st, k: 1 } : null,
+    });
     for (let i = 0; i < BONES.length; i++) {
       const fr = F[BONES[i]], b = this.bones[i];
-      const dick = i === 2 || i > 10 ? G : GB;
+      const dick = i === 2 || i === 11 || i === 12 ? G : GB;
       b.matrix.makeBasis(D(fr.ex).multiplyScalar(dick), D(fr.ey).multiplyScalar(G), D(fr.ez).multiplyScalar(dick)).setPosition(W(fr.o));
       b.matrixWorldNeedsUpdate = true;
     }
@@ -794,7 +928,7 @@ export class Avatar {
       const Y = D(o.schlaeger.d).normalize(), Z = D(o.schlaeger.n || [0, 0, 1]);
       const X = new THREE.Vector3().crossVectors(Y, Z).normalize();
       Z.crossVectors(X, Y).normalize();
-      rk.position.copy(W(J.handR));
+      rk.position.copy(W(F.faustR)).addScaledVector(Y, -0.03);
       rk.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, Z));
     }
   }
