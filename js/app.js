@@ -9,7 +9,7 @@ import { Match } from './match.js';
 import { AUFSCHLAEGE, AUFSCHLAG_ARTEN, standardAufschlag } from './schlaege.js';
 import { loadFigure } from './figur.js';
 import { ladeRequisiten } from './requisiten.js';
-import { loadMocap, mocapClip } from './mocap.js';
+import { loadMocap, loadGang, mocapClip } from './mocap.js';
 import { SHOW } from './showschlaege.js';
 import { schlagbuchHtml, uhrHtml } from './schlagbuch.js';
 import * as D from './data.js';
@@ -2916,7 +2916,7 @@ window.__powershotPadWeg = () => { controls.nativePad = false; controls.padWeg()
 
 window.__powershot = { game, controls, settings, step, kameraLauf, kameraBild, get match() { return match; }, get career() { return career; }, get season() { return season; }, actions };
 // Das Spielermodell laden (höchstens 8 Sekunden warten – sonst geht es mit den einfachen Figuren los)
-await Promise.race([Promise.all([loadFigure(), loadMocap(), ladeRequisiten()]), new Promise((r) => setTimeout(r, 8000))]);
+await Promise.race([Promise.all([loadFigure(), loadMocap(), loadGang(), ladeRequisiten()]), new Promise((r) => setTimeout(r, 8000))]);
 $('#loading').remove();
 actions.home();
 requestAnimationFrame(loop);
