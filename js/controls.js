@@ -72,7 +72,16 @@ export function wischArt(dx, dy) {
 const SWING_START = 1.6;               // ab dieser Beschleunigung (in g, 1 g = Erdanziehung) zählt es als Schwung
 const SWING_VOLL = 5.0;                // so stark muss man schwingen für volle Kraft
 const SWING_PAUSE = 0.4;               // Sekunden Ruhe nach einem Schwung (sonst zählt einer doppelt)
-const PAD_HALTBAR = 0.5;               // so lange "gilt" ein Schwung oder Tastendruck, bis der Ball da sein muss
+const PAD_HALTBAR = 0.6;               // so lange "gilt" ein Schwung oder Tastendruck, bis der Ball da sein muss
+// --- Schwingen mit Uhr, iPhone oder Controller: Hilfen, damit man damit auch Punkte macht (seit 21.11.2026, alle Zahlen geschätzt) ---
+const SCHWUNG_MIN = 0.5;               // so hart ist schon der sanfteste Schwung (0 bis 1). Früher 0.3 – da kam der Ball zu lahm.
+const SCHWUNG_KURVE = 0.6;             // kleiner als 1 = schon ein mittlerer Schwung gibt fast volle Härte
+const SCHWUNG_ECKE = 0.6;              // kleiner als 1 = der Ball geht eher in die Ecken als in die Mitte (dort steht der Gegner)
+const SCHWUNG_TIEF = 0.08;             // ein harter Schwung fliegt um so viel tiefer ins Feld (Anteil der Feldlänge)
+// Aus der gemessenen Schwung-Stärke (0 bis 1) wird die Härte des Schlags (0 bis 1)
+export const schwungHaerte = (kraft) => SCHWUNG_MIN + (1 - SCHWUNG_MIN) * Math.pow(clamp(kraft, 0, 1), SCHWUNG_KURVE);
+// Aus der Richtung nach dem Timing (-1 bis +1) wird das Ziel: Die Mitte wird "auseinandergezogen", die Ecken bleiben.
+export const schwungRichtung = (lr) => Math.sign(lr) * Math.pow(Math.abs(lr), SCHWUNG_ECKE);
 // --- Controller: Das Timing bestimmt die Richtung, wie beim echten Tennis. ---
 // Triffst du den Ball früh (noch vor dem Körper), geht er nach links. Triffst du ihn spät (neben dem Körper), nach rechts.
 // Das gilt, wenn der Ball RECHTS von dir ist (Vorhand beim Rechtshänder). Ist der Ball LINKS von dir (Rückhand),
@@ -80,12 +89,12 @@ const PAD_HALTBAR = 0.5;               // so lange "gilt" ein Schwung oder Taste
 // Auf welcher Seite der Ball ist, sagt das Match der Steuerung in "schlagSeite" (+1 = rechts von dir, -1 = links).
 // Das ganze Fenster ist kurz und liegt direkt vor dem Moment, in dem der Ball bei dir ankommt:
 //
-//   0,32 s vorher        0,16 s vorher        Ball ist da
+//   0,38 s vorher        0,19 s vorher        Ball ist da
 //   ganz links  ───────────  Mitte  ───────────  ganz rechts
 //
-const TIMING_FRUEH = 0.32;             // so viele Sekunden vor dem Treffen = ganz nach links
-const TIMING_MITTE = 0.16;             // so viele Sekunden vor dem Treffen = genau geradeaus
-export const TIMING_SPAET = 0.12;      // so lange nach dem Treffmoment darf man noch schlagen (bleibt ganz rechts), danach "Zu spät!"
+const TIMING_FRUEH = 0.38;             // so viele Sekunden vor dem Treffen = ganz nach links
+const TIMING_MITTE = 0.19;             // so viele Sekunden vor dem Treffen = genau geradeaus
+export const TIMING_SPAET = 0.15;      // so lange nach dem Treffmoment darf man noch schlagen (bleibt ganz rechts), danach "Zu spät!"
 // Ein Schwung wird erst erkannt, wenn er schon einen Moment läuft. Diese Zeit rechnen wir zurück.
 const SCHWUNG_VERZUG = 0.08;           // iPhone oder Controller in der Hand
 const UHR_VERZUG = 0.04;               // Apple Watch (zusätzlich zur gemessenen Funkzeit)
@@ -303,7 +312,8 @@ export class Controls {
     }
     // Von oben nach unten geschwungen = Slice, sonst Topspin
     const type = hochAnteil < -0.35 ? 'slice' : 'drive';
-    this.commitPad(type, 0.3 + 0.7 * kraft, senkrecht, this.aufschlagArt);
+    this.commitPad(type, schwungHaerte(kraft), senkrecht, this.aufschlagArt);
+    this.committed.schwung = true;         // merken: Das war ein echter Schwung (keine Taste) – dafür gibt es die Schwung-Hilfen
     this.padAt = this.time - alter;
   }
 
@@ -334,8 +344,11 @@ export class Controls {
     // Richtung: Wer einen Stick hat und ihn drückt, zielt damit. Sonst entscheidet das Timing.
     const ud = this.pad.f;
     if (this.ctx === 'serve') return { type: 'serve', art: c.art, aim: this.pad.x * 0.85, power: Math.min(1.05, c.power + 0.1), committed: true };
-    const lr = this.pad.x || this.timingZiel(spaet);
-    return { type: c.type, aimMode: 'abs', aim: lr * 0.88, depth: 0.78 + ud * 0.16, power: clamp(c.power, 0.2, 1), committed: true, vonOben: !!c.vonOben };
+    // Wer schwingt und nicht mit dem Stick zielt, bekommt Hilfe: Der Ball geht eher in die Ecken und bei harten Schwüngen tiefer.
+    const hilfe = !!c.schwung && !this.pad.x;
+    const lr = this.pad.x || (hilfe ? schwungRichtung(this.timingZiel(spaet)) : this.timingZiel(spaet));
+    const tief = hilfe ? SCHWUNG_TIEF * clamp((c.power - 0.5) * 2, 0, 1) : 0;
+    return { type: c.type, aimMode: 'abs', aim: lr * 0.88, depth: 0.78 + ud * 0.16 + tief, power: clamp(c.power, 0.2, 1), committed: true, vonOben: !!c.vonOben, schwung: hilfe };
   }
 
   // Im Browser (ohne iOS-App) fragen wir den Controller selbst ab. Dort gibt es nur Stick und Tasten.

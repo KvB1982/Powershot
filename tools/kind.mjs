@@ -2,12 +2,15 @@
 //   nix     = macht gar nichts (schlägt nur auf)
 //   drueckt = schlägt jeden Ball mit halber Kraft in die Mitte, zielt nie
 //   zielt   = schlägt kräftig dorthin, wo der Gegner nicht steht
+//   uhr     = schwingt wie mit der Apple Watch: mittelstarke Schwünge, Richtung zufällig (Timing nicht geübt), jeder zwölfte Ball verpasst
 // So sieht man, ob eigenes Schlagen und Zielen belohnt wird. Aufruf: node tools/kind.mjs [Matches je Zeile] [Spieler-Platz]
 // Wunsch: "nix" verliert auf jeder Stufe klar. "drueckt" gewinnt auf Leicht fast immer (dafür ist Leicht da),
 // auf Mittel etwa die Hälfte und auf Schwer fast nie. "zielt" ist auf Mittel und Schwer deutlich besser als "drueckt".
 // Die Stellschrauben: aiAngriff, meReact, aiSigma in js/data.js und CHANCE_…, HILFS_… oben in js/match.js.
 import { Match } from '../js/match.js';
 import { PLAYERS } from '../js/data.js';
+const { schwungHaerte, schwungRichtung } = await import('../js/controls.js');
+const zufall = () => { let s = 0; for (let i = 0; i < 4; i++) s += Math.random(); return (s - 2) * 1.2; };   // ungefähr eine Glockenkurve um 0
 
 const N = +process.argv[2] || 12, platz = +process.argv[3] || 1;
 const ich = PLAYERS[platz - 1];
@@ -16,9 +19,15 @@ const ich = PLAYERS[platz - 1];
 function steuerung(art, match) {
   return {
     begin() {}, peek() { return null; }, move() { return { x: 0, f: 0 }; }, takeNetz() { return null; },
-    takeServe() { return { power: 0.6, aim: 0 }; },
+    takeServe() { return art === 'uhr' ? { power: Math.min(1.05, schwungHaerte(0.25 + 0.4 * Math.random()) + 0.1), aim: 0 } : { power: 0.6, aim: 0 }; },
     consume() {
       if (art === 'nix') return null;
+      if (art === 'uhr') {
+        if (Math.random() < 1 / 12) return null;                       // Schwung zu spät oder nicht erkannt
+        const haerte = schwungHaerte(0.2 + 0.5 * Math.random());       // Schwünge mit 20 bis 70 % der vollen Stärke
+        const lr = Math.max(-1, Math.min(1, zufall() * 0.55));
+        return { type: 'drive', aimMode: 'abs', aim: schwungRichtung(lr) * 0.88, depth: 0.78 + 0.08 * Math.max(0, Math.min(1, (haerte - 0.5) * 2)), power: haerte, schwung: true };
+      }
       if (art === 'drueckt') return { type: 'drive', aimMode: 'abs', aim: 0, power: 0.45 };
       const gegner = match().P[1];
       return { type: 'drive', aimMode: 'abs', aim: gegner.x >= 0 ? -0.75 : 0.75, power: 0.75 };
@@ -29,12 +38,12 @@ function steuerung(art, match) {
 console.log(`Du bist ${ich.name}. ${N} kurze Matches je Zeile, Gegner aus den Top 20.\n`);
 console.log('Stufe   Spieler   Siege   Punkte-Anteil   Ø Schläge   so enden deine Punkte / die des Gegners');
 for (const diff of ['leicht', 'mittel', 'schwer']) {
-  for (const art of ['nix', 'drueckt', 'zielt']) {
+  for (const art of ['nix', 'drueckt', 'zielt', 'uhr']) {
     let siege = 0, pts = [0, 0], rally = 0, n = 0; const wie = [{}, {}];
     for (let k = 0; k < N; k++) {
       let m;
       const gegner = PLAYERS[1 + (k * 3) % 19];
-      m = new Match({ players: [ich, gegner === ich ? PLAYERS[19] : gegner], human: 0, surface: 'hard', difficulty: diff, sets: 1, games: 3, mode: 'match', assist: 'voll', controlMode: 'klassik', changeover: false },
+      m = new Match({ players: [ich, gegner === ich ? PLAYERS[19] : gegner], human: 0, surface: 'hard', difficulty: diff, sets: 1, games: 3, mode: 'match', assist: 'voll', controlMode: art === 'uhr' ? 'controller' : 'klassik', changeover: false },
         new Proxy({}, { get: (_, key) => (x) => { if (key === 'point') { rally += x.rally; n++; wie[x.winner][x.reason] = (wie[x.winner][x.reason] || 0) + 1; } } }),
         steuerung(art, () => m));
       let t = 0; while (m.state !== 'over' && m.score.winner === null && t++ < 600000) m.update(1 / 60);

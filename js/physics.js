@@ -138,6 +138,9 @@ export class Ball {
 
     // Boden
     if (p.y <= COURT.BALL_R && v.y < 0) {
+      // Der Ball ist in diesem Rechenschritt ein Stück "in den Boden" geflogen: genau bis zur Berührung zurückgehen
+      const zuviel = Math.min(1, (COURT.BALL_R - p.y) / (-v.y * H));
+      p.x -= v.x * H * zuviel; p.z -= v.z * H * zuviel;
       p.y = COURT.BALL_R;
       this.bounces++;
       events.push({ type: 'bounce', x: p.x, z: p.z, n: this.bounces, speed: sp });
@@ -201,14 +204,20 @@ export function solveShot(p0, target, vh, spin) {
   const fly = (winkel, vy0) => {
     let x = p0.x, y = p0.y, z = p0.z, t = 0, yNet = null, xNet = 0;
     v.x = Math.sin(winkel) * vh; v.y = vy0; v.z = Math.cos(winkel) * vh;
-    const h = 1 / 120;
+    const h = H;        // derselbe Rechenschritt wie beim echten Ballflug – dann passen Plan und Flug genau zusammen
     while (t < 8) {
       beschleunigung(v, spin, a);
       v.x += a.x * h; v.y += a.y * h; v.z += a.z * h;
-      const oz = z;
+      const oz = z, oy = y;
       x += v.x * h; y += v.y * h; z += v.z * h; t += h;
       if (crosses && yNet === null && (oz > 0) !== (z > 0)) { yNet = y; xNet = x; }
-      if (y <= COURT.BALL_R && v.y < 0) break;
+      if (y <= COURT.BALL_R && v.y < 0) {
+        // Der Ball ist in diesem Rechenschritt ein Stück "in den Boden" geflogen. Wir gehen genau bis zur Stelle zurück,
+        // an der er den Boden berührt hat – sonst landen sehr schnelle Bälle bis zu 30 cm neben dem Ziel.
+        const zuviel = (COURT.BALL_R - y) / Math.max(1e-6, oy - y);
+        x -= v.x * h * zuviel; z -= v.z * h * zuviel; t -= h * zuviel;
+        break;
+      }
     }
     return { s: Math.hypot(x - p0.x, z - p0.z), winkel: Math.atan2(x - p0.x, z - p0.z), yNet, xNet, t };
   };

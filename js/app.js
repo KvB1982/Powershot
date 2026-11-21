@@ -52,11 +52,16 @@ const settings = Object.assign({
   kamera: 'aus', kameraRaum: 'mittel', kameraTauschen: false,
   spielzuege: 'aus',       // taktische Spielzüge im Match: 'aus' oder 'an'
   blick: 'tv',             // Blick auf den Platz im Match: 'tv' (wie im Fernsehen) oder 'nah' (dicht hinter dir)
+  tempo: 'schnell',        // Spieltempo im Match: 'echt', 'schnell' oder 'turbo' (siehe TEMPO_MAL)
 }, (() => { try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch (e) { return {}; } })());
 // Welche Spielzüge hast du schon gelernt? { id: { t: im Training geschafft, m: im Match geschafft } }
 const ZUG_KEY = 'powershot.spielzuege.v1';
 const zugSpeicher = (() => { try { return JSON.parse(localStorage.getItem(ZUG_KEY)) || {}; } catch (e) { return {}; } })();
 const zugSichern = () => { try { localStorage.setItem(ZUG_KEY, JSON.stringify(zugSpeicher)); } catch (e) { /* egal */ } };
+// Spieltempo: Mit dieser Zahl wird die Zeit im Match malgenommen. 1.1 heißt: Ball, Spieler und Bewegungen
+// laufen alle zusammen 10 % schneller ab – wie ein Film, der etwas schneller abgespielt wird. Flugbahnen bleiben gleich.
+const TEMPO_MAL = { echt: 1, schnell: 1.1, turbo: 1.22 };
+const tempoMal = () => TEMPO_MAL[settings.tempo] || 1;
 const saveSettings = () => { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) { /* egal */ } };
 
 const CONTROL_NAMES = { klassik: 'Klassik (Maus)', touch: 'Touch (iPad)', wisch: 'Wischen (iPad, neu)', profi: 'Profi (Tastatur)', controller: 'Controller / iPhone-Schläger' };
@@ -428,6 +433,9 @@ actions.settings = (v) => {
       ${optionRow('Grafik', 'quality', { hoch: 'Schön', niedrig: 'Schnell (ältere Geräte)' })}
       ${optionRow('Spielerfiguren', 'figures', { echt: 'Realistisch', einfach: 'Einfach' })}
       ${optionRow('Blick auf den Platz', 'blick', { tv: 'Wie im Fernsehen', nah: 'Nah am Spieler' })}
+      ${optionRow('Spieltempo', 'tempo', { echt: 'Echt', schnell: 'Schnell', turbo: 'Turbo' })}
+      <p class="dim" style="margin:6px 0 0;font-size:13px">Wie schnell die Zeit im Match läuft. „Schnell“ spielt alles 10 % flotter ab (Ball und Spieler zusammen),
+        „Turbo“ 22 %. Je schneller, desto weniger Zeit hast du zum Schlagen.</p>
       <p class="dim" style="margin:6px 0 0;font-size:13px">Der Platz hat immer die echten Maße (23,77 m lang). „Wie im Fernsehen“ schaut von weit hinten und oben –
         beide Spieler sehen ähnlich groß aus. „Nah am Spieler“ ist der alte Blick: du bist groß, der Gegner klein.</p>
     </div>
@@ -2607,6 +2615,12 @@ const hud = {
     s.textContent = name + kmh + ' km/h'; s.classList.add('on');
     speedTimer = 2.5;
   },
+  // Dein harter Schlag im Ballwechsel: kurz das Tempo zeigen (stark = 0 bis 1, ab 0.6 mit Flamme)
+  schlagTempo(kmh, stark) {
+    const s = $('#speed');
+    s.textContent = (stark >= 0.6 ? '🔥 ' : '') + kmh + ' km/h'; s.classList.add('on');
+    speedTimer = 1.1;
+  },
   training(tr, pts, ok) {
     if (tr.lernen) {
       // Spielzug-Training: Jeder geschaffte Spielzug wird sofort gemerkt
@@ -2836,11 +2850,15 @@ function loop(now) {
   controls.pollPad();               // Controller im Browser abfragen (auch in der Pause, wegen der Pause-Taste)
   // Läuft ein Mini-Spiel (minispiele.js), bleibt das Gelände dahinter als Standbild stehen: Das spart Rechenzeit fürs Mini-Spiel.
   if (MS.offen()) return requestAnimationFrame(loop);
+  // Im Match läuft die Zeit nach dem eingestellten Spieltempo. Bei einem langen Bild rechnen wir in zwei halben Schritten,
+  // damit ein sehr schneller Ball nicht in einem einzigen Schritt am Schläger vorbeifliegt.
+  const dm = match ? dt * tempoMal() : dt;
   if (match && !paused) {
-    controls.update(dt);
-    match.update(dt);
+    controls.update(dt);       // die Steuerung rechnet in echter Zeit: Die Zeitfenster zum Schlagen werden durch das Spieltempo nicht kürzer
+    const teile = dm > 0.022 ? 2 : 1;
+    for (let i = 0; i < teile; i++) match.update(dm / teile);
   }
-  game.frame(match && paused ? 0 : dt);
+  game.frame(match && paused ? 0 : dm);
   gelaendeTon(dt);
   hudFrame(dt);
   kameraFrame();
