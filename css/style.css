@@ -385,8 +385,8 @@ tr.cut td { text-align: center; font-size: 11px; font-weight: 700; color: var(--
 #anlage h3 { margin: 0 0 4px; font-size: 22px; color: var(--accent); }
 #anlage p { margin: 4px 0; }
 #anlage .kam { position: absolute; right: max(10px, env(safe-area-inset-right)); top: 50%; transform: translateY(-50%);
-  display: grid; gap: 8px; pointer-events: auto; }
-#anlage .kam button { width: 52px; height: 52px; padding: 0; font-size: 22px; background: var(--bg); touch-action: none; }
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; pointer-events: auto; }      /* zwei Spalten wie im Reitturnier: ⟲ ⟳ / ＋ － / ▲ ▼ nebeneinander */
+#anlage .kam button { width: 48px; height: 48px; padding: 0; font-size: 21px; background: var(--bg); touch-action: none; }
 #anlage .kam button.aus { opacity: 0.45; filter: grayscale(1); }
 #anlage .oben { align-items: center; }
 #anlage .zeit { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; font-weight: 600; font-size: 15px; }
@@ -569,7 +569,7 @@ table.erklaer td:first-child { white-space: nowrap; }
 @media (max-height: 500px) { h3.gruppe { max-width: 640px; margin: 8px auto 4px; font-size: 12px; } #helpBtn { top: max(12px, env(safe-area-inset-top)); } }
 
 /* Gelände: Kasten unten zum Einklappen, Schloss an Orten ohne Angebot */
-#anlage .panel { position: relative; }
+/* (Der Kasten bleibt mit position: absolute unten am Bildschirm – der Knopf „Kleiner“ klebt auch so oben im Kasten.) */
 #anlage .panel .klappe { position: sticky; top: 0; float: right; margin: 0 0 4px 8px; padding: 4px 10px; min-height: 0; font-size: 13px; z-index: 2; }
 #anlage .panel.klein { max-height: 54px; overflow: hidden; }
 #anlage .wohin button.zu { opacity: 0.55; }
@@ -584,3 +584,96 @@ table.erklaer td:first-child { white-space: nowrap; }
 
 /* Schlagbuch: „So spielst du ihn“ */
 .sb-wie { background: rgba(55, 195, 255, 0.1); border-left: 3px solid var(--accent2); padding: 8px 12px; border-radius: 8px; }
+
+/* ---------- Radar und Lageplan auf dem Gelände (gelaendekarte.js) ---------- */
+#radar { position: fixed; left: max(12px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top)); width: 136px; height: 136px; z-index: 19;
+  border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.9); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45); cursor: pointer; background: #b9d7a0; }
+#radar[hidden], #lageplan[hidden] { display: none; }
+#radar canvas { width: 100%; height: 100%; border-radius: 50%; display: block; }
+#radar .nord { position: absolute; transform: translate(-50%, -50%); font: bold 12px system-ui, sans-serif; color: #fff; background: #c8322a; border-radius: 50%;
+  width: 18px; height: 18px; line-height: 18px; text-align: center; pointer-events: none; }
+#radar::after { content: '🔍 Plan'; position: absolute; left: 50%; bottom: -12px; transform: translateX(-50%); font: 600 11px system-ui, sans-serif; color: #fff;
+  background: rgba(10, 16, 34, 0.85); border-radius: 9px; padding: 2px 8px; white-space: nowrap; pointer-events: none; }
+@media (max-height: 560px) { #radar { width: 96px; height: 96px; } }
+#lageplan { position: fixed; inset: 0; z-index: 26; background: rgba(6, 10, 22, 0.92); display: flex; flex-direction: column; padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); gap: 8px; }
+#lageplan .kopf { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+#lageplan .kopf .titel { font-size: 20px; color: var(--accent); }
+#lageplan .kopf .wo { flex: 1; color: var(--dim); font-size: 15px; }
+#lageplan .rahmen { flex: 1; position: relative; overflow: hidden; border-radius: 12px; border: 1px solid var(--line); background: #1c2438; touch-action: none; cursor: grab; }
+#lageplan .rahmen canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+#lageplan .tipp { margin: 0; text-align: center; color: var(--dim); font-size: 14px; }
+#lageplan.stadt .rahmen { display: none; }
+#lageplan.stadt .tipp { margin: auto; font-size: 20px; max-width: 560px; color: var(--text, #fff); }
+/* ---------- Fotomodus auf dem Gelände ---------- */
+#fotoLeiste { position: fixed; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 19; display: none; gap: 8px; align-items: center;
+  background: rgba(10, 16, 34, 0.72); border: 1px solid var(--line); border-radius: 14px; padding: 8px 10px; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 20px); }
+#fotoLeiste .was { font-size: 14px; color: var(--dim); padding: 0 6px; }
+#fotoLeiste button { min-height: 44px; padding: 8px 12px; font-size: 16px; }
+body.foto #fotoLeiste { display: flex; }
+body.foto #anlage .oben, body.foto #anlage .panel, body.foto #anlage .kam, body.foto #radar { display: none; }
+#fotoBlitz { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 40; }
+#fotoBlitz.an { animation: fotoBlitz 0.35s ease-out; }
+@keyframes fotoBlitz { from { opacity: 0.85; } to { opacity: 0; } }
+@media (max-height: 760px) { #anlage .kam { grid-template-columns: 1fr 1fr; } }
+#radar.stadt::after { content: none; }
+/* ---------- Einlaufszene vor dem Match: Titel oben, Steckbrief rechts ---------- */
+#einlauf { position: fixed; inset: 0; z-index: 12; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+#einlauf[hidden] { display: none; }
+/* Schwarze Balken oben und unten wie im Kino */
+#einlauf::before, #einlauf::after { content: ''; position: absolute; left: 0; right: 0; height: 7vh; background: #000; opacity: 0.82; }
+#einlauf::before { top: 0; } #einlauf::after { bottom: 0; }
+#einlaufTitel { position: absolute; left: max(4vw, env(safe-area-inset-left)); bottom: calc(7vh + 18px); transform: translate(-24px, 0); text-align: left; white-space: nowrap;
+  padding: 10px 26px 12px; border-radius: 14px; background: linear-gradient(180deg, rgba(10, 16, 32, 0.9), rgba(10, 16, 32, 0.72));
+  border: 1px solid var(--line); border-bottom: 3px solid var(--accent); opacity: 0; transition: opacity 0.45s, transform 0.45s; }
+#einlaufTitel.on { opacity: 1; transform: translate(0, 0); }
+#einlaufTitel small { display: block; color: var(--accent); font-size: clamp(11px, 1.5vw, 15px); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+#einlaufTitel b { display: block; font-size: clamp(20px, 3.6vw, 40px); font-weight: 800; letter-spacing: 0.02em; }
+#einlaufTitel b i { font-style: normal; font-weight: 500; font-size: 0.55em; color: var(--dim); margin: 0 0.35em; vertical-align: middle; }
+#einlaufTitel.klein { padding: 6px 16px 7px; }
+#einlaufTitel.klein small, #einlaufTitel.klein b { display: none; }
+#einlaufTitel.klein span { color: var(--text); font-weight: 700; }
+#einlaufTitel span { display: block; color: var(--dim); font-size: clamp(11px, 1.5vw, 15px); }
+/* Die Karte gleitet von rechts herein */
+#einlaufKarte { --hemd: #fff; position: absolute; right: max(4vw, env(safe-area-inset-right)); top: 50%; width: min(440px, 46vw);
+  transform: translate(40px, -50%); opacity: 0; background: linear-gradient(160deg, rgba(16, 24, 46, 0.95), rgba(10, 16, 32, 0.9));
+  border: 1px solid var(--line); border-left: 8px solid var(--hemd); border-radius: 16px; padding: 16px 18px 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); }
+#einlaufKarte.on { opacity: 1; transform: translate(0, -50%); transition: opacity 0.5s 0.25s, transform 0.5s 0.25s; }
+#einlaufKarte .kopf { display: flex; align-items: center; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+#einlaufKarte .flagge { font-size: clamp(30px, 4.4vw, 46px); line-height: 1; }
+#einlaufKarte .wer { flex: 1; min-width: 0; }
+#einlaufKarte .wer small { display: block; color: var(--accent); font-size: clamp(10px, 1.3vw, 13px); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+#einlaufKarte .wer b { display: block; font-size: clamp(18px, 2.7vw, 30px); font-weight: 800; line-height: 1.1; }
+#einlaufKarte .platz { text-align: center; font-size: clamp(24px, 3.6vw, 40px); font-weight: 800; color: var(--accent); line-height: 1; }
+#einlaufKarte .platz small { display: block; color: var(--dim); font-size: clamp(9px, 1.1vw, 12px); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 3px; }
+#einlaufKarte table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: clamp(12px, 1.7vw, 17px); }
+#einlaufKarte td { padding: 4px 0; vertical-align: top; }
+#einlaufKarte td:first-child { color: var(--dim); white-space: nowrap; padding-right: 14px; }
+#einlaufKarte td:last-child { font-weight: 700; text-align: right; }
+#einlaufKarte p { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--line); color: var(--text); font-size: clamp(11px, 1.5vw, 15px); font-style: italic; }
+#einlaufSkip { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: calc(7vh + 12px); background: rgba(10, 16, 32, 0.8); }
+#einlaufTipp { position: absolute; left: 0; right: 0; bottom: calc(max(7vh, env(safe-area-inset-bottom, 0px)) + 10px); z-index: 1; text-align: center; color: #fff; opacity: 0.7; font-size: 13px;
+  text-shadow: 0 1px 4px #000; pointer-events: none; }
+@media (max-height: 480px) {
+  #einlaufKarte { padding: 9px 12px 8px; width: min(380px, 48vw); }
+  #einlaufKarte td { padding: 1px 0; }
+  #einlaufKarte p { margin-top: 4px; padding-top: 4px; }
+  #einlaufTitel { padding: 5px 16px 6px; bottom: calc(7vh + 8px); }
+}
+
+/* iPhone im Querformat: Der Hinweis „Tippen = weiter“ steht rechts über dem Überspringen-Knopf,
+   damit er nicht in die Titelkarte unten links hineinragt. */
+@media (max-height: 500px) {
+  #einlaufTipp { left: auto; right: max(14px, env(safe-area-inset-right)); bottom: calc(7vh + 12px + 46px); text-align: right; }
+}
+
+/* Turniergelände: unten nur eine schmale Leiste mit Knöpfen. Der Kasten darüber erscheint nur, wenn man etwas aufklappt oder an einer Tür steht. */
+#anlage .leiste { position: absolute; left: 50%; bottom: max(10px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+  display: flex; gap: 8px; pointer-events: auto; white-space: nowrap; }
+#anlage .leiste button { padding: 8px 14px; min-height: 40px; font-size: 15px; background: var(--bg); border-radius: 20px; }
+#anlage .leiste button.sel { border-color: var(--accent); color: var(--accent); }
+#anlage .leiste .zahl { display: inline-block; min-width: 20px; padding: 0 5px; border-radius: 10px; background: var(--accent); color: #111; font-size: 13px; }
+#anlage .panel { bottom: calc(max(10px, env(safe-area-inset-bottom)) + 50px); max-height: 38vh; padding: 12px 16px; }
+#anlage .panel.muss { bottom: max(14px, env(safe-area-inset-bottom)); }
+#anlage .panel .klappe { width: 34px; height: 34px; padding: 0; font-size: 16px; border-radius: 17px; }
+#anlage .panel .wohin { margin-top: 4px; }

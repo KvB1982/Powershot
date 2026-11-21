@@ -13,6 +13,11 @@ const REASON_TEXT = { aus: 'Aus!', netz: 'Netz!', doppelfehler: 'Doppelfehler!',
 
 import { Siegerehrung } from './siegerehrung.js';
 import { Anlage } from './anlage.js';
+import { Einlauf } from './einlauf.js';
+
+// Automatische Bildschärfe: alle SCHARF_PRUEFEN Sekunden nachsehen. Dauert ein Bild im Schnitt länger als SCHARF_LANGSAM,
+// sinken die Bildpunkte um SCHARF_STUFE; ist es schneller als SCHARF_FLOTT, steigen sie nach einer Weile wieder. Alle Zahlen wie im Rennspiel.
+const SCHARF_PRUEFEN = 1.5, SCHARF_LANGSAM = 1 / 48, SCHARF_FLOTT = 1 / 57, SCHARF_STUFE = 0.25;
 
 // Blick auf den Platz im Match. Platz, Figur, Schläger und Netz haben die echten Maße in Metern (nachgemessen) –
 // wie groß die Spieler im Vergleich zum Platz AUSSEHEN, bestimmt allein die Kamera.
@@ -67,13 +72,47 @@ export class Game3D {
     this.buildProps();
     this.ehrung = new Siegerehrung(this);      // Siegerehrung nach einem gewonnenen Finale
     this.anlage = new Anlage(this);            // Turnieranlage zum Herumlaufen (Probe)
+    // Automatische Bildschärfe (Idee aus dem Schwester-Spiel Rennspiel): Ruckelt das Bild, malt das Spiel mit weniger Bildpunkten.
+    this.scharfAuto = !/[?&]scharf\b/.test(location.search);      // ?scharf in der Adresse = immer volle Schärfe (für Testbilder)
+    this.punkte = 0;                 // so viele Bildpunkte je Bildschirmpunkt malen wir gerade (0 = noch nicht festgelegt)
+    this.bildZeit = 1 / 60; this.pruefZeit = 0; this.ruhig = 0; this.punkteGrenze = 9;
+    this.einlauf = null;                       // Einlaufszene vor dem Match (siehe einlaufStart)
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
 
+  // Wie lange hat das letzte Bild wirklich gedauert (roh, in Sekunden)? Dauert es öfter länger als 1/48 Sekunde,
+  // geht die Schärfe eine Stufe herunter (weniger Bildpunkte = schneller). Läuft es lange ruhig, geht sie wieder herauf –
+  // aber nie zurück auf eine Stufe, die schon einmal zu langsam war.
+  tempoPruefen(roh) {
+    if (!this.scharfAuto || !(roh > 0) || roh > 0.25) return;       // sehr lange Bilder (Laden, anderes Fenster) zählen nicht
+    this.bildZeit += (roh - this.bildZeit) * 0.05;
+    this.pruefZeit += roh;
+    if (this.pruefZeit < SCHARF_PRUEFEN) return;
+    this.pruefZeit = 0;
+    let neu = this.punkte;
+    if (this.bildZeit > SCHARF_LANGSAM && this.punkte > this.punkteMin) { this.punkteGrenze = this.punkte; neu = Math.max(this.punkteMin, this.punkte - SCHARF_STUFE); this.ruhig = 0; }
+    else if (this.bildZeit < SCHARF_FLOTT && this.punkte + SCHARF_STUFE < this.punkteGrenze && this.punkte < this.punkteMax) { if (++this.ruhig >= 4) { neu = Math.min(this.punkteMax, this.punkte + SCHARF_STUFE); this.ruhig = 0; } }
+    else this.ruhig = 0;
+    if (neu === this.punkte) return;
+    this.punkte = neu;
+    this.bildZeit = 1 / 60;          // nach dem Umschalten neu messen
+    this.resize();
+  }
+  setScharfAuto(an) {
+    an = an && !/[?&]scharf\b/.test(location.search);
+    if (an === this.scharfAuto) return;
+    this.scharfAuto = an; this.punkte = 0; this.punkteGrenze = 9;
+    this.resize();
+  }
+
   resize() {
     const w = this.canvas.clientWidth || window.innerWidth, h = this.canvas.clientHeight || window.innerHeight;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.quality === 'niedrig' ? 1.25 : 2));
+    // Bildpunkte: höchstens so viele, wie der Bildschirm hat (und wie die Grafik-Einstellung erlaubt) – die automatische Bildschärfe darf darunter gehen
+    const max = this.punkteMax = Math.min(window.devicePixelRatio || 1, this.quality === 'niedrig' ? 1.25 : 2);
+    this.punkteMin = Math.min(max, Math.max(0.75, max * 0.5));
+    this.punkte = this.scharfAuto && this.punkte ? Math.max(this.punkteMin, Math.min(max, this.punkte)) : max;
+    this.renderer.setPixelRatio(this.punkte);
     this.renderer.setSize(w, h, false);
     this.aspect = w / h;
     this.camera.aspect = this.aspect;
@@ -295,6 +334,7 @@ export class Game3D {
 
   detach() {
     this.match = null;
+    this.einlauf = null;
     this.clearZones();
     this.landing.visible = this.landingDot.visible = this.aimRing.visible = this.aimLine.visible = this.boxGlow.visible = false;
     this.zugFeld[0].visible = this.zugFeld[1].visible = this.zugLinie.visible = false;
@@ -432,7 +472,7 @@ export class Game3D {
       this.blitz.visible = false;
       if (this.nahVorher != null) { this.camera.near = this.nahVorher; this.nahVorher = null; this.camera.updateProjectionMatrix(); }
     }
-    if (m) this.syncMatch(dt, m); else if (this.ehrung.an) this.ehrung.update(dt); else if (this.anlage.an) this.anlage.update(dt); else this.menuCamera(dt);
+    if (m && this.einlauf && this.einlauf.an) this.einlaufBild(dt, m); else if (m) this.syncMatch(dt, m); else if (this.ehrung.an) this.ehrung.update(dt); else if (this.anlage.an) this.anlage.update(dt); else this.menuCamera(dt);
     for (const mk of this.marks) {
       if (!mk.visible) continue;
       mk.userData.life -= dt;
@@ -672,6 +712,64 @@ export class Game3D {
     }
     if (this.nahVorher == null) this.nahVorher = this.camera.near;      // merken, wie es vor dem Match war
     if (this.camera.near !== nah) { this.camera.near = nah; this.camera.updateProjectionMatrix(); }
+  }
+
+  // ---------------------------------------------------------------
+  // Einlaufszene vor dem Match (der Ablauf steht in einlauf.js, hier wird er nur gezeichnet)
+  // ---------------------------------------------------------------
+  // art = 'an' (einlaufen, einspielen, Steckbriefe) oder 'kurz' (nur Steckbriefe). spieler = [du, gegner].
+  // wenn(name, info) meldet app.js, wenn ein neuer Teil beginnt ('teil') und wenn alles vorbei ist ('fertig').
+  einlaufStart(art, spieler, wenn) {
+    const snd = this.sound, gross = this.venue ? this.venue.zuschauer ?? 1 : 1;     // gross = wie voll die Tribüne ist (0…1)
+    this.einlauf = new Einlauf({ art, spieler }, (name, info, E) => {
+      if (name === 'schlag') {
+        if (this.avatars[info.side]) this.avatars[info.side].swing(info.kind, info.y, 'drive');
+        snd.hit(0.4, 'drive');
+      } else if (name === 'aufprall') {
+        snd.bounce(9, this.venue ? this.venue.surface : 'hard');
+      } else if (name === 'teil') {
+        // Die Zuschauer klatschen, wenn die Spieler hereinkommen und wenn einer vorgestellt wird (bei kleinen Turnieren leiser)
+        const stark = info.teil === 'einlaufen' ? 0.75 : info.seite != null ? 0.55 : 0;
+        if (stark) { snd.applause(Math.max(0.2, stark * gross), gross > 0.5); this.stadium.jubel(stark * gross); }
+        snd.setCrowd(0.05);
+      }
+      wenn(name, info, E);
+    });
+    return this.einlauf;
+  }
+
+  einlaufBild(dt, m) {
+    const E = this.einlauf;
+    E.update(dt);
+    if (!E.an) return this.syncMatch(dt, m);        // gerade zu Ende gegangen: ab jetzt zeichnet das Match
+    for (let i = 0; i < 2; i++) {
+      const av = this.avatars[i], p = E.leute[i];
+      if (!av) continue;
+      av.group.visible = true;
+      av.update(dt, { x: p.x, z: p.z, vx: p.vx, vz: p.vz, walk: p.walk, face: p.face, stroke: p.stroke, tHit: p.tHit, planY: p.planY, volley: false, hint: 'drive', prep: 0, ball: E.ball });
+    }
+    // Ball: liegt in der Hand des Spielers, der anspielt, und fällt kurz vor dem Schlag zum Treffpunkt
+    const B = E.ball, halter = B.hand != null ? this.avatars[B.hand] : null;
+    if (halter && halter.handLWorld) {
+      const h = halter.handLWorld, u = B.fall || 0;
+      this.ball.position.set(h.x + (B.x - h.x) * u, h.y + 0.07 + (B.y - h.y - 0.07) * u, h.z + (B.z - h.z) * u);
+    } else this.ball.position.set(B.x, B.y, B.z);
+    this.ball.visible = this.blob.visible = B.da;
+    this.blob.position.set(this.ball.position.x, 0.011, this.ball.position.z);
+    this.blob.scale.setScalar(clamp(1 + this.ball.position.y * 0.25, 1, 2.2));
+    this.blob.material.opacity = clamp(0.4 - this.ball.position.y * 0.05, 0.12, 0.4);
+    this.trail.visible = this.blitz.visible = this.aimRing.visible = this.aimLine.visible = this.boxGlow.visible = false;
+    if (this.maschine) this.maschine.visible = false;
+    // Kamera: Bei einem „Schnitt“ springt sie an die neue Stelle, sonst fährt sie weich hin
+    const K = E.kamera;
+    this.setWinkel(K.winkel);
+    const von = new THREE.Vector3(...K.von), nach = new THREE.Vector3(...K.nach);
+    if (K.schnitt) { this.camPos.copy(von); this.camLook.copy(nach); K.schnitt = false; }
+    else { const k = Math.min(1, dt * 4); this.camPos.lerp(von, k); this.camLook.lerp(nach, k); }
+    this.camera.position.copy(this.camPos);
+    this.camera.lookAt(this.camLook);
+    if (this.nahVorher == null) this.nahVorher = this.camera.near;      // merken, wie es vor dem Match war
+    if (this.camera.near !== 0.3) { this.camera.near = 0.3; this.camera.updateProjectionMatrix(); }
   }
 
   menuCamera(dt) {

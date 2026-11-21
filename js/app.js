@@ -1,5 +1,8 @@
 // Powershot – Hauptprogramm: Menüs, Abläufe (Freies Spiel, Turnier, Karriere, Training), Anzeige im Spiel
 
+import { SchlaegerEmpfang, qrMalen } from './handyschlaeger.js';
+import { GelaendeKarte } from './gelaendekarte.js';
+import * as GW from './gelaendewetter.js';
 import { Sound } from './audio.js';
 import { Game3D } from './game3d.js';
 import { Controls } from './controls.js';
@@ -11,6 +14,7 @@ import { loadFigure } from './figur.js';
 import { ladeRequisiten } from './requisiten.js';
 import { loadMocap, loadGang, mocapClip } from './mocap.js';
 import { SHOW } from './showschlaege.js';
+import { steckbrief } from './einlauf.js';
 import { schlagbuchHtml, uhrHtml } from './schlagbuch.js';
 import * as D from './data.js';
 import * as TN from './tournament.js';
@@ -48,11 +52,12 @@ const SET_KEY = 'powershot.einstellungen.v1';
 const touchDevice = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
 const settings = Object.assign({
   control: touchDevice ? 'touch' : 'klassik', assist: 'voll', difficulty: 'mittel', length: 'kurz',
-  sound: true, volume: 0.8, umgebung: 1, voice: true, quality: 'hoch', figures: 'echt',
+  sound: true, volume: 0.8, umgebung: 1, voice: true, quality: 'hoch', schaerfe: 'auto', gelaende: 'reit', figures: 'echt',
   kamera: 'aus', kameraRaum: 'mittel', kameraTauschen: false,
   spielzuege: 'aus',       // taktische Spielzüge im Match: 'aus' oder 'an'
   blick: 'tv',             // Blick auf den Platz im Match: 'tv' (wie im Fernsehen) oder 'nah' (dicht hinter dir)
   tempo: 'schnell',        // Spieltempo im Match: 'echt', 'schnell' oder 'turbo' (siehe TEMPO_MAL)
+  einlauf: 'an',           // Einlaufszene vor dem Match: 'an' (ganz), 'kurz' (nur Steckbriefe) oder 'aus'
 }, (() => { try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch (e) { return {}; } })());
 // Welche Spielzüge hast du schon gelernt? { id: { t: im Training geschafft, m: im Match geschafft } }
 const ZUG_KEY = 'powershot.spielzuege.v1';
@@ -85,6 +90,8 @@ game.wennShow = (side, id) => {
   if (career && ctxT && ctxT.career) { career.showSchlaege = career.showSchlaege || {}; career.showSchlaege[S.clip] = (career.showSchlaege[S.clip] || 0) + 1; }
 };
 game.setQuality(settings.quality);
+game.setScharfAuto(settings.schaerfe !== 'fest');
+game.anlage.artSetzen(settings.gelaende);      // Steuerung auf dem Turniergelände: 'reit' = wie im Reitturnier, 'frei' = mit freier Kamera
 game.blick = settings.blick;
 game.realFigures = settings.figures === 'echt';
 const controls = new Controls($('#touch'), $('#stick'));
@@ -130,6 +137,8 @@ document.addEventListener('click', (e) => {
 });
 document.addEventListener('pointerdown', () => sound.unlock(), { once: true });
 window.addEventListener('keydown', (e) => {
+  // Einlaufszene: Leertaste oder Eingabetaste = nächster Teil, Esc = gleich zum Match
+  if (game.einlauf && game.einlauf.an && !paused && (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape')) { e.preventDefault(); return einlaufTipp(e.key === 'Escape'); }
   if ((e.key === 'Escape' || e.key.toLowerCase() === 'p') && match && session && !session.over) togglePause();
 });
 $('#pauseBtn').addEventListener('click', () => { sound.unlock(); togglePause(); });
@@ -370,6 +379,7 @@ actions.ersteLos = (v) => {
   const opp = L.mode === 'match' ? lehrling : { ...D.PLAYERS[59], name: 'Trainer', short: 'Trainer' };
   startMatch({
     me, opp, def: D.tournamentById(free.venue), mode: L.mode, balls: L.balls, title: 'Erste Schritte', difficulty: 'leicht', length: 'kurz', ohneHilfe: L.mode !== 'match',
+    ohneEinlauf: true,       // in den Lektionen geht es gleich los
     hinweis: `Lektion ${i + 1}: ${L.ziel}`,
     onEnd: (res) => {
       if (res.aborted) return actions.erste();
@@ -389,6 +399,7 @@ function enterMenu() {
   game.detach();
   game.loadVenue(D.tournamentById(menuVenue));
   hudEl.hidden = true;
+  $('#einlauf').hidden = true;
   sound.setCrowd(0.02);
 }
 
@@ -411,6 +422,7 @@ actions.settings = (v) => {
       <p class="dim" style="margin:6px 0 0;font-size:13px">🎮 ${controls.pad.connected
         ? `Verbunden: ${esc(controls.pad.name)} · ${controls.pad.motion ? 'Schwingen wird erkannt' : 'nur Tasten und Stick (kein Schwingen)'}`
         : 'Kein Controller verbunden. Koppeln: iPad-Einstellungen → Bluetooth, am Joy-Con die kleine runde Taste gedrückt halten.'}</p>
+      <div class="row" style="margin-top:8px"><button data-a="handySchlaeger">📱 Handy als Schläger verbinden (QR-Code)</button></div>
       ${window.webkit?.messageHandlers?.powershot ? `<div class="row" style="margin-top:8px">
         <button data-a="schlaeger">📱 Dieses Gerät als Schläger für ein anderes benutzen</button></div>` : ''}
       <label>Laufen mit der Kamera</label><div class="row">
@@ -431,8 +443,17 @@ actions.settings = (v) => {
         Auf iPad und iPhone bleibt alles still, solange der Schalter „Stumm“ an ist.</p>
       ${optionRow('Schiedsrichter spricht', 'voice', { true: 'Ja', false: 'Nein' })}
       ${optionRow('Grafik', 'quality', { hoch: 'Schön', niedrig: 'Schnell (ältere Geräte)' })}
+      ${optionRow('Bildschärfe', 'schaerfe', { auto: 'Automatisch', fest: 'Immer voll' })}
+      <p class="dim" style="margin:6px 0 0;font-size:13px">„Automatisch“: Wenn das Bild ruckelt (zum Beispiel auf einem großen Turniergelände), malt das Spiel
+        etwas weniger scharf und läuft dafür flüssig. Läuft es wieder gut, wird es von selbst wieder schärfer.</p>
+      ${optionRow('Steuerung auf dem Turniergelände', 'gelaende', { reit: 'Wie im Reitturnier', frei: 'Mit freier Kamera' })}
+      <p class="dim" style="margin:6px 0 0;font-size:13px">„Wie im Reitturnier“: Ein Finger läuft immer, zwei Finger drehen, neigen und zoomen die Kamera, die Kamera bleibt bei deiner Figur.
+        „Mit freier Kamera“: Zusätzlich schiebst du die Ansicht mit drei Fingern frei über das Gelände.</p>
       ${optionRow('Spielerfiguren', 'figures', { echt: 'Realistisch', einfach: 'Einfach' })}
       ${optionRow('Blick auf den Platz', 'blick', { tv: 'Wie im Fernsehen', nah: 'Nah am Spieler' })}
+      ${optionRow('Einlaufen vor dem Match', 'einlauf', { an: 'Ganze Szene', kurz: 'Nur Steckbriefe', aus: 'Aus' })}
+      <p class="dim" style="margin:6px 0 0;font-size:13px">Vor jedem Match kommen die Spieler auf den Platz, spielen sich kurz ein und werden mit einem Steckbrief vorgestellt.
+        Ein Tipp auf den Bildschirm springt zum nächsten Teil, „Überspringen“ gleich zum Match.</p>
       ${optionRow('Spieltempo', 'tempo', { echt: 'Echt', schnell: 'Schnell', turbo: 'Turbo' })}
       <p class="dim" style="margin:6px 0 0;font-size:13px">Wie schnell die Zeit im Match läuft. „Schnell“ spielt alles 10 % flotter ab (Ball und Spieler zusammen),
         „Turbo“ 22 %. Je schneller, desto weniger Zeit hast du zum Schlagen.</p>
@@ -455,6 +476,9 @@ actions.set = (v) => {
   sound.setUmgebung(settings.umgebung);
   sound.setEnabled(settings.sound);
   game.setQuality(settings.quality);
+  game.setScharfAuto(settings.schaerfe !== 'fest');
+  game.anlage.artSetzen(settings.gelaende);
+  if (game.anlage.an) anlageZeigen();
   game.blick = settings.blick;
   game.realFigures = settings.figures === 'echt';
   if (key === 'quality') game.loadVenue(D.tournamentById(menuVenue));
@@ -1022,6 +1046,7 @@ actions.tourPlay = () => {
   startMatch({
     me: ctxT.season ? ichJetzt(oppId) : getPlayer(T.humanId), opp: getPlayer(oppId), def, title: def.cat === 'LIGA' ? def.name : `${def.name} · ${D.ROUND_NAMES[TN.currentLabel(T)]}`,
     finale: def.cat !== 'LIGA' && TN.currentLabel(T) === 'F',
+    bilanz: ctxT.season && season && season.profi ? season.profi.h2h[oppId] : null,      // Saison: deine Siege und Niederlagen gegen diesen Gegner (für den Steckbrief)
     onEnd: (res) => {
       TN.playRound(T, { winner: res.won ? T.humanId : oppId, score: res.score, setDiff: res.setDiff });
       let danach = renderTournament;
@@ -1097,12 +1122,27 @@ let anlageErgebnis = null;   // was die letzte Tätigkeit gebracht hat: { ort, t
 let anlageMeldung = null;    // was nach einem Zufall (Ereignis) passiert ist: { text, bringt }
 // Der Kasten unten auf dem Gelände lässt sich klein machen, damit man mehr vom Gelände sieht
 let anlageKlein = false;
-actions.anlagePanel = () => { anlageKlein = !anlageKlein; anlageZeigen(); };
+// Unten auf dem Gelände liegt nur eine schmale Leiste mit Knöpfen. Ein Tipp darauf klappt EINE Sache auf:
+// 'aufgaben' (Liste vom Team), 'wohin' (Knöpfe zum Hinlaufen), 'hilfe' (wie man steuert). null = nichts ist aufgeklappt.
+let anlageAuf = null;
+let anlageWeg = null;        // den Kasten zu diesem Ort hat man mit ✕ weggetippt (id des Ortes) – er kommt wieder, wenn man neu an die Tür tritt
+actions.anlageAuf = (v) => { anlageAuf = anlageAuf === v ? null : v; anlageListe = false; anlageZeigen(); };
+actions.anlageZu = () => { if (anlageAuf || anlageListe) { anlageAuf = null; anlageListe = false; } else { anlageWeg = game.anlage.amOrt ? game.anlage.amOrt.id : '-'; anlageMeldung = null; } anlageZeigen(); };
+// Die Kamera-Knöpfe rechts, genau wie auf dem Pferdehof im Reitturnier: drehen, zoomen, neigen (solange gedrückt)
+const KAM_KNOEPFE = [['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg'],
+  ['hoch', '▲', 'Kamera höher, mehr von oben'], ['flach', '▼', 'Kamera flacher, mehr von der Seite']];
+actions.anlagePanel = () => actions.anlageZu();      // (alter Name, falls ihn noch jemand ruft)
 function anlageZeigen() {
   if (hotelWeg || (anlageTag && anlageTag.abend)) return hotelZeigen();      // Fahrt oder Fußweg ins Hotel: eigenes Fenster (weiter unten)
   const A = game.anlage, ort = A.amOrt;
-  const hilfe = 'Laufen: W A S D oder mit einem Finger ziehen. Tippe auf ein Gebäude, dann läuft deine Figur von selbst hin. In viele Häuser kannst du durch die Tür hineingehen – dann verschwindet das Dach und du siehst die Möbel. Kamera mit zwei Fingern: kneifen = nah oder ganz weit weg, zur Seite wischen = rundherum drehen, hoch oder runter wischen = Blickwinkel. Mit drei Fingern schiebst du die Ansicht frei über das Gelände (danach reicht ein Finger), Doppel-Tipp oder 🎯 = zurück zur Figur. 🏷️ schaltet die Beschriftungen an und aus. Am PC: rechte Maustaste ziehen und Mausrad, mittlere Maustaste oder Umschalt + ziehen = verschieben, F = zurück zur Figur, B = Beschriftungen.';
-  const kam = [['karte', '🗺️', 'Übersicht'], ['schilder', '🏷️', 'Beschriftungen an oder aus (Taste B)'], ['figur', '🎯', 'Zurück zur Figur (Doppel-Tipp oder Taste F)'], ['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg']];
+  const reit = A.reit();
+  // Zwei Arten der Steuerung (Einstellungen → „Steuerung auf dem Turniergelände“): wie auf dem Pferdehof im Reitturnier oder mit freier Kamera
+  const hilfe = reit
+    ? 'Laufen: Pfeiltasten oder W A S D. Auf dem iPad: Finger auflegen und ziehen. Tippe auf ein Gebäude, dann läuft deine Figur von selbst hin. In viele Häuser kannst du durch die Tür hineingehen – dann verschwindet das Dach und du siehst die Möbel. Rechts sind die Knöpfe für die Kamera: 🗺️ Übersicht, ⟲ ⟳ drehen, ＋ － näher und weiter weg, ▲ ▼ mehr von oben oder flacher. Mit zwei Fingern geht das auch: zur Seite wischen = drehen, hoch oder runter = neigen, kneifen = zoomen. Am PC: rechte Maustaste ziehen und Mausrad, Tasten Q und R drehen, T und G zoomen, M = Übersicht, K = Lageplan, B = Beschriftungen.'
+    : 'Laufen: W A S D oder mit einem Finger ziehen. Tippe auf ein Gebäude, dann läuft deine Figur von selbst hin. In viele Häuser kannst du durch die Tür hineingehen – dann verschwindet das Dach und du siehst die Möbel. Kamera mit zwei Fingern: kneifen = nah oder ganz weit weg, zur Seite wischen = rundherum drehen, hoch oder runter wischen = Blickwinkel. Mit drei Fingern schiebst du die Ansicht frei über das Gelände (danach reicht ein Finger), Doppel-Tipp oder 🎯 = zurück zur Figur. 🏷️ schaltet die Beschriftungen an und aus. Am PC: rechte Maustaste ziehen und Mausrad, mittlere Maustaste oder Umschalt + ziehen = verschieben, F = zurück zur Figur, B = Beschriftungen.';
+  // Reihenfolge wie im Reitturnier: Übersicht, drehen, zoomen, neigen – danach unsere eigenen Knöpfe (Beschriftungen, Tageszeit, Wetter, Foto)
+  const kam = [['karte', '🗺️', 'Übersicht von oben (Taste M) – den Lageplan öffnest du mit einem Tipp auf das Radar oder Taste K'], ['schilder', '🏷️', 'Beschriftungen an oder aus (Taste B)'], ...KAM_KNOEPFE,
+    ...stimmungKnoepfe(), ...(reit ? [] : [['figur', '🎯', 'Zurück zur Figur (Doppel-Tipp oder Taste F)']])];
   let unten = `<p class="dim">${hilfe}</p>`, zeit = '', tagListe = '';
   if (anlageTag && phaseJetzt() === 'nach') {
     // Nach dem Match: nur noch die Aufgaben vom Team, dann geht es ins Hotel
@@ -1119,16 +1159,17 @@ function anlageZeigen() {
   tagListe = anlageTag ? unten : '';       // die Aufgabenliste merken: Am Morgen (noch am Fahrdienst) bleibt sie zu sehen
   // Auf einem großen Gelände: oben steht, wo man ist, und unten gibt es Knöpfe zum Hinlaufen (die Wege sind lang)
   const G = A.plan ? A.plan.g : null;
-  let wohin = '';
+  let wohin = '', listeHtml = '';
   if (G) {
     if (!anlageTag) {
       zeit = `<span class="zeit">${esc(G.name)} · <span class="dim">${esc(G.stadt)}</span></span><button data-a="anlageListe">🌍 Gelände wechseln</button>`;
-      unten = anlageListe
+      if (anlageListe) unten = anlageListe
         ? `<h3>Welches Turniergelände möchtest du sehen?</h3><div class="row wahl">${GL.GELAENDE_LISTE.map((id) => `<button class="${id === anlageWo ? 'primary' : ''}" data-a="anlageWahlOrt" data-v="${id}">${esc(D.tournamentById(id).name)} <small>${esc(GL.GELAENDE[id].name)}</small></button>`).join('')}</div>
           <p class="dim klein">Kleinere Turniere (Beispiele – in der Karriere hat jedes Turnier sein eigenes Gelände):</p>
           <div class="row wahl">${ANLAGE_KLEIN.map((t) => `<button class="${t.id === anlageWo ? 'primary' : ''}" data-a="anlageWahlOrt" data-v="${t.id}">${esc(t.city === 'Zu Hause' ? 'Heimatverein' : t.city)} <small>${esc(t.catName)}</small></button>`).join('')}</div>`
-        : `<p class="dim">${G.klein ? 'Dieses Gelände ist ausgedacht und nur an den echten Ort angelehnt.' : 'Dieses Gelände ist dem echten nachempfunden.'} Lauf herum und sieh dir alles an – an den blauen Kreisen ℹ️ erfährst du etwas über den Ort. ${hilfe}</p>`;
+        : `<p class="dim">${G.klein ? 'Dieses Gelände ist ausgedacht und nur an den echten Ort angelehnt.' : 'Dieses Gelände ist dem echten nachempfunden.'} Lauf herum und sieh dir alles an – an den blauen Kreisen ℹ️ erfährst du etwas über den Ort.</p>`;
     }
+    if (anlageListe && !anlageTag) listeHtml = unten;      // die Liste „Gelände wechseln“ merken (weiter unten wird „unten“ vielleicht vom Ort überschrieben)
     const hab = stempelVon(G), infos = A.orte.filter((o) => o.info);
     // Am Turniertag: Orte, die es bei so kleinen Turnieren noch nicht gibt (Kraftraum, Physio …), bekommen ein Schloss
     const zu = (o) => { if (!anlageTag || o.info || o.id === 'court' || o.id === 'hotel') return false; const hier = TA.AUFGABEN_IDS.filter((id) => TA.AUFGABEN[id].ort === o.id); return hier.length > 0 && !hier.some((id) => TA.gibtEs(id, anlageTag.def)); };
@@ -1158,7 +1199,7 @@ function anlageZeigen() {
       } else if (ort.id === 'hotel') {
         const nachOffen = TA.offen(c, 'nach');
         unten = phase === 'nach' ? `${tagListe}<p>${nachOffen ? 'Du hast noch Aufgaben offen.' : 'Alles erledigt!'} Im Hotel suchst du dir aus, was du am Abend machst.</p><button class="${nachOffen ? '' : 'primary'}" data-a="nachHotel">🏨 ${nachOffen ? 'Trotzdem schon ins Hotel' : 'Ab ins Hotel'} ›</button>`
-          : `<p class="dim klein">Du bist mit dem Fahrdienst angekommen. Erst nach dem Match geht es zurück ins Hotel.</p>${tagListe}`;   // am Morgen stehst du hier: Die Aufgabenliste bleibt zu sehen
+          : `<h3>${esc(ort.name)}</h3><p class="dim">Du bist mit dem Fahrdienst angekommen. Erst nach dem Match geht es zurück ins Hotel. Was dein Team heute von dir möchte, steht unten bei <b>📋 Aufgaben</b>.</p>`;
       } else {
         // Alles, was man an diesem Ort machen kann: Aufgaben vom Team zuerst, dann Freiwilliges. Jedes ist ein Mini-Spiel.
         const liste = TA.amOrt(c, ort.id, anlageTag.def, phase);
@@ -1172,9 +1213,28 @@ function anlageZeigen() {
       unten = `<h3>${esc(ort.name)}</h3><p>${anlageErgebnis.text}</p><p class="gold">${anlageErgebnis.bringt.join(' · ')}</p>`;
     }
   }
+  // --- Was ist unten zu sehen? Immer nur die schmale Leiste – und darüber höchstens EIN kleiner Kasten. ---
+  //   1. Etwas, das man entscheiden muss (Zufall am Morgen)            → Kasten bleibt, bis man gewählt hat
+  //   2. Etwas, das man selbst aufgeklappt hat (Aufgaben, Hinlaufen, Hilfe, Gelände wechseln)
+  //   3. Man steht an einer Tür                                         → Kasten zu diesem Ort (mit ✕ wegzutippen)
+  //   4. Sonst nichts: Das Gelände ist frei zu sehen.
+  const offenZahl = anlageTag ? TA.offen(lebenC(), phaseJetzt() === 'nach' ? 'nach' : 'vor') : 0;
+  let kasten = '', muss = false;
+  if (E) { kasten = unten; muss = true; }
+  else if (listeHtml) kasten = listeHtml;
+  else if (anlageAuf === 'hilfe') kasten = `<h3>❓ So steuerst du</h3><p class="dim">${hilfe}</p>`;
+  else if (anlageAuf === 'wohin' && wohin) kasten = `<h3>🧭 Wohin möchtest du?</h3>${wohin}`;
+  else if (anlageAuf === 'aufgaben' && tagListe) kasten = tagListe;
+  else if (ort && anlageWeg !== ort.id) kasten = unten;
+  else if (anlageMeldung && !ort && anlageWeg !== '-') kasten = unten;
+  const chip = (id, text) => `<button class="${anlageAuf === id ? 'sel' : ''}" data-a="anlageAuf" data-v="${id}">${text}</button>`;
+  const leiste = muss ? '' : `<div class="leiste">
+    ${anlageTag ? chip('aufgaben', `📋 Aufgaben${offenZahl ? ` <b class="zahl">${offenZahl}</b>` : ' ⭐'}`) : ''}
+    ${wohin ? chip('wohin', '🧭 Hinlaufen') : ''}
+    ${chip('hilfe', '❓ Hilfe')}</div>`;
   anlageEl.innerHTML = `<div class="oben"><button class="ghost" data-a="anlageEnde">‹ Zurück</button>${zeit}</div>
     <div class="kam">${kam.map(([k, z, t]) => `<button data-kam="${k}"${(k === 'schilder' && !game.anlage.schilderAn) || (k === 'figur' && !game.anlage.frei) ? ' class="aus"' : ''} title="${t}" aria-label="${t}">${z}</button>`).join('')}</div>
-    <div class="panel${anlageKlein ? ' klein' : ''}"><button class="klappe" data-a="anlagePanel" title="Kasten klein oder groß machen">${anlageKlein ? '▴ Aufklappen' : '▾ Kleiner'}</button>${unten}${anlageListe && !anlageTag ? '' : wohin}</div>`;
+    ${kasten ? `<div class="panel${muss ? ' muss' : ''}">${muss ? '' : '<button class="klappe" data-a="anlageZu" title="Kasten schließen" aria-label="Kasten schließen">✕</button>'}${kasten}</div>` : ''}${leiste}`;
   anlageEl.classList.add('on');
 }
 // Taste B schaltet die Beschriftungen auch – dann den Knopf 🏷️ mit umfärben
@@ -1186,12 +1246,124 @@ anlageEl.addEventListener('pointerdown', (e) => {
   const b = e.target.closest('[data-kam]');
   if (!b) return;
   e.preventDefault();
-  if (b.dataset.kam === 'karte') game.anlage.uebersicht();
+  if (b.dataset.kam === 'zeit' || b.dataset.kam === 'wetter') stimmungWeiter(b.dataset.kam);
+  else if (b.dataset.kam === 'foto') fotoStart();
+  else if (b.dataset.kam === 'karte') game.anlage.uebersicht();
   else if (b.dataset.kam === 'figur') game.anlage.zurFigur();
   else if (b.dataset.kam === 'schilder') b.classList.toggle('aus', !game.anlage.schilderSchalten());
   else game.anlage.kamTaste = b.dataset.kam;
 });
 for (const n of ['pointerup', 'pointercancel', 'pointerleave']) anlageEl.addEventListener(n, () => { game.anlage.kamTaste = null; }, true);
+
+// ---- Tageszeit und Wetter auf dem Gelände (gelaendewetter.js, Idee aus dem Reitturnier). Man wählt selbst; abends nach dem Match ist von allein Abend.
+const STIMMUNG_KEY = 'powershot.stimmung.v1';
+let stimmung = { zeit: null, wetter: 'sonne' };       // zeit null = von allein (Mittag, am Abend nach dem Match Abend)
+try { stimmung = { ...stimmung, ...(JSON.parse(localStorage.getItem(STIMMUNG_KEY)) || {}) }; } catch (e) { /* dann eben Mittag und Sonne */ }
+const zeitJetzt = () => (GW.ZEITEN[stimmung.zeit] ? stimmung.zeit : (hotelWeg || (anlageTag && anlageTag.abend) ? 'abend' : 'tag'));
+const wetterJetzt = () => (GW.WETTER[stimmung.wetter] ? stimmung.wetter : 'sonne');
+const stimmungKnoepfe = () => [
+  ['zeit', GW.ZEITEN[zeitJetzt()].bild, `Tageszeit: ${GW.ZEITEN[zeitJetzt()].name} – antippen wechselt (Mittag, Abend, Nacht, Morgen)`],
+  ['wetter', GW.WETTER[wetterJetzt()].bild, `Wetter: ${GW.WETTER[wetterJetzt()].name} – antippen wechselt (Sonne, Wolken, Regen, Nebel)`],
+  ['foto', '📷', 'Fotomodus: alle Knöpfe weg, Kamera frei drehen, Foto speichern (Taste P)'],
+];
+function stimmungWeiter(was) {
+  if (was === 'zeit') stimmung.zeit = GW.ZEIT_REIHE[(GW.ZEIT_REIHE.indexOf(zeitJetzt()) + 1) % GW.ZEIT_REIHE.length];
+  else stimmung.wetter = GW.WETTER_REIHE[(GW.WETTER_REIHE.indexOf(wetterJetzt()) + 1) % GW.WETTER_REIHE.length];
+  try { localStorage.setItem(STIMMUNG_KEY, JSON.stringify(stimmung)); } catch (e) { /* ohne Speicher gilt es nur bis zum Neuladen */ }
+  const Z = GW.ZEITEN[zeitJetzt()], W = GW.WETTER[wetterJetzt()];
+  for (const b of document.querySelectorAll('[data-kam="zeit"]')) { b.textContent = Z.bild; b.title = `Tageszeit: ${Z.name}`; }
+  for (const b of document.querySelectorAll('[data-kam="wetter"]')) { b.textContent = W.bild; b.title = `Wetter: ${W.name}`; }
+  fotoEl.querySelector('.was').textContent = `${Z.bild} ${Z.name} · ${W.bild} ${W.name}`;
+}
+
+// ---- Radar und Lageplan (gelaendekarte.js, Idee aus Police Quest). Ein Tipp auf einen Ort im Plan = die Figur läuft hin.
+const gKarte = new GelaendeKarte((ort) => { game.anlage.geheZu(ort.id); });
+
+// ---- Fotomodus (Idee aus dem Reitturnier): Knöpfe und Schilder verschwinden, die Kamera dreht man wie immer, 📸 speichert das Bild.
+let fotoAn = false, fotoRahmen = true, fotoSchilder = true;
+const fotoEl = document.createElement('div');
+fotoEl.id = 'fotoLeiste';
+fotoEl.innerHTML = `<span class="was"></span><button data-kam="zeit" title="Tageszeit wechseln">☀️</button><button data-kam="wetter" title="Wetter wechseln">☀️</button>
+  <button data-foto="rahmen" title="Mit oder ohne Rahmen">🖼️ Rahmen: an</button><button class="primary" data-foto="knips">📸 Foto machen</button><button data-foto="zu">✕ Fertig</button>`;
+document.body.appendChild(fotoEl);
+const fotoBlitz = document.createElement('div');
+fotoBlitz.id = 'fotoBlitz';
+document.body.appendChild(fotoBlitz);
+function fotoStart() {
+  const A = game.anlage;
+  if (fotoAn || !A.an) return;
+  fotoAn = true; fotoSchilder = A.schilderAn; A.schilderAn = false;       // die Beschriftungen stören auf dem Foto (nur solange der Fotomodus an ist)
+  A.kamTaste = null;
+  const Z = GW.ZEITEN[zeitJetzt()], W = GW.WETTER[wetterJetzt()];
+  fotoEl.querySelector('[data-kam="zeit"]').textContent = Z.bild; fotoEl.querySelector('[data-kam="wetter"]').textContent = W.bild;
+  fotoEl.querySelector('.was').textContent = `${Z.bild} ${Z.name} · ${W.bild} ${W.name}`;
+  document.body.classList.add('foto');
+}
+function fotoEnde() {
+  if (!fotoAn) return;
+  fotoAn = false; game.anlage.schilderAn = fotoSchilder;
+  document.body.classList.remove('foto');
+}
+function fotoKnips() {
+  game.frame(0);                     // das Bild frisch malen – gleich danach kann man es von der Malfläche abnehmen
+  const quelle = game.renderer.domElement, c = document.createElement('canvas'), G = game.anlage.plan ? game.anlage.plan.g : null;
+  if (fotoRahmen) {
+    // Rahmen wie bei einem Sofortbild, unten der Ort und das Datum
+    const rand = Math.round(quelle.width * 0.03), unten = Math.round(quelle.width * 0.085), k = c.getContext('2d');
+    c.width = quelle.width + rand * 2; c.height = quelle.height + rand + unten;
+    k.fillStyle = '#fffaf0'; k.fillRect(0, 0, c.width, c.height);
+    k.drawImage(quelle, rand, rand);
+    k.fillStyle = '#1a2440'; k.textAlign = 'center'; k.textBaseline = 'middle';
+    k.font = `bold ${Math.round(unten * 0.4)}px system-ui, "Segoe UI", Arial, sans-serif`;
+    k.fillText(`🎾 ${G ? `${G.name} · ` : ''}${new Date().toLocaleDateString('de-DE')}`, c.width / 2, quelle.height + rand + unten / 2);
+  } else { c.width = quelle.width; c.height = quelle.height; c.getContext('2d').drawImage(quelle, 0, 0); }
+  fotoBlitz.classList.remove('an'); void fotoBlitz.offsetWidth; fotoBlitz.classList.add('an');
+  sound.play('klick');
+  const name = `powershot-foto-${Date.now()}.png`;
+  c.toBlob((blob) => {
+    if (!blob) return;
+    // Auf iPad und iPhone über „Teilen“ (dort kann man das Bild in den Fotos sichern), sonst als Datei speichern
+    try {
+      const datei = new File([blob], name, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [datei] }) && (/iPad|iPhone|Android/i.test(navigator.userAgent) || navigator.maxTouchPoints > 1)) {
+        navigator.share({ files: [datei], title: 'Powershot Tennis' }).catch(() => {});
+        return;
+      }
+    } catch (e) { /* dann eben als Datei */ }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  }, 'image/png');
+  return c;
+}
+fotoEl.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.kam) stimmungWeiter(b.dataset.kam);
+  else if (b.dataset.foto === 'rahmen') { fotoRahmen = !fotoRahmen; b.textContent = `🖼️ Rahmen: ${fotoRahmen ? 'an' : 'aus'}`; }
+  else if (b.dataset.foto === 'knips') fotoKnips();
+  else fotoEnde();
+});
+window.addEventListener('keydown', (e) => {
+  if (!game.anlage.an || MS.offen() || e.target.closest('input, textarea')) return;
+  if (e.code === 'KeyP') (fotoAn ? fotoEnde : fotoStart)();
+  else if (e.code === 'KeyK' && !fotoAn) (gKarte.offen() ? gKarte.zu() : gKarte.stand && gKarte.auf(gKarte.stand));
+  else if (e.code === 'Escape') { fotoEnde(); gKarte.zu(); }
+});
+// Jedes Bild: Stimmung weitergeben und das Radar malen
+function gelaendeFrame() {
+  const A = game.anlage, an = A.an && !!A.plan;
+  if (!an) { if (fotoAn) fotoEnde(); gKarte.setze(null); return; }
+  if (A.stimmung.zeit !== zeitJetzt() || A.stimmung.wetter !== wetterJetzt()) A.stimmungSetzen(zeitJetzt(), wetterJetzt());
+  gKarte.setze(A.plan);
+  const wo = A.kamZiel || A.p, punkte = [];
+  // Am Rand des Radars: im Städtchen das Hotel (gelb), auf dem Gelände am Turniertag der Platz, auf dem dein Match wartet (weiß)
+  const fest = A.orte.find((o) => o.id === (gKarte.istStadt() ? 'ziel' : 'court'));
+  if (fest && (gKarte.istStadt() || anlageTag)) punkte.push({ x: fest.tx, z: fest.tz, farbe: gKarte.istStadt() ? '#ffd23a' : '#ffffff' });
+  gKarte.radar({ x: wo.x, z: wo.z, blick: A.p.blick, kamW: A.kam.w, ziel: A.ziel, punkte });
+}
+
 // woher = an welcher Tür die Figur startet · ergebnis = was dort gleich angezeigt wird (nach einem Minispiel)
 function anlageStart(ich, woher, ergebnis = null) {
   hide();
@@ -1202,6 +1374,8 @@ function anlageStart(ich, woher, ergebnis = null) {
   game.anlage.wennDa = (ort) => {
     if (!ort || !anlageErgebnis || anlageErgebnis.ort !== ort.id) anlageErgebnis = null;
     if (ort) anlageMeldung = null;
+    anlageWeg = null;                       // neu an einer Tür (oder weg von ihr): Der Kasten darf wiederkommen
+    if (ort) { anlageAuf = null; anlageListe = false; }      // was aufgeklappt war, macht Platz für den Ort
     // Eine Sehenswürdigkeit zum ersten Mal besucht? Dann gibt es einen Stempel ins Heft (und in der Karriere etwas Erfahrung).
     const G = game.anlage.plan && game.anlage.plan.g;
     if (ort && ort.info && G && !stempelVon(G).includes(ort.name)) {
@@ -1212,6 +1386,7 @@ function anlageStart(ich, woher, ergebnis = null) {
     }
     anlageZeigen();
   };
+  anlageAuf = anlageTag && !ergebnis && !woher ? 'aufgaben' : null; anlageWeg = null;      // am Morgen zeigt das Team einmal seine Aufgaben, sonst ist das Gelände frei
   game.anlage.start(woher, anlageGelaende());
   // Der Glücksball: in der Karriere einer pro Turniertag, beim freien Herumlaufen immer einer (nicht nach dem Match, nicht am Abend und nicht im Städtchen)
   if (hotelWeg || (anlageTag && (anlageTag.abend || anlageTag.phase === 'nach'))) { /* heute kein Glücksball mehr */ } else if (!anlageTag || !TT.ballGefunden(lebenC())) game.anlage.ballLegen();
@@ -1224,8 +1399,8 @@ function anlageStart(ich, woher, ergebnis = null) {
   anlageZeigen();
 }
 // Knopf „Hinlaufen“: Die Figur sucht sich den Weg selbst
-actions.anlageGeh = (v) => { game.anlage.geheZu(v); };
-actions.anlageListe = () => { anlageListe = !anlageListe; anlageZeigen(); };
+actions.anlageGeh = (v) => { game.anlage.geheZu(v); anlageAuf = null; anlageZeigen(); };      // losgelaufen: Die Liste klappt wieder zu
+actions.anlageListe = () => { anlageListe = !anlageListe; anlageAuf = null; anlageZeigen(); };
 // Ein anderes Gelände ansehen (nur im Hauptmenü)
 actions.anlageWahlOrt = (v) => { if (anlageTag || !D.tournamentById(v)) return; anlageWo = v; anlageListe = false; anlageStart(career ? CA.mePlayer(career) : D.PLAYERS[0]); };
 function anlageSchluss() { hotelSchluss(); anlageMeldung = null; game.anlage.ende(); anlageEl.classList.remove('on'); anlageEl.innerHTML = ''; }
@@ -1401,7 +1576,7 @@ function hotelAmWagen(G) {
 // Das Fenster während der Fahrt, im Städtchen und im Hotel
 function hotelZeigen() {
   const A = game.anlage, ort = A.amOrt, G = A.plan ? A.plan.g : null, W = hotelWeg, abend = !!(anlageTag && anlageTag.abend);
-  const kam = [['karte', '🗺️', 'Weiter weg / näher'], ['schilder', '🏷️', 'Beschriftungen an oder aus (Taste B)'], ['links', '⟲', 'Kamera nach links drehen'], ['rechts', '⟳', 'Kamera nach rechts drehen'], ['nah', '＋', 'näher'], ['fern', '－', 'weiter weg']];
+  const kam = [['karte', '🗺️', 'Weiter weg / näher'], ['schilder', '🏷️', 'Beschriftungen an oder aus (Taste B)'], ...KAM_KNOEPFE, ...stimmungKnoepfe()];
   const abendWahl = () => `<p class="dim">Was machst du heute Abend noch?</p><div class="row wahl">${Object.entries(TT.ABEND).map(([id, B]) => `<button data-a="hotelAbendWahl" data-v="${id}">${B.name} <small>${B.bringt}</small></button>`).join('')}</div>`;
   let zeit = '', unten = '';
   if (!W) {
@@ -2585,7 +2760,78 @@ function startMatch(o) {
   hud.update();
   hud.message(o.title || '', 'info');
   sound.setCrowd(0.05);
+  // Vor einem richtigen Match: die Einlaufszene (Einstellungen → „Einlaufen vor dem Match“)
+  if (mode === 'match' && !lernen && !o.ohneEinlauf && settings.einlauf !== 'aus') einlaufLos(o);
 }
+
+// ---------------------------------------------------------------
+// Einlaufszene vor dem Match: Die Spieler kommen auf den Platz, spielen sich ein und werden vorgestellt.
+// Der Ablauf steht in einlauf.js, gezeichnet wird in game3d.js. Hier: Titel, Steckbrief-Karte, Antippen.
+// ---------------------------------------------------------------
+const einlaufEl = $('#einlauf');
+let einlaufSeit = 0;        // wann der Teil begonnen hat, der gerade läuft (damit ein Doppeltipp nicht gleich zwei Teile überspringt)
+const einlaufAn = () => !!(game.einlauf && game.einlauf.an);
+function einlaufLos(o) {
+  controls.enabled = false;
+  hudEl.hidden = true;
+  einlaufEl.hidden = false;
+  // Was im Steckbrief steht, das die Spieler-Daten nicht wissen: dein Platz in der Karriere, deine Turniersiege, die Bilanz
+  const inKarriere = career && o.me.me;
+  const ichMehr = { du: true };
+  if (inKarriere) {
+    const ich = CA.ranking(career).find((p) => p.me);
+    Object.assign(ichMehr, { platz: ich.rank, punkte: ich.points, titel: career.titles });
+  }
+  const karten = [steckbrief(o.me, ichMehr), steckbrief(o.opp, { bilanz: o.bilanz })];
+  const farbe = (p) => '#' + ((p.look && p.look.shirt) ?? 0xffffff).toString(16).padStart(6, '0');
+  const titel = (klein) => { $('#einlaufTitel').innerHTML = `<small>${esc(o.title || '')}</small><b>${esc(o.me.short)} <i>gegen</i> ${esc(o.opp.short)}</b><span>${klein}</span>`; };
+  game.einlaufStart(settings.einlauf === 'kurz' ? 'kurz' : 'an', [o.me, o.opp], (name, info) => {
+    if (name === 'fertig') return einlaufFertig(o);
+    if (name !== 'teil') return;
+    einlaufSeit = performance.now();
+    const karte = $('#einlaufKarte');
+    if (info.seite == null) {
+      karte.className = '';
+      titel(info.teil === 'einlaufen' ? 'Die Spieler kommen auf den Platz' : 'Einspielen');
+      $('#einlaufTitel').className = info.teil === 'einlaufen' ? 'on' : 'on klein';      // beim Einspielen nur ein kleines Schild, damit man die Spieler sieht
+      if (info.teil === 'einlaufen') sound.say('Bitte begrüßen Sie die Spieler!');
+      return;
+    }
+    // Steckbrief: Wer wird gerade gezeigt?
+    const k = karten[info.seite], p = info.seite === 0 ? o.me : o.opp;
+    $('#einlaufTitel').className = '';
+    karte.style.setProperty('--hemd', farbe(p));
+    karte.innerHTML = `<div class="kopf"><span class="flagge">${flag(k.land)}</span>
+        <div class="wer"><small>${k.du ? 'Das bist du' : 'Dein Gegner'}${k.land ? ' · ' + esc(k.land) : ''}</small><b>${esc(k.name)}</b></div>
+        ${k.platz ? `<div class="platz"><small>Platz</small>${k.platz}</div>` : ''}</div>
+      <table>${k.zeilen.map((z) => `<tr><td>${esc(z[0])}</td><td>${esc(z[1])}</td></tr>`).join('')}</table>
+      ${k.merkmal ? `<p>${esc(k.merkmal)}</p>` : ''}`;
+    karte.className = '';
+    void karte.offsetWidth;           // kurz „ausschalten“, damit die Karte jedes Mal neu hereingleitet
+    karte.className = 'on';
+    sound.say(k.name);
+  });
+}
+// Die Szene ist vorbei (oder übersprungen): Jetzt beginnt das Match.
+function einlaufFertig(o) {
+  einlaufEl.hidden = true;
+  $('#einlaufKarte').className = ''; $('#einlaufTitel').className = '';
+  if (!match) return;
+  match.timer = 1.2;                // kurz durchatmen, dann kommt der erste Aufschlag
+  hudEl.hidden = false;
+  controls.enabled = !paused;
+  $('#hint').classList.remove('kurz'); void $('#hint').offsetWidth; $('#hint').classList.add('kurz');
+  hud.message(o.title || '', 'info');
+}
+// Antippen (irgendwo) = zum nächsten Teil, Knopf „Überspringen“ = gleich zum Match
+function einlaufTipp(alles) {
+  if (!einlaufAn() || paused) return;
+  sound.unlock();
+  if (alles) return game.einlauf.ueberspringen();
+  if (performance.now() - einlaufSeit < 350) return;
+  game.einlauf.weiter();
+}
+einlaufEl.addEventListener('pointerdown', (e) => { e.stopPropagation(); einlaufTipp(!!e.target.closest('#einlaufSkip')); });
 
 let msgTimer = 0, toastTimer = 0, speedTimer = 0;
 const hud = {
@@ -2725,7 +2971,7 @@ function hudFrame(dt) {
 function togglePause() {
   if (!match || !session || session.over) return;
   paused = !paused;
-  controls.enabled = !paused;
+  controls.enabled = !paused && !einlaufAn();
   if (paused) {
     show(`<div class="panel modal"><h2>Pause</h2><div class="menu">
       <button class="primary" data-a="resume">Weiterspielen</button>
@@ -2845,20 +3091,23 @@ function gelaendeTon(dt) {
 
 let last = performance.now();
 function loop(now) {
-  const dt = Math.min(0.05, (now - last) / 1000);
+  const roh = (now - last) / 1000, dt = Math.min(0.05, roh);
   last = now;
+  if (!MS.offen() && !document.hidden) game.tempoPruefen(roh);      // ruckelt es? Dann malt das Spiel mit weniger Bildpunkten (game3d.js)
+  handy.pruefen();                  // meldet sich das Handy (als Schläger) noch?
   controls.pollPad();               // Controller im Browser abfragen (auch in der Pause, wegen der Pause-Taste)
   // Läuft ein Mini-Spiel (minispiele.js), bleibt das Gelände dahinter als Standbild stehen: Das spart Rechenzeit fürs Mini-Spiel.
   if (MS.offen()) return requestAnimationFrame(loop);
   // Im Match läuft die Zeit nach dem eingestellten Spieltempo. Bei einem langen Bild rechnen wir in zwei halben Schritten,
   // damit ein sehr schneller Ball nicht in einem einzigen Schritt am Schläger vorbeifliegt.
   const dm = match ? dt * tempoMal() : dt;
-  if (match && !paused) {
+  if (match && !paused && !einlaufAn()) {
     controls.update(dt);       // die Steuerung rechnet in echter Zeit: Die Zeitfenster zum Schlagen werden durch das Spieltempo nicht kürzer
     const teile = dm > 0.022 ? 2 : 1;
     for (let i = 0; i < teile; i++) match.update(dm / teile);
   }
   game.frame(match && paused ? 0 : dm);
+  gelaendeFrame();
   gelaendeTon(dt);
   hudFrame(dt);
   kameraFrame();
@@ -2868,8 +3117,9 @@ function loop(now) {
 // Für Tests: das Spiel von Hand um n Bilder weiterdrehen
 function step(n = 60) {
   for (let i = 0; i < n; i++) {
-    if (match && !paused) { controls.update(1 / 60); match.update(1 / 60); }
+    if (match && !paused && !einlaufAn()) { controls.update(1 / 60); match.update(1 / 60); }
     game.frame(1 / 60);
+    gelaendeFrame();
     gelaendeTon(1 / 60);
     hudFrame(1 / 60);
   }
@@ -2887,6 +3137,8 @@ document.addEventListener('visibilitychange', () => {
 // Ein Knopf ist "ausgewählt" (gelber Rahmen, Klasse .fokus). Der Stick springt zum nächsten Knopf
 // in der gedrückten Richtung, A drückt den Knopf, B drückt "Zurück".
 function menuTaste(was) {
+  // Einlaufszene: A = nächster Teil, B = gleich zum Match
+  if (einlaufAn() && !paused && (was === 'ok' || was === 'zurueck')) return einlaufTipp(was === 'zurueck');
   if (!screen.classList.contains('on')) return;
   const knoepfe = [...screen.querySelectorAll('button:not(:disabled)')];
   if (!knoepfe.length) return;
@@ -2927,12 +3179,51 @@ controls.onHint = (text) => hud.message(text, 'warn');
 // Nur in der iOS-App: Dieses Gerät wird zum Schläger für ein anderes (z. B. iPhone für das Spiel auf dem iPad).
 actions.schlaeger = () => window.webkit.messageHandlers.powershot.postMessage('schlaeger');
 
+// ---- Handy als Schläger über einen QR-Code (handyschlaeger.js, Idee aus dem Rennspiel: Handy als Lenkrad).
+// Das Handy schickt seine Bewegung, das Spiel behandelt es wie einen Controller mit Bewegungssensor.
+const handy = new SchlaegerEmpfang();
+let handyDa = false;
+const HANDY_TEXT = { aus: '', laden: '⏳ Verbindung wird vorbereitet …', bereit: '📡 Wartet auf dein Handy …', fehler: '⚠️ Kein Internet oder der Vermittler antwortet nicht – der QR-Code geht gerade nicht.' };
+const handyText = () => (handy.status === 'verbunden' ? `✅ ${handy.geraet || 'Handy'} ist verbunden. Schwinge einmal zur Probe!` : HANDY_TEXT[handy.status] || '');
+handy.wennDaten = (d) => {
+  if (d.t !== 's') return;
+  window.__powershotPad({ name: `${handy.geraet || 'Handy'} als Schläger`, lx: 0, ly: 0, motion: d.m || null, x: !!d.x, y: !!d.y, netz: !!d.netz, pause: !!d.pause });
+};
+handy.wennStatus = (st) => {
+  if (st === 'verbunden' && !handyDa) {
+    handyDa = true;
+    // Geschwungen wird in der Steuerung „Controller“ – die stellen wir gleich ein
+    if (settings.control !== 'controller') { settings.control = 'controller'; saveSettings(); controls.setMode('controller'); if (match) match.cfg.controlMode = 'controller'; }
+  } else if (st !== 'verbunden' && handyDa) { handyDa = false; window.__powershotPadWeg(); }
+  const el = document.getElementById('handyStatus');
+  if (el) el.textContent = handyText();
+  const c = document.getElementById('handyCode');
+  if (c) c.textContent = handy.code || '';
+};
+// Das Handy darf kurz anzeigen (und rütteln), wenn das Spiel einen Schwung erkannt hat
+controls.onSchwung = (kraft) => { if (handyDa) handy.senden({ t: 'schwung', hart: kraft > 0.7 }); };
+actions.handySchlaeger = () => {
+  handy.start();
+  show(`<div class="bar">${back('settings')}<h2>📱 Handy als Schläger</h2></div>
+    <div class="panel" style="text-align:center">
+      <p>Scanne den Code mit der Kamera deines Handys. Es öffnet sich eine Seite – dort auf <b>„Los geht’s“</b> tippen und „Bewegung“ erlauben.</p>
+      <canvas id="handyQr" width="264" height="264" style="width:220px;height:220px;border-radius:12px"></canvas>
+      <p>Oder am Handy <b>kvb1982.github.io/Powershot/schlaeger.html</b> öffnen und diesen Code eintippen: <b id="handyCode" style="font-size:26px;letter-spacing:4px;color:var(--accent)">${handy.code || ''}</b></p>
+      <p id="handyStatus" style="font-weight:600">${handyText()}</p>
+      <p class="dim" style="font-size:13px;text-align:left">So geht es: Das Handy fest halten wie einen Schlägergriff (mit Hülle, am besten mit Schlaufe ums Handgelenk!) und schwingen, wenn der Ball kommt.
+        Früh schwingen = cross, spät = longline. Von unten nach oben = Topspin, von oben nach unten = Slice, fest = hart. Lob, Stoppball und „Ans Netz“ sind Knöpfe auf dem Handy.
+        Die Steuerung stellt sich von selbst auf „Controller“, am besten mit Laufhilfe „Voll“ – dann läuft deine Figur von allein.
+        Beide Geräte brauchen Internet (nur für den ersten Kontakt). Mit dem iPhone geht es auch ohne Internet über die Powershot-App.</p>
+    </div>`);
+  qrMalen(document.getElementById('handyQr'), handy.adresse());
+};
+
 // Controller: Die Pause-Taste hält das Spiel an. Die iOS-App meldet den Controller über diese beiden Funktionen.
 controls.onPause = () => togglePause();
 window.__powershotPad = (s) => { controls.nativePad = true; controls.setPad(s); };
 window.__powershotPadWeg = () => { controls.nativePad = false; controls.padWeg(); };
 
-window.__powershot = { game, controls, settings, step, kameraLauf, kameraBild, get match() { return match; }, get career() { return career; }, get season() { return season; }, actions };
+window.__powershot = { game, controls, settings, step, kameraLauf, kameraBild, get match() { return match; }, get career() { return career; }, get season() { return season; }, actions, karte: gKarte, handy, foto: { start: fotoStart, knips: fotoKnips, ende: fotoEnde } };
 // Das Spielermodell laden (höchstens 8 Sekunden warten – sonst geht es mit den einfachen Figuren los)
 await Promise.race([Promise.all([loadFigure(), loadMocap(), loadGang(), ladeRequisiten()]), new Promise((r) => setTimeout(r, 8000))]);
 $('#loading').remove();

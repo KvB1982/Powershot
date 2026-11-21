@@ -303,6 +303,7 @@ export class Controls {
   //   kraft: 0 bis 1 · hochAnteil: +1 = ganz nach oben, -1 = ganz nach unten, 0 = seitlich
   //   alter: so viele Sekunden ist der Schwung schon her (bei der Apple Watch dauert die Meldung einen Moment)
   schwungFertig(kraft, hochAnteil, alter) {
+    if (this.onSchwung) this.onSchwung(kraft);      // z. B. damit das Handy als Schläger kurz rüttelt
     // Ging der Schwung senkrecht (von oben nach unten oder umgekehrt) oder eher seitlich?
     // Aufschlag und Schmetterball brauchen einen senkrechten Schwung – wie beim echten Tennis über dem Kopf.
     const senkrecht = Math.abs(hochAnteil) > 0.35;

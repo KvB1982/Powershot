@@ -12,6 +12,7 @@
 //
 // Einfache Anlage (kleine Turniere): Alle Gebäude stehen im Kreis um einen Platz in der Mitte, die Türen zeigen zur Mitte.
 // So kommt man von jeder Tür geradeaus zu jeder anderen, ohne durch ein Haus zu laufen.
+import { GelaendeWetter } from './gelaendewetter.js';
 import * as THREE from 'three';
 import { requisit } from './requisiten.js';
 import { planVon, planAus } from './gelaende.js';
@@ -28,6 +29,14 @@ const TEMPO_GROSS = 4.0;      // auf den großen Geländen joggt sie, die Wege s
 const GEH_BIS = 1.9;          // bis zu diesem Tempo wird gegangen, darüber geht das Gehen nach und nach ins Joggen über
 // Kamera: w = Drehung um die Figur (0 = von vorn/Süden), e = Neigung (0 flach … 1.5 von oben), d = Abstand in Metern
 const KAM_START = { w: 0, e: 0.7, d: 15 }, KAM_WEIT = { e: 1.05, d: 46 };
+// --- Steuerung „Wie im Reitturnier“ (this.art = 'reit', das ist der Standard). Alle Zahlen sind vom Pferdehof im Reitturnier abgeschrieben (js/hof.js, js/spiel.js dort). ---
+const REIT_START = { w: 0, e: 0.785, d: 18.4 };      // so schaut die Kamera am Anfang: schräg von oben (45°), 18 m weg
+const REIT_TOT = 12, REIT_VOLL = 70;                 // Finger als Steuerknüppel: die ersten 12 Bildpunkte passiert nichts, ab 70 läuft die Figur volles Tempo
+const REIT_DREH = 0.004, REIT_NEIG = 0.003;          // zwei Finger: so stark dreht und neigt jeder Finger die Kamera (pro Bildpunkt)
+const REIT_NEIG_MIN = 0.06, REIT_NEIG_MAX = 1.5;     // so flach und so steil darf die Kamera schauen
+const REIT_NAH = 5;                                  // näher als 5 m kommt die Kamera nicht an die Figur
+const REIT_TASTE_DREH = Math.PI / 8;                 // Taste Q oder R: ein Achtel einer halben Drehung weiter
+const KNOPF_NEIG = 0.9;                              // Knöpfe ▲ ▼: so schnell kippt die Kamera (pro Sekunde)
 // Kamera von Hand: wie stark Wischen dreht und neigt (Bogenmaß je Pixel) und wie weit man gehen darf
 const DREH_FINGER = 0.009, NEIG_FINGER = 0.007;      // zwei Finger gemeinsam schieben (ein Bildschirm breit ≈ einmal ganz herum)
 const DREH_MAUS = 0.008, NEIG_MAUS = 0.006;          // rechte Maustaste ziehen
@@ -61,7 +70,7 @@ const grad = (g) => g * Math.PI / 180;
 // Der flachste erlaubte Blickwinkel bei diesem Abstand: nah darf die Kamera ganz flach schauen, weit weg muss sie über den Dächern bleiben
 // Beschriftungen: Höhe eines Schilds in Bildpunkten (nah / fern), wie viele Etagen übereinander, ab welchem Kamera-Abstand auch bloße Namen
 const SCHILD_GROSS = 30, SCHILD_KLEIN = 19, SCHILD_ETAGEN = 8, NAMEN_AB = 26;
-const SCHILD_OBEN = 68, SCHILD_RECHTS = 74;      // oben liegt die Leiste mit „Zurück“, rechts die Kamera-Knöpfe – dort kein Schild
+const SCHILD_OBEN = 68, SCHILD_RECHTS = 122;      // oben liegt die Leiste mit „Zurück“, rechts die Kamera-Knöpfe – dort kein Schild
 // Freie Kamera: so nah darf sie heran, so hoch schwebt sie mindestens, so weit darf sie über den Zaun hinaus (alles Meter)
 const FREI_NAH = 30, FREI_HOCH = 24, FREI_RAND = 160;
 const DOPPEL_ZEIT = 380, DOPPEL_WEIT = 44;         // Doppel-Tipp: höchstens so viele Millisekunden und Bildpunkte auseinander
@@ -87,7 +96,9 @@ export class Anlage {
     this.finger = {};          // alle Finger (oder die Maus), die gerade aufliegen: id → { x0, y0, x, y, rechts }
     this.knueppel = null;      // id des Fingers, der gerade läuft
     this.kamTaste = null;      // welcher Kamera-Knopf gerade gedrückt ist ('links', 'rechts', 'nah', 'fern')
+    this.art = 'reit';         // Art der Steuerung: 'reit' = genau wie auf dem Pferdehof im Reitturnier, 'frei' = mit freier Kamera (drei Finger schieben die Ansicht)
     this.frei = null;          // freie Kamera: { x, z } = die Stelle am Boden, auf die sie schaut. null = sie folgt der Figur
+    this.stimmung = { zeit: 'tag', wetter: 'sonne' };      // Tageszeit und Wetter auf dem Gelände (gelaendewetter.js), gesetzt mit stimmungSetzen
     this.blick = { x: 0, z: 0 };   // dorthin schaut die Kamera gerade (merken wir uns, damit die freie Kamera ohne Ruck losfährt)
     this.letzterTipp = null;   // der letzte kurze Tipp (für den Doppel-Tipp)
     this.wennFrei = null;      // wird aufgerufen, wenn die Kamera frei wird oder zur Figur zurückkehrt (app.js färbt den Knopf 🎯)
@@ -98,15 +109,15 @@ export class Anlage {
     this.amOrt = null;         // der Ort, an dessen Tür die Figur gerade steht
     this.wennDa = null;        // wird aufgerufen, wenn sich amOrt ändert (app.js zeigt dann das Fenster)
     // Tasten, Maus und Finger – hören nur zu, solange die Anlage an ist
-    const meins = (e) => this.an && !e.target.closest('button, .panel');
-    addEventListener('keydown', (e) => { if (!this.an) return; this.tasten[e.code] = true; if (e.code === 'KeyM') this.uebersicht(); if (e.code === 'KeyF') this.zurFigur(); if (e.code === 'KeyB' && !e.repeat) { this.schilderSchalten(); if (this.wennSchilder) this.wennSchilder(this.schilderAn); } });
+    const meins = (e) => this.an && !e.target.closest('button, .panel, #radar, #lageplan, #fotoLeiste');
+    addEventListener('keydown', (e) => { if (!this.an) return; this.tasten[e.code] = true; this.reitTaste(e.code); if (e.code === 'KeyM' && !e.repeat) this.uebersicht(); if (e.code === 'KeyF') this.zurFigur(); if (e.code === 'KeyB' && !e.repeat) { this.schilderSchalten(); if (this.wennSchilder) this.wennSchilder(this.schilderAn); } });
     addEventListener('keyup', (e) => { this.tasten[e.code] = false; });
     addEventListener('contextmenu', (e) => { if (meins(e)) e.preventDefault(); });
-    addEventListener('wheel', (e) => { if (meins(e)) { this.kam.zd *= Math.exp(e.deltaY * 0.001); this.kamGrenzen(); } }, { passive: true });
+    addEventListener('wheel', (e) => { if (meins(e)) { this.kam.zd *= this.reit() ? (e.deltaY > 0 ? 1.12 : 0.89) : Math.exp(e.deltaY * 0.001); this.kamGrenzen(); } }, { passive: true });
     addEventListener('pointerdown', (e) => {
       if (!meins(e)) return;
       // Maus: mittlere Taste oder Umschalt + linke Taste = die Ansicht verschieben
-      this.finger[e.pointerId] = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, rechts: e.button === 2, schieb: e.button === 1 || (e.button === 0 && e.shiftKey && e.pointerType === 'mouse'), weg: 0 };
+      this.finger[e.pointerId] = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, rechts: e.button === 2, schieb: !this.reit() && (e.button === 1 || (e.button === 0 && e.shiftKey && e.pointerType === 'mouse')), weg: 0 };
       if (e.button === 1) e.preventDefault();
       const n = Object.keys(this.finger).length, f = this.finger[e.pointerId];
       // ein Finger läuft (Steuerknüppel), zwei drehen die Kamera, drei verschieben sie. Ist die Kamera schon frei, verschiebt auch ein Finger.
@@ -117,7 +128,7 @@ export class Anlage {
       if (!f) return;
       const dx = e.clientX - f.x, dy = e.clientY - f.y, k = this.kam;
       f.weg += Math.hypot(dx, dy);
-      if (f.rechts) { k.zw -= dx * DREH_MAUS; k.ze += dy * NEIG_MAUS; }
+      if (f.rechts) { k.zw -= dx * DREH_MAUS; k.ze += dy * NEIG_MAUS; if (this.reit()) { this.kamGrenzen(); k.w = k.zw; k.e = k.ze; } }      // (im Reitturnier folgt die Kamera der Maus sofort, ohne Nachziehen)
       else if (Object.keys(this.finger).length === 1 && (f.schieb || (this.frei && this.knueppel === null)) && f.weg > 6) this.schieben(dx, dy);
       // (Zwei Finger: Das rechnet zweiFinger() einmal pro Bild aus – dann ist es egal, welcher Finger sich zuerst meldet.)
       f.x = e.clientX; f.y = e.clientY;
@@ -130,7 +141,7 @@ export class Anlage {
       // Nur ein kurzer Tipp (kaum bewegt)? Dann ist das ein Ziel zum Hinlaufen.
       if (this.an && f && !f.rechts && !f.schieb && f.weg < 12 && e.type === 'pointerup' && !e.target.closest('button, .panel')) {
         const jetzt = performance.now(), l = this.letzterTipp;
-        if (l && jetzt - l.zeit < DOPPEL_ZEIT && Math.hypot(e.clientX - l.x, e.clientY - l.y) < DOPPEL_WEIT) {
+        if (!this.reit() && l && jetzt - l.zeit < DOPPEL_ZEIT && Math.hypot(e.clientX - l.x, e.clientY - l.y) < DOPPEL_WEIT) {
           // Doppel-Tipp: Die Kamera kehrt zur Figur zurück. Der erste der beiden Tipps soll die Figur dabei nicht losschicken.
           this.letzterTipp = null;
           if (this.frei) { this.ziel = l.ziel; this.pfad = l.pfad; }
@@ -154,6 +165,24 @@ export class Anlage {
   //   Mitte wandert nach oben/unten          = Blickwinkel: flach über den Boden bis fast senkrecht von oben
   zweiFinger() {
     const ff = Object.values(this.finger).filter((f) => !f.rechts);
+    if (this.reit()) {
+      // Wie im Reitturnier: Sobald zwei Finger aufliegen, gehört jeder Finger der Kamera. Jeder Finger, der sich bewegt, dreht
+      // (links/rechts) und neigt (hoch/runter) sie ein Stück; wird der Abstand der Finger kleiner oder größer, zoomt sie.
+      // Drei Finger machen nichts Besonderes.
+      this.drei = null;
+      if (ff.length < 2) { this.zwei = null; return; }
+      const [a, b] = ff, k = this.kam, z = this.zwei;
+      const jetzt = { a, b, ax: a.x, ay: a.y, bx: b.x, by: b.y, weit: Math.hypot(a.x - b.x, a.y - b.y) };
+      if (z && z.a === a && z.b === b) {
+        if (z.weit > 8 && jetzt.weit > 8) k.zd *= z.weit / jetzt.weit;
+        k.zw -= ((a.x - z.ax) + (b.x - z.bx)) * REIT_DREH;
+        k.ze += ((a.y - z.ay) + (b.y - z.by)) * REIT_NEIG;
+        this.kamGrenzen();
+        k.w = k.zw; k.e = k.ze; k.d = k.zd;      // ohne Nachziehen: Die Kamera klebt an den Fingern
+      }
+      this.zwei = jetzt;
+      return;
+    }
     // Drei Finger: die Ansicht über das Gelände schieben (links/rechts, vor/zurück) – die Kamera löst sich dabei von der Figur
     if (ff.length >= 3) {
       const x = (ff[0].x + ff[1].x + ff[2].x) / 3, y = (ff[0].y + ff[1].y + ff[2].y) / 3, d = this.drei;
@@ -178,6 +207,7 @@ export class Anlage {
   // Die Ansicht um (dx, dy) Bildpunkte verschieben – wie eine Landkarte, die man mit dem Finger zieht.
   // Beim ersten Mal löst sich die Kamera von der Figur („freie Kamera“).
   schieben(dx, dy) {
+    if (this.reit()) return;      // „Wie im Reitturnier“ gibt es keine freie Kamera: Sie bleibt immer bei der Figur
     if (!this.plan || this.zuFuss() || this.fahrt) return;      // nur auf den Geländen mit Lageplan – und nicht im Städtchen (dort soll man den Weg ja suchen)
     const k = this.kam, g = this.game, r = this.plan.g.rand;
     if (!this.frei) {
@@ -200,15 +230,36 @@ export class Anlage {
   zurFigur() {
     if (!this.frei) return;
     this.frei = null;
-    if (this.kam.zd > 45) { this.kam.zd = KAM_START.d; this.kam.ze = KAM_START.e; }      // von weit oben wieder nah heran
+    if (this.kam.zd > 45) { this.kam.zd = this.kamStart().d; this.kam.ze = this.kamStart().e; }      // von weit oben wieder nah heran
     if (this.wennFrei) this.wennFrei(false);
+  }
+
+  // Gilt gerade die Steuerung „Wie im Reitturnier“?
+  reit() { return this.art !== 'frei'; }
+  // So schaut die Kamera am Anfang (und nach der Übersicht)
+  kamStart() { return this.reit() ? REIT_START : KAM_START; }
+  // Die Steuerung wechseln (Einstellungen → „Steuerung auf dem Gelände“)
+  artSetzen(art) {
+    this.art = art === 'frei' ? 'frei' : 'reit';
+    if (this.reit() && this.frei) this.zurFigur();
+    this.knueppel = null;
+  }
+  // Tasten wie im Reitturnier: Q und R drehen in Stufen, T und + holen heran, G und − schieben weg
+  // (hält man die Taste fest, wiederholt der Computer sie von selbst – so dreht es weiter)
+  reitTaste(code) {
+    if (!this.reit() || this.fahrt) return;
+    const k = this.kam;
+    if (code === 'KeyQ') k.zw += REIT_TASTE_DREH; else if (code === 'KeyR') k.zw -= REIT_TASTE_DREH;
+    else if (code === 'NumpadAdd' || code === 'BracketRight' || code === 'KeyT') k.zd *= 0.8;
+    else if (code === 'NumpadSubtract' || code === 'Slash' || code === 'KeyG') k.zd *= 1.25;
+    this.kamGrenzen();
   }
 
   kamGrenzen() {
     const k = this.kam;
     if (this.frei) k.zd = Math.max(FREI_NAH, k.zd);
-    k.zd = Math.max(NAH_MIN, Math.min(this.zuFuss() ? STADT_FERN : this.plan ? this.weit * FERN_MAL : 90, k.zd));
-    k.ze = Math.max(NEIG_MIN, flachMin(k.zd), Math.min(NEIG_MAX, k.ze));
+    k.zd = Math.max(this.reit() ? REIT_NAH : NAH_MIN, Math.min(this.zuFuss() ? STADT_FERN : this.plan ? this.weit * FERN_MAL : 90, k.zd));
+    k.ze = Math.max(this.reit() ? REIT_NEIG_MIN : NEIG_MIN, flachMin(k.zd), Math.min(this.reit() ? REIT_NEIG_MAX : NEIG_MAX, k.ze));
     if (this.drinnen && !this.frei) { k.zd = Math.min(k.zd, 16); k.ze = Math.max(k.ze, 0.75); }      // im Haus nicht zu weit weg und nicht zu flach, sonst sieht man nur Wand
   }
 
@@ -216,10 +267,10 @@ export class Anlage {
   uebersicht() {
     if (this.fahrt) return;                                // während der Fahrt bleibt die Kamera beim Wagen
     const fern = this.zuFuss() ? STADT_FERN : this.plan ? this.weit : KAM_WEIT.d;
-    if (this.frei) { this.zurFigur(); this.kam.zd = KAM_START.d; }
+    if (this.frei) { this.zurFigur(); this.kam.zd = this.kamStart().d; }
     const k = this.kam, weit = k.zd > fern * 0.6;
-    k.zd = weit ? KAM_START.d : fern;
-    k.ze = weit ? KAM_START.e : KAM_WEIT.e;
+    k.zd = weit ? this.kamStart().d : fern;
+    k.ze = weit ? this.kamStart().e : KAM_WEIT.e;
     const w0 = this.plan && this.plan.g.kamW || 0;
     if (weit) k.zw = w0 + Math.round((k.zw - w0) / (Math.PI * 2)) * Math.PI * 2;
   }
@@ -255,6 +306,8 @@ export class Anlage {
     // Himmel und Dunst: am Tag, auch wenn das Turnier sonst abends gespielt wird
     this.alt = { hintergrund: g.scene.background, nebel: g.scene.fog.color.clone(), nah: g.camera.near, fern: g.camera.far };
     g.scene.background = new THREE.Color(0x8cc0ee);
+    this.wetter = new GelaendeWetter(g.scene, this.gruppe, himmel, sonne);
+    this.wetter.setze(this.stimmung.zeit, this.stimmung.wetter);
     g.scene.fog.color.set(0xa8cdea);
     g.scene.fog.near = this.weit * 1.2; g.scene.fog.far = this.weit * 1.2 + 1500;      // weit hinten verschwinden die Berge im Dunst
     g.camera.near = 1; g.camera.far = 4000; g.camera.updateProjectionMatrix();
@@ -341,7 +394,7 @@ export class Anlage {
     g.ball.visible = g.blob.visible = g.trail.visible = false;
     if (g.maschine) g.maschine.visible = false;
     if (!this.plan) { g.scene.fog.near = 60; g.scene.fog.far = 160; }
-    Object.assign(this.kam, KAM_START, { zw: KAM_START.w, ze: KAM_START.e, zd: KAM_START.d });
+    { const K = this.kamStart(); Object.assign(this.kam, K, { zw: K.w, ze: K.e, zd: K.d }); }
     // Manche Gelände schaut man sich besser von der anderen Seite an (Monte-Carlo: Blick aufs Meer)
     if (this.plan && this.plan.g.kamW) this.kam.w = this.kam.zw = this.plan.g.kamW;
     this.kamera(1);
@@ -501,6 +554,12 @@ export class Anlage {
     return lang;
   }
 
+  // Tageszeit ('morgen', 'tag', 'abend', 'nacht') und Wetter ('sonne', 'wolken', 'regen', 'nebel') wählen – das Licht blendet weich um
+  stimmungSetzen(zeit, wetter) {
+    this.stimmung = { zeit, wetter };
+    if (this.wetter) this.wetter.setze(zeit, wetter);
+  }
+
   // Zu einem Ort laufen (z. B. vom Knopf im Menü)
   geheZu(id) {
     const ort = this.orte.find((o) => o.id === id);
@@ -517,7 +576,16 @@ export class Anlage {
     if (f) {
       // Der Knüppel sitzt dort, wo der Finger aufgesetzt hat. Je weiter gezogen, desto schneller.
       const dx = (f.x - f.x0) / 70, dz = (f.y - f.y0) / 70;
-      if (Math.hypot(dx, dz) > 0.18) { sx = dx; sz = dz; }
+      if (this.reit()) {
+        // Wie im Reitturnier: links/rechts und vor/zurück werden einzeln gerechnet. Die ersten 12 Bildpunkte zählen nicht
+        // (so wackelt die Figur nicht bei jedem Zittern des Fingers), bei 70 Bildpunkten ist es volles Tempo.
+        const wx = Math.abs(f.x - f.x0) - REIT_TOT, wy = Math.abs(f.y - f.y0) - REIT_TOT;
+        f.zieht = f.zieht || wx >= 0 || wy >= 0;
+        if (f.zieht) {
+          sx += wx > 0 ? Math.sign(f.x - f.x0) * Math.min(1, wx / (REIT_VOLL - REIT_TOT)) : 0;
+          sz += wy > 0 ? Math.sign(f.y - f.y0) * Math.min(1, wy / (REIT_VOLL - REIT_TOT)) : 0;
+        }
+      } else if (Math.hypot(dx, dz) > 0.18) { sx = dx; sz = dz; }
     }
     // „Oben“ auf dem Bildschirm ist immer von der Kamera weg, egal wie sie gedreht ist
     const kc = Math.cos(k.w), ks = Math.sin(k.w);
@@ -661,7 +729,7 @@ export class Anlage {
     this.fahrt = null; this.kamZiel = null; this.schauHoch = 0;
     this.wagenSetzen(f.h.start.x, f.h.start.z, f.h.start.w);
     if (ort) Object.assign(this.p, { x: ort.tx, z: ort.tz, vx: 0, vz: 0 });
-    Object.assign(this.kam, { zd: KAM_START.d, ze: KAM_START.e, zw: (this.plan.g.kamW || 0) });
+    Object.assign(this.kam, { zd: this.kamStart().d, ze: this.kamStart().e, zw: (this.plan.g.kamW || 0) });
     if (this.game.avatars[0]) this.game.avatars[0].group.visible = true;
     this.kamera(1);
   }
@@ -766,8 +834,10 @@ export class Anlage {
     const g = this.game, p = this.kamZiel || this.p, k = this.kam, t = this.tasten;      // kamZiel: bei der Fahrt ins Hotel folgt die Kamera dem Wagen
     const knopf = this.kamTaste;
     this.zweiFinger();
-    if (knopf === 'links' || t.KeyQ) k.zw += dt * 1.6; else if (knopf === 'rechts' || t.KeyR) k.zw -= dt * 1.6;
-    if (knopf === 'nah' || t.KeyT) k.zd *= Math.exp(-dt * 1.4); else if (knopf === 'fern' || t.KeyG) k.zd *= Math.exp(dt * 1.4);
+    const halten = !this.reit();      // „Wie im Reitturnier“ drehen die Tasten in Stufen (reitTaste), sonst gleichmäßig, solange man sie hält
+    if (knopf === 'links' || (halten && t.KeyQ)) k.zw += dt * 1.6; else if (knopf === 'rechts' || (halten && t.KeyR)) k.zw -= dt * 1.6;
+    if (knopf === 'nah' || (halten && t.KeyT)) k.zd *= Math.exp(-dt * 1.4); else if (knopf === 'fern' || (halten && t.KeyG)) k.zd *= Math.exp(dt * 1.4);
+    if (knopf === 'hoch') k.ze += dt * KNOPF_NEIG; else if (knopf === 'flach') k.ze -= dt * KNOPF_NEIG;      // ▲ = mehr von oben, ▼ = flacher, mehr von der Seite
     this.kamGrenzen();
     const weich = Math.min(1, dt * 8);
     k.w += (k.zw - k.w) * weich; k.e += (k.ze - k.e) * weich; k.d += (k.zd - k.d) * weich;
@@ -795,20 +865,17 @@ export class Anlage {
     const nach = new THREE.Vector3(mx, Math.max(this.schauHoch || 0, 0.9 + Math.max(0, 0.6 - e) * 2.2 * Math.min(1, d / 15)), mz);      // flache Kamera schaut etwas höher (ganz nah an der Figur nicht – sonst sähe man nur Himmel)
     // Die Schilder: aus der Ferne groß (sonst kann man sie nicht lesen), aus der Nähe klein
     // (auf den großen Geländen wachsen sie in der Übersicht immer weiter mit)
-    if (this.plan) {
-      // Der Dunst in der Ferne rückt mit weg, wenn die Kamera weit hinausfährt – sonst wäre von weit oben alles nur hellblau
-      const dunst = Math.max(this.weit * 1.2, k.d * 1.3);
-      g.scene.fog.near = dunst; g.scene.fog.far = dunst + 520 + k.d;
-    }
-    if (this.sonne) {
-      // Die Sonne wandert mit der Figur mit, damit die Schatten in ihrer Nähe scharf sind
-      this.sonne.position.set(mx + 50, 110, mz + 40);
-      this.sonne.target.position.set(mx, 0, mz);
-    }
     const kk = dt >= 1 ? 1 : 1 - Math.exp(-6 * dt);
     g.camPos.lerp(von, kk); g.camLook.lerp(nach, kk);
     g.camera.position.copy(g.camPos);
     g.camera.lookAt(g.camLook);
+    // Tageszeit und Wetter (gelaendewetter.js): Licht, Himmel, Regen. Die Sonne wandert mit der Figur mit, damit die Schatten in ihrer Nähe scharf sind
+    if (this.wetter) this.wetter.schritt(dt, g.camera, mx, mz);
+    if (this.plan) {
+      // Der Dunst in der Ferne rückt mit weg, wenn die Kamera weit hinausfährt – sonst wäre von weit oben alles nur hellblau. Bei Regen und Nebel rückt er heran
+      const dunst = Math.max(this.weit * 1.2, k.d * 1.3), W = this.wetter;
+      g.scene.fog.near = dunst * (W ? W.nah : 1); g.scene.fog.far = g.scene.fog.near + (520 + k.d) * (W ? W.fern : 1);
+    }
     this.schilderOrdnen(dt);
   }
 
@@ -906,7 +973,7 @@ export class Anlage {
       g.scene.fog.color.copy(this.alt.nebel);
       g.camera.near = this.alt.nah; g.camera.far = this.alt.fern; g.camera.updateProjectionMatrix();
     }
-    this.plan = null; this.gitter = null; this.sonne = null; this.pfad = null; this.namen = []; this.ball = null;
+    this.plan = null; this.gitter = null; this.sonne = null; this.wetter = null; this.pfad = null; this.namen = []; this.ball = null;
     this.fahrt = null; this.kamZiel = null; this.schauHoch = 0;
     this.an = false; this.frei = null; this.drei = null; this.letzterTipp = null;
     this.finger = {};
