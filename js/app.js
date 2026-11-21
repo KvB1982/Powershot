@@ -181,6 +181,7 @@ actions.home = () => {
       <button class="big" data-a="training">Training <small>Ballmaschine · Aufschlag</small></button>
       <button class="big" data-a="anlage">Turniergelände <small>Wimbledon, New York, Paris … – die echten Anlagen zum Herumlaufen</small></button>
       <button class="big" data-a="schlagbuch">Schlagarten <small>Nachlesen und ansehen · Aufnehmen mit der Uhr</small></button>
+      <button class="big" data-a="miniMenu">Mini-Spiele und Quiz <small>Alle Aufgaben vom Turniergelände frei spielen · Tennis-Quiz</small></button>
       <button class="big" data-a="wissen">Tennis-Wissen <small>Lernen und üben: Regeln, Technik, Taktik, Turniere, Geschichte …</small></button>
       <div class="row"><button class="grow" data-a="settings" data-v="home">Einstellungen</button><button class="grow" data-a="help" data-v="home">Steuerung</button></div>
     </div>`);
@@ -1028,6 +1029,72 @@ actions.aufgabe = (v) => {
     }
     if (anlageTag) anlageZeigen();
   });
+};
+// ---------------------------------------------------------------
+// Mini-Spiele und Quiz frei spielen (Hauptmenü): alle Aufgaben vom Turniergelände, ohne Turnier und ohne Belohnung
+// ---------------------------------------------------------------
+const MINI_KEY = 'powershot.minifrei.v1';          // deine beste Note je Spiel (0…1)
+let miniBeste = {};
+try { miniBeste = JSON.parse(localStorage.getItem(MINI_KEY)) || {}; } catch (e) { miniBeste = {}; }
+let miniLetztes = null;                             // was nach dem letzten Spiel oben im Kasten steht
+const miniIch = () => (career ? CA.mePlayer(career) : D.PLAYERS[0]);
+const miniSterne = (note) => (note == null ? '<span class="dim">noch nicht gespielt</span>' : `<span class="gold">${'★'.repeat(note >= 0.75 ? 3 : note >= 0.4 ? 2 : 1)}${'☆'.repeat(note >= 0.75 ? 0 : note >= 0.4 ? 1 : 2)}</span> <span class="dim">beste Note ${Math.round(note * 100)} %</span>`);
+function miniFertig(id, note, davor = '') {
+  const A = TA.AUFGABEN[id], neu = miniBeste[id] == null || note > miniBeste[id];
+  if (neu) { miniBeste[id] = note; try { localStorage.setItem(MINI_KEY, JSON.stringify(miniBeste)); } catch (e) { /* dann eben ohne Merken */ } }
+  miniLetztes = `<b>${A.bild} ${esc(A.name)}:</b> ${davor}${Math.round(note * 100)} % – ${esc(TA.stufeFuer(id, note)[2])}${neu ? ' <span class="gold">Neue Bestnote!</span>' : ''}`;
+}
+actions.miniMenu = () => {
+  enterMenu();
+  const karte = (id) => { const A = TA.AUFGABEN[id]; return `<button class="lernkarte" data-a="miniSpiel" data-v="${id}"><b>${A.bild} ${esc(A.name)}</b><span>${A.spiel === 'platz' ? '🏟️ auf dem Platz' : ''}</span><small>${miniSterne(miniBeste[id])}</small></button>`; };
+  const ids = TA.AUFGABEN_IDS.filter((id) => TA.AUFGABEN[id].spiel !== 'quiz');
+  const quizId = TA.AUFGABEN_IDS.find((id) => TA.AUFGABEN[id].spiel === 'quiz');
+  show(`
+    <div class="bar">${back('home')}<h2>Mini-Spiele und Quiz</h2></div>
+    ${miniLetztes ? `<div class="panel merke" style="margin-top:0">${miniLetztes}</div>` : ''}
+    <div class="panel"><p style="margin:0">Hier kannst du alle Aufgaben vom Turniergelände <b>jederzeit üben</b> – ohne Turnier. Es gibt dafür keine Pluspunkte, aber das Spiel merkt sich deine beste Note.
+      Gespielt wird mit ${career ? 'deiner Karriere-Figur' : 'einer Beispiel-Figur'}.</p></div>
+    <h3>Mini-Spiele</h3>
+    <div class="grid lern">${ids.map(karte).join('')}</div>
+    <h3>Tennis-Quiz mit der Trainerin</h3>
+    <div class="panel"><p style="margin-top:0" class="dim">10 Fragen – such dir ein Thema aus. ${quizId ? miniSterne(miniBeste[quizId]) : ''}</p>
+      <div class="row"><button class="primary" data-a="miniQuiz" data-v="alles">🎲 Alle Themen gemischt</button>
+        ${Object.keys(LE.THEMEN).map((t) => `<button data-a="miniQuiz" data-v="${t}">${LE.THEMEN[t]}</button>`).join('')}</div>
+      <div class="row" style="margin-top:12px"><button data-a="wissen">📖 Erst lernen: Tennis-Wissen ›</button></div></div>`);
+};
+actions.miniSpiel = (id) => {
+  const A = TA.AUFGABEN[id];
+  if (!A) return;
+  const ich = miniIch(), phase = A.phase === 'nach' ? 'nach' : 'vor';
+  if (A.spiel === 'platz') {
+    // Die drei Aufgaben auf dem echten Platz: Zielübung, Aufschlag-Ziele, Spielzug
+    const trainer = { ...D.PLAYERS[59], name: 'Trainer', short: 'Trainer' }, zug = A.modus === 'lernen' ? zugFuerHeute() : null;
+    startMatch({
+      me: ich, opp: trainer, def: D.tournamentById(menuVenue), title: zug ? 'Spielzug: ' + SZ.ZUEGE[zug].name : A.name,
+      ...(zug ? { lernen: zug } : { mode: A.modus, balls: A.baelle }),
+      onEnd: (res) => {
+        if (!res.aborted && res.training) {
+          const tr = res.training;
+          if (zug) miniFertig(id, Math.min(1, tr.score / 4), `${tr.score}-mal geschafft. `);
+          else miniFertig(id, Math.min(1, tr.score / (A.baelle * TT.PUNKTE_PRO_BALL)), `${tr.score} von ${A.baelle * TT.PUNKTE_PRO_BALL} Punkten. `);
+        }
+        actions.miniMenu();
+      },
+    });
+    return;
+  }
+  const hemd = ich.look && ich.look.shirt;
+  MS.starte(A.spiel, {
+    titel: `${A.bild} ${A.name}`, wer: 'Dein Team', auftrag: TA.auftragText(id, phase), phase,
+    farbe: typeof hemd === 'number' ? '#' + hemd.toString(16).padStart(6, '0') : undefined, anzahl: A.anzahl, look: ich.look,
+  }, (r) => { if (!r.abbruch) miniFertig(id, r.note); actions.miniMenu(); });
+};
+actions.miniQuiz = (thema) => {
+  const id = TA.AUFGABEN_IDS.find((k) => TA.AUFGABEN[k].spiel === 'quiz'), A = TA.AUFGABEN[id];
+  if (!A) return;
+  const ich = miniIch();
+  MS.starte('quiz', { titel: `${A.bild} Tennis-Quiz${LE.THEMEN[thema] ? ': ' + LE.THEMEN[thema] : ''}`, phase: 'vor', anzahl: 10, gesehen: quizGesehen, themen: LE.THEMEN[thema] ? [thema] : null, look: ich.look },
+    (r) => { if (!r.abbruch) { if (r.ids) quizMerken(r.ids); miniFertig(id, r.note); } actions.miniMenu(); });
 };
 actions.anlageMatch = () => { anlageSchluss(); actions.tourPlay(); };
 // Nach den Aufgaben nach dem Match: Am Fahrdienst geht es weiter mit dem Weg ins Hotel (Fahrt oder zu Fuß, siehe unten)
