@@ -243,7 +243,7 @@ export function kleinesGelaende(def) {
   // Wie sehen die Häuser aus? Das richtet sich nach dem Land (für die 3D-Modelle in gelaendemodelle.js)
   const stil = holz || land.includes('alpen') ? 'alpen' : sued ? 'mittelmeer' : land.includes('wueste') ? 'wueste' : ENGLAND.includes(stadt) ? 'england'
     : def.erdteil === 'na' ? 'usa' : def.erdteil === 'as' ? 'asien' : def.erdteil === 'eu' ? (stufe >= 2 ? 'modern' : 'europa') : 'modern';
-  return { name: liga ? name : name.replace('Tennisclub Zu Hause', 'Dein Verein'), stadt: def.name || stadt, rand, umland, boden, feld, kamW, leute: [10, 40, 90, 130][stufe], klein: true, stufe, stil, um, fichte: winter || land.includes('alpen'), teile };
+  return { name: liga ? name : name.replace('Tennisclub Zu Hause', 'Dein Verein'), stadt: def.name || stadt, ort: liga ? '' : stadt, liga, imHotel: !!O.hotel && stufe === 0, erdteil: def.erdteil, rand, umland, boden, feld, kamW, leute: [10, 40, 90, 130][stufe], klein: true, stufe, stil, um, fichte: winter || land.includes('alpen'), teile };
 }
 
 // Einen Baustein an der Mitte spiegeln (Osten und Westen tauschen)

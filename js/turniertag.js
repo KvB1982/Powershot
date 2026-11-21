@@ -212,6 +212,15 @@ export function abend(c, id) {
   return { text: A.text, bringt };
 }
 
+// Zu Fuß zum Hotel (kleine Turniere, hotelweg.js): Wer den Weg schnell findet (3 Sterne), liegt früher im Bett.
+export const HOTELWEG_FRISCHE = 2;
+export function hotelweg(c, sterne) {
+  if (sterne < 3) return [];
+  const bringt = folgen(c, { frische: HOTELWEG_FRISCHE });
+  saveCareer(c);
+  return ['Schnell gefunden – du liegst früh im Bett', ...bringt];
+}
+
 // --- Leben auf dem Gelände ---
 // Der Glücksball: An jedem Turniertag liegt irgendwo auf dem Gelände ein goldener Ball. Wer ihn findet, geht mit einem
 // guten Gefühl ins Match (+1 Mental, nur heute). Gibt die Liste zurück, was er bringt – oder null, wenn er schon gefunden ist.
