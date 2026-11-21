@@ -33,6 +33,8 @@ const BLICK = {
   nah: { winkel: 62, hoch: 6.4, hinten: 23.5, zielZ: 1.5, mitX: 0.35 },
 };
 
+const BREMS_AB = 4.0;        // ab diesem Tempo (Meter pro Sekunde) quietscht es beim scharfen Abbremsen
+
 export class Game3D {
   constructor(canvas, sound) {
     this.canvas = canvas;
@@ -306,7 +308,7 @@ export class Game3D {
         if (show && self.wennShow) self.wennShow(side, show);
       },
       hit(h) {
-        snd.hit(clamp((h.speed - 8) / 40, 0.2, 1), h.type === 'serve');
+        snd.hit(clamp((h.speed - 8) / 40, 0.2, 1), h.type);      // die Schlagart bestimmt, welche Aufnahme kommt
         if (h.type === 'serve') call('serveSpeed', Math.round(h.speed * 3.6), h.side, h.art);
         snd.setCrowd(0.02);
       },
@@ -353,6 +355,7 @@ export class Game3D {
         if (info.reason === 'winner' && info.rally <= 2) head = 'Nicht erreicht!';
         let sub = 'Punkt ' + w;
         let strength = info.reason === 'ass' || info.reason === 'winner' ? 0.75 : 0.45;
+        if (strength > 0.7 && info.rally >= 5) snd.staunen();       // toller Gewinnschlag nach langem Ballwechsel: das Publikum staunt
         let say = REASON_TEXT[info.reason] && info.reason !== 'winner' ? head.replace('!', '') + '. ' : '';
         if (info.events.includes('match')) { sub = 'Spiel, Satz und Sieg ' + w; strength = 1; say += sub; }
         else if (info.events.includes('set')) { sub = 'Satz ' + w; strength = 0.95; say += sub; }
@@ -417,6 +420,19 @@ export class Game3D {
     this.renderer.render(this.scene, this.camera);
   }
 
+  // Rennt ein Spieler schnell und bleibt plötzlich stehen, quietschen die Schuhe (auf Sand rutscht er)
+  bremsTon(i, p, dt, m) {
+    const tempo = Math.hypot(p.vx || 0, p.vz || 0);
+    const b = this.brems || (this.brems = [{ v: 0, pause: 0 }, { v: 0, pause: 0 }]);
+    const e = b[i];
+    e.pause -= dt;
+    if (m.state === 'rally' && e.pause <= 0 && e.v > BREMS_AB && tempo < e.v * 0.4) {
+      this.sound.bremsen(this.venue ? this.venue.surface : 'hard', (i === 0 ? 1 : 0.6) * clamp(e.v / 6, 0.5, 1.2));   // der Gegner ist weiter weg, also leiser
+      e.pause = 1.5;
+    }
+    e.v += (tempo - e.v) * Math.min(1, dt * 3.5);     // ungefähr das Tempo von vor einer Drittelsekunde
+  }
+
   syncMatch(dt, m) {
     const b = m.ball.pos;
     // Training mit der Ballmaschine: Statt des Gegners steht die Maschine da (wenn ihr Modell geladen ist)
@@ -426,6 +442,7 @@ export class Game3D {
     for (let i = 0; i < 2; i++) {
       const p = m.P[i], av = this.avatars[i];
       if (!av) continue;
+      this.bremsTon(i, p, dt, m);
       const amAufschlag = (m.state === 'toss' || m.state === 'serveReady') && m.server === i && m.mode !== 'ballmaschine';
       const vonUnten = amAufschlag && m.state === 'toss' && m.serveUnten;
       const tossing = amAufschlag && !vonUnten;

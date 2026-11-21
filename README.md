@@ -117,9 +117,17 @@ das gibt das Spiel vor.
 
 ## Sound
 
-Schlag, Aufprall, Applaus und Stadion-Atmosphäre kommen aus den Aufnahmen im Ordner `sounds/` (Dateien von Pixabay / Freesound-Community).
-In `js/audio.js` steht oben, welche Stelle welcher Aufnahme wofür benutzt wird – die Zeiten kann man dort anpassen.
-Solange die Aufnahmen laden, erzeugt der Browser die Geräusche selbst. Der Schiedsrichter spricht über die Sprachausgabe des Geräts.
+Alle Geräusche sind kleine Aufnahmen im Ordner `sounds/` (65 Dateien, zusammen etwa 2 MB): Schläge je Schlagart, Aufprall je Belag, Netz,
+quietschende Schuhe, Applaus, Staunen und Erschrecken des Publikums, Stadion im Hintergrund, Stimmen, Vögel, Schritte und der Fahrdienst
+auf dem Turniergelände, dazu Klänge für Menü und Mini-Spiele.
+
+- **Alle Aufnahmen sind frei (Lizenz CC0)**, gesucht bei [Freesound](https://freesound.org) und [Kenney](https://kenney.nl/assets).
+  Wer was aufgenommen hat, steht in [`sounds/QUELLEN.md`](sounds/QUELLEN.md).
+- Anhören: `python tools/server.py`, dann http://localhost:8765/tools/sounds.html · Prüfen: `node tools/sounds.mjs`
+- Welche Datei wofür benutzt wird und wie laut, steht oben in `js/audio.js` (Tabelle `KLAENGE`).
+- Einstellungen: „Ton“ an/aus, „Lautstärke“, „Publikum und Umgebung“ (normal, leise, aus), „Schiedsrichter spricht“.
+- Der Schiedsrichter spricht mit der Sprachausgabe des Geräts. Lädt eine Aufnahme noch (oder fehlt sie), erzeugt der Browser ein einfaches Ersatz-Geräusch.
+- iPad und iPhone: Der Ton startet erst nach dem ersten Tippen, und mit dem Schalter „Stumm“ bleibt alles still.
 
 ## Steuerung
 
