@@ -101,9 +101,11 @@ function ladeEins(name) {
       const mal = info.h ? info.h / gr.y : info.l ? info.l / Math.max(gr.x, gr.z) : 1;
       if (mal !== 1) { geo.scale(mal, mal, mal); gr.multiplyScalar(mal); }
       geo.computeBoundingSphere();
-      const bild = netz.material.map;
-      if (bild) bild.anisotropy = 4;
-      const mat = new THREE.MeshStandardMaterial({ map: bild, roughness: 0.88, metalness: 0, side: info.beide ? THREE.DoubleSide : THREE.FrontSide });
+      const bild = netz.material.map, rillen = netz.material.normalMap || null;
+      if (bild) bild.anisotropy = rillen ? 8 : 4;
+      // Die großen Stadien bringen ein zweites Bild mit: Es sagt dem Licht, wo feine Rillen und Kanten sind (Normal-Map).
+      // Dadurch sehen Sitzreihen und Träger scharf aus, obwohl sie gar nicht aus Dreiecken gebaut sind.
+      const mat = new THREE.MeshStandardMaterial({ map: bild, normalMap: rillen, roughness: 0.88, metalness: 0, side: info.beide ? THREE.DoubleSide : THREE.FrontSide });
       fertig.set(name, { geo, mat, gr });
     });
   }

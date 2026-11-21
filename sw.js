@@ -11,7 +11,7 @@
 // Wenn du ein Modell oder einen Sound austauschst (gleicher Dateiname, neuer Inhalt), erhöhe VERSION um 1.
 // Dann wirft der Helfer den alten Speicher weg und lädt alles frisch.
 
-const VERSION = 2;
+const VERSION = 3;
 const CACHE = 'powershot-v' + VERSION;
 
 self.addEventListener('install', () => self.skipWaiting());
