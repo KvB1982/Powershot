@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Powershot – Statisten backen</title>
+  <base href="../../">
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
+  <style>body { margin: 0; background: #20304f; color: #fff; font: 15px sans-serif; } canvas { display: block; } p { position: fixed; left: 12px; top: 4px; }</style>
+</head>
+<body>
+  <p id="text">lädt …</p>
+  <canvas id="bild" width="900" height="700"></canvas>
+  <!--
+    Statisten sind Menschen, die nur herumstehen: Ballkinder, Linienrichter, Besucher.
+    Sie brauchen keine Knochen. Diese Seite stellt einen Menschen aus MakeHuman einmal in seine Haltung
+    und „backt“ ihn: Aus der beweglichen Figur wird eine feste Form, die Farben werden ins Bild gemalt.
+    tools/mensch/statist.mjs holt das Ergebnis hier ab und speichert es als kleine GLB-Datei.
+    Ansehen:  http://localhost:8765/tools/mensch/statist.html?wer=ballkind
+  -->
+  <script type="module">
+    import * as THREE from 'three';
+    import { ladeMenschAls, loadFigure } from './js/figur.js';
+    import { Avatar } from './js/avatar.js';
+    import { gelenke } from './js/minibuehne.js';
+
+    // Wer gebacken wird: Datei (aus tools/mensch/bau.sh), Größe in Metern, Farben und Haltung.
+    // Haltung in [vor, seite, hoch] (seite: + = rechts), erklärt bei gelenke() in js/minibuehne.js.
+    // shirt: null = das Hemd bleibt grau – dann färbt es das Spiel später in der Farbe des Turniers.
+    const GRAU = 0xb4b4b4;
+    const STATISTEN = {
+      ballkind: { datei: 'kind', hoch: 1.5, look: { skin: 0xe8be9a, hair: 0x4a3423, shirt: GRAU, shorts: 0x1c2a4a, band: GRAU },
+        pose: { hip: [0, 0, 0.93], hR: [-0.15, 0.05, 0.9], hL: [-0.15, -0.05, 0.9], eR: [-0.5, 1, 0], eL: [-0.5, -1, 0], fR: [0, 0.1, 0.09], fL: [0, -0.1, 0.09] } },
+      linienrichter: { datei: 'richter', hoch: 1.55, look: { skin: 0xdcae8a, hair: 0x8a8a86, shirt: 0x1f2d4f, shorts: 0xcbb994, band: 0x1f2d4f },
+        pose: { hip: [-0.2, 0, 0.84], auf: [0.62, 0, 0.78], hR: [0.13, 0.27, 0.53], hL: [0.13, -0.27, 0.53], eR: [0, 1, 0.3], eL: [0, -1, 0.3],
+          fR: [0, 0.27, 0.09], fL: [0, -0.27, 0.09], kR: [1, 0.25, 0.1], kL: [1, -0.25, 0.1], blick: [1, 0, -0.08] } },
+    };
+    const wunsch = new URLSearchParams(location.search);
+    const S = STATISTEN[wunsch.get('wer') || 'ballkind'];
+
+    const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('bild'), antialias: true });
+    const szene = new THREE.Scene(); szene.background = new THREE.Color(0x20304f);
+    szene.add(new THREE.HemisphereLight(0xffffff, 0x556070, 1.8));
+    const licht = new THREE.DirectionalLight(0xfff4d8, 2.2); licht.position.set(2, 5, 3); szene.add(licht);
+    const kamera = new THREE.PerspectiveCamera(30, 900 / 700, 0.05, 50);
+
+    await loadFigure();
+    await ladeMenschAls('statist', `tools/mensch/statisten/${S.datei}.glb`);
+    const av = new Avatar({ ...S.look, model: 'statist', shoes: 0xffffff }, 0, 1, true);
+    av.stelle(gelenke(S.pose), { faust: 0.25 });
+    av.group.updateMatrixWorld(true);
+    let figur = null; av.group.traverse((o) => { if (o.isSkinnedMesh) figur = o; });
+    figur.skeleton.update();
+
+    // ---- 1. Form backen: jeden Punkt mit seinen (bis zu vier) Knochen an seine Stelle rechnen
+    const g = figur.geometry, P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv, I = g.attributes.skinIndex, W = g.attributes.skinWeight;
+    const BM = figur.skeleton.boneMatrices, n = P.count;
+    const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), uv = new Float32Array(n * 2);
+    const M = new THREE.Matrix4(), M1 = new THREE.Matrix4(), v = new THREE.Vector3(), w = new THREE.Vector3();
+    let tief = 1e9;
+    for (let i = 0; i < n; i++) {
+      M.elements.fill(0);
+      for (let k = 0; k < 4; k++) {
+        const gw = W.getComponent(i, k); if (!gw) continue;
+        M1.fromArray(BM, I.getComponent(i, k) * 16);
+        for (let e = 0; e < 16; e++) M.elements[e] += M1.elements[e] * gw;
+      }
+      v.fromBufferAttribute(P, i).applyMatrix4(M); w.fromBufferAttribute(N, i).transformDirection(M);
+      pos.set([v.x, v.y, v.z], i * 3); nor.set([w.x, w.y, w.z], i * 3); uv.set([U.getX(i), U.getY(i)], i * 2);
+      tief = Math.min(tief, v.y);
+    }
+    // auf den Boden stellen und auf die gewünschte Größe bringen (Maß: so groß wäre die Figur, wenn sie gerade stünde)
+    const mal = S.hoch / 1.78;
+    for (let i = 0; i < n; i++) { pos[i * 3] *= mal; pos[i * 3 + 1] = (pos[i * 3 + 1] - tief) * mal; pos[i * 3 + 2] *= mal; }
+
+    // ---- 2. Bild backen: dieselbe Rechnung wie der Farb-Shader in js/figur.js (materialMensch), nur einmal für jeden Bildpunkt
+    const bildQuelle = figur.material.map.image, BW = 1024, BH = 512;
+    const cv = document.createElement('canvas'); cv.width = BW; cv.height = BH;
+    const cx = cv.getContext('2d'); cx.drawImage(bildQuelle, 0, 0, BW, BH);
+    const dat = cx.getImageData(0, 0, BW, BH), d = dat.data;
+    const rgb = (hex) => [(hex >> 16 & 255) / 255, (hex >> 8 & 255) / 255, (hex & 255) / 255];
+    const L = S.look, REF = rgb(0xad8068), haut = rgb(L.skin).map((c, k) => c / REF[k]);
+    const hemd = rgb(L.shirt), hose = rgb(L.shorts), haar = rgb(L.hair), band = rgb(L.band ?? 0xffffff);
+    for (let y = 0; y < BH; y++) for (let x = 0; x < BW; x++) {
+      const fx = (x + 0.5) / BW, fy = 1 - (y + 0.5) / BH, o = (y * BW + x) * 4;
+      let f = null;
+      if (fx < 0.5) f = haut;
+      else if (fy >= 0.5) f = (fx <= 0.75 ? hemd : hose).map((c) => c / 0.68);
+      else if (fx < 0.75) f = haar.map((c) => c / 0.68 * 1.6);
+      else if (fy >= 0.25 && fx < 0.875) f = [1 / 0.68, 1 / 0.68, 1 / 0.68];
+      else if (fy < 0.125 && fx >= 0.8125 && fx < 0.875) f = haar.map((c) => c / 0.68 * 1.2);
+      else if (fy >= 0.125 && !(fy < 0.25 && fx >= 0.875)) f = band.map((c) => c / 0.68);
+      if (f) for (let k = 0; k < 3; k++) d[o + k] = Math.min(255, d[o + k] * f[k]);
+    }
+    cx.putImageData(dat, 0, 0);
+
+    // ---- 3. Zeigen (zur Kontrolle) und für statist.mjs bereitlegen
+    const fest = new THREE.BufferGeometry();
+    fest.setAttribute('position', new THREE.BufferAttribute(pos, 3)); fest.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    fest.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); fest.setIndex(g.index.clone());
+    const tex = new THREE.CanvasTexture(cv); tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace;
+    const puppe = new THREE.Mesh(fest, new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8 }));
+    szene.add(puppe);
+    const schau = (von, nach) => { kamera.position.set(...von); kamera.lookAt(...nach); renderer.render(szene, kamera); };
+    schau([2.2, 1.3, 3.2], [0, 0.75, 0]);
+    document.getElementById('text').textContent = `${wunsch.get('wer') || 'ballkind'}: ${n} Punkte, ${g.index.count / 3} Dreiecke (vor dem Verkleinern)`;
+    const b64 = (a) => { const u = new Uint8Array(a.buffer, a.byteOffset, a.byteLength); let s = ''; for (let i = 0; i < u.length; i += 32768) s += String.fromCharCode(...u.subarray(i, i + 32768)); return btoa(s); };
+    window.__statist = { schau, daten: () => ({ pos: b64(pos), nor: b64(nor), uv: b64(uv), idx: b64(new Uint32Array(g.index.array)), bild: cv.toDataURL('image/png') }) };
+  </script>
+</body>
+</html>

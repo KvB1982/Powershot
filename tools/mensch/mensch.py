@@ -75,11 +75,20 @@ def aktiv(o):
     for x in bpy.data.objects: x.select_set(x == o)
 
 # Formen fest einrechnen, alles Versteckte (Hilfs-Geometrie, Haut unter der Kleidung) wirklich löschen
+# "schnitt": {"hose": {"unter": 0.6}} schneidet ein Teil ab (hier: alles unter 60 cm Höhe weg – aus der langen Hose wird eine kurze).
+#            {"hemd": {"aussen": 0.21}} schneidet alles ab, was weiter als 21 cm von der Körpermitte weg ist (Ärmel ab).
+SCHNITT = wahl.get('schnitt', {})
+drin = lambda feld, co, rand=0.0: co.z > SCHNITT[feld].get('unter', -9) + rand and abs(co.x) < SCHNITT[feld].get('aussen', 9) - rand
+spaeter = []      # (Feld, Gruppe am Körper): Haut, die erst nach dem Biegen gelöscht wird
+print('Masken am Körper:', [(m.name, m.vertex_group) for m in h.modifiers if m.type == 'MASK'])
 for o in [h] + teile:
     aktiv(o)
     if o.data.shape_keys: bpy.ops.object.shape_key_remove(all=True, apply_mix=True)
     for m in list(o.modifiers):
-        if m.type == 'MASK': bpy.ops.object.modifier_apply(modifier=m.name)
+        if m.type == 'MASK':
+            teil = next((t for t in teile if o == h and t['feld'] in SCHNITT and t.name.split('.')[-1] in m.vertex_group), None)
+            if teil: spaeter.append((teil['feld'], m.vertex_group)); o.modifiers.remove(m)
+            else: bpy.ops.object.modifier_apply(modifier=m.name)
         elif m.type != 'ARMATURE': o.modifiers.remove(m)
     spar = wahl.get('sparen', {}).get(o['feld'])
     if spar and spar < 1:
@@ -201,6 +210,123 @@ for o in [h] + teile:
         if m.type == 'ARMATURE': bpy.ops.object.modifier_apply(modifier=m.name)
     o.parent = None
 
+# Abschneiden (siehe SCHNITT): erst das Kleidungsstück, dann die Haut, die unter dem Rest versteckt ist
+import bmesh
+from mathutils.bvhtree import BVHTree
+def weg(o, welche):
+    bm = bmesh.new(); bm.from_mesh(o.data)
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if welche(v)], context='VERTS'); bm.to_mesh(o.data); bm.free()
+def schneiden(o, punkt, weg_richtung):       # glatter Schnitt: alles auf der Seite von weg_richtung fällt weg
+    bm = bmesh.new(); bm.from_mesh(o.data)
+    bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=punkt, plane_no=weg_richtung, clear_outer=True)
+    bm.to_mesh(o.data); bm.free()
+for t in teile:
+    sn = SCHNITT.get(t['feld'])
+    if not sn: continue
+    if 'unter' in sn: schneiden(t, Vector((0, 0, sn['unter'])), Vector((0, 0, -1)))
+    if 'aussen' in sn:      # Ärmel ab
+        for m in (1, -1): schneiden(t, Vector((m * sn['aussen'], 0, 1.40)), Vector((m, 0, 0)))
+# Haare, die unter einer Kappe stecken, löschen (sonst schauen sie durch den Stoff)
+for hut in [t for t in teile if t['feld'].startswith('extra') and t.get('teil') == 'Clothes']:
+    bmh = bmesh.new(); bmh.from_mesh(hut.data); baum = BVHTree.FromBMesh(bmh); bmh.free()
+    for haar in [t for t in teile if t.get('teil') == 'Hair']:
+        bm = bmesh.new(); bm.from_mesh(haar.data); bm.normal_update()
+        mitte = Vector((0, 0.01, max(v.co.z for v in h.data.vertices) - 0.11))
+        def unterHut(co):       # vom Kopf-Inneren aus gesehen: liegt der Punkt unter dem Hut oder höchstens 1,5 cm darüber?
+            weit = baum.ray_cast(mitte, (co - mitte).normalized(), 0.5)[3]
+            return weit is not None and (co - mitte).length < weit + 0.015
+        drunter = {v for v in bm.verts if unterHut(v.co)}
+        for runde in range(2):  # zwei Ringe Nachbarn dazu, sonst bleiben am Rand der Kappe Haar-Fetzen stehen
+            drunter |= {e.other_vert(v) for v in drunter for e in v.link_edges}
+        drunter = list(drunter)
+        bmesh.ops.delete(bm, geom=drunter, context='VERTS'); bm.to_mesh(haar.data); bm.free()
+        print('Haare unter der Kappe gelöscht:', len(drunter))
+for feld, gruppe in spaeter:
+    gi = h.vertex_groups[gruppe].index
+    lage = h.data
+    in_gruppe = {v.index for v in lage.vertices if any(g.group == gi and g.weight > 0.5 for g in v.groups)}
+    weg(h, lambda v, f=feld: v.index in in_gruppe and drin(f, v.co, 0.035))
+
+# Hemd länger machen ("saum": 0.9 = der Saum soll auf 90 cm Höhe hängen), damit kein Bauch herausschaut. Unten wird es ein wenig weiter.
+if wahl.get('saum'):
+    for t in teile:
+        if t['feld'] != 'hemd': continue
+        ab = 1.16; tief = min(v.co.z for v in t.data.vertices); k = (ab - (wahl['saum'] - wahl.get('saumZug', 0.07))) / (ab - tief)
+        for v in t.data.vertices:
+            if v.co.z < ab:
+                u = (ab - v.co.z) / (ab - tief); v.co.z = ab - (ab - v.co.z) * k
+                v.co.x *= 1 + 0.07 * u; v.co.y = (v.co.y - 0.01) * (1 + 0.09 * u) + 0.01
+        # Das Hemd soll ÜBER der Hose hängen: Wo ein Punkt des Hemds in der Hose steckt (oder zu dicht an ihr liegt), rückt er nach außen.
+        for hose in [x for x in teile if x['feld'] == 'hose']:
+            bm = bmesh.new(); bm.from_mesh(hose.data); baum = BVHTree.FromBMesh(bm); bm.free()
+            for runde in range(2):
+                for v in t.data.vertices:
+                    ort, norm, _, weit = baum.find_nearest(v.co, 0.06)
+                    if ort is None: continue
+                    aussen = Vector((ort.x, ort.y - 0.01, 0)); aussen = aussen.normalized() if aussen.length > 1e-4 else norm
+                    if norm.dot(aussen) < 0: norm = -norm           # die Seite der Hose, die nach außen schaut
+                    tief = (v.co - ort).dot(norm)
+                    if tief < 0.009: v.co += aussen * min(0.04, (0.011 - tief) / max(0.35, norm.dot(aussen)))     # nur waagerecht schieben, sonst wird der Saum zackig
+        # Der Saum wird gerade abgeschnitten (das Hemd war zum Hineinstecken gedacht und ist unten ausgefranst)
+        schneiden(t, Vector((0, 0, wahl['saum'])), Vector((0, 0, -1)))
+        # Was von der Hose weiter oben unter dem Hemd steckt, braucht niemand – glatt abschneiden, dann kann es nicht durchblitzen
+        for hose in [x for x in teile if x['feld'] == 'hose']:
+            schneiden(hose, Vector((0, 0, wahl['saum'] + 0.025)), Vector((0, 0, 1)))
+
+# Haut, die ganz unter Hemd oder Hose steckt, löschen – sonst blitzt sie in der Bewegung durch den Stoff.
+# Ein Punkt der Haut gilt als verdeckt, wenn von ihm aus nach außen gleich (höchstens 5 cm weiter) Stoff kommt.
+# Am Rand (Kragen, Ärmel, Saum, Hosenbein) bleibt ein Streifen Haut stehen, damit man nicht in die Figur hineinschaut.
+stoff = [t for t in teile if t['feld'] in ('hemd', 'hose')]
+if stoff and wahl.get('hautWeg', True):
+    baeume = []
+    for t in stoff:
+        bm = bmesh.new(); bm.from_mesh(t.data); baeume.append(BVHTree.FromBMesh(bm)); bm.free()
+    bm = bmesh.new(); bm.from_mesh(h.data); bm.verts.ensure_lookup_table(); bm.normal_update()
+    verdeckt = set()
+    for v in bm.verts:
+        for b in baeume:
+            if b.ray_cast(v.co + v.normal * 0.0005, v.normal, 0.05)[0] is not None: verdeckt.add(v.index); break
+    alle = set(verdeckt)
+    for runde in range(3):      # drei Ringe Rand stehen lassen
+        verdeckt = {i for i in verdeckt if all(e.other_vert(bm.verts[i]).index in verdeckt for e in bm.verts[i].link_edges)}
+    for i in alle - verdeckt: bm.verts[i].co -= bm.verts[i].normal * 0.006      # der Rand unter dem Stoff rückt 6 mm nach innen
+    bmesh.ops.delete(bm, geom=[bm.verts[i] for i in verdeckt], context='VERTS'); bm.to_mesh(h.data); bm.free()
+    print('Haut unter der Kleidung gelöscht:', len(verdeckt), 'Punkte')
+
+# Bänder selbst bauen: "baender": ["stirn", "handgelenke"] – ein Stirnband um den Kopf, Schweißbänder um die Handgelenke.
+# Ein Band ist ein Ring aus 40 Stücken, der sich eng um alles legt, was dort ist (Kopf mit Haaren, Unterarm).
+def band(name, achse, von, bis, gruppe, wo=lambda co: True, dick=0.004):
+    pkt = [v.co.copy() for o in [h] + teile for v in o.data.vertices if von - 0.01 < v.co[achse] < bis + 0.01 and wo(v.co)]
+    a, b = [i for i in range(3) if i != achse]
+    ma = sum(p[a] for p in pkt) / len(pkt); mb = sum(p[b] for p in pkt) / len(pkt)
+    n = 40; weit = [0.0] * n
+    for p in pkt:
+        w = math.atan2(p[b] - mb, p[a] - ma); r = math.hypot(p[a] - ma, p[b] - mb)
+        for d in (-1, 0, 1):
+            i = (int(round(w / (2 * math.pi) * n)) + d) % n; weit[i] = max(weit[i], r)
+    weit = [max(weit[(i - 1) % n], weit[i], weit[(i + 1) % n]) * 0 + (weit[(i - 1) % n] + 2 * weit[i] + weit[(i + 1) % n]) / 4 + dick for i in range(n)]
+    bm = bmesh.new(); uvl = bm.loops.layers.uv.new('UVMap'); ringe = []
+    for z, mehr in ((von, 0), (von + 0.004, 0.004), (bis - 0.004, 0.004), (bis, 0)):
+        ring = []
+        for i in range(n):
+            w = i / n * 2 * math.pi; co = [0, 0, 0]; co[achse] = z; co[a] = ma + (weit[i] + mehr) * math.cos(w); co[b] = mb + (weit[i] + mehr) * math.sin(w)
+            ring.append(bm.verts.new(co))
+        ringe.append(ring)
+    for r0, r1 in zip(ringe, ringe[1:]):
+        for i in range(n):
+            f = bm.faces.new((r0[i], r0[(i + 1) % n], r1[(i + 1) % n], r1[i]))
+            for l in f.loops: l[uvl].uv = (0.5, 0.5)
+    netz = bpy.data.meshes.new(name); bm.to_mesh(netz); bm.free()
+    o = bpy.data.objects.new(name, netz); bpy.context.collection.objects.link(o)
+    o.vertex_groups.new(name=gruppe).add(list(range(len(netz.vertices))), 1.0, 'REPLACE')
+    o['feld'] = 'extra'; o['teil'] = 'Band'; o['glatt'] = True; teile.append(o)
+oben = max(v.co.z for v in h.data.vertices)
+for b in wahl.get('baender', []):
+    if b == 'stirn': band('stirnband', 2, oben - 0.078, oben - 0.038, N('Head'), lambda co: abs(co.x) < 0.14, 0.002)
+    if b == 'handgelenke':
+        band('schweissband_r', 0, -0.715, -0.655, N('RightForeArm'), lambda co: co.z > 1.3)
+        band('schweissband_l', 0, 0.655, 0.715, N('LeftForeArm'), lambda co: co.z > 1.3)
+
 # ---------------------------------------------------------------- 3. Gewichte für die 27 Knochen von Powershot
 ss = lambda a, b, x: (lambda t: t * t * (3 - 2 * t))(max(0.0, min(1.0, (x - a) / (b - a))))
 def knochen(name, a):       # mixamo-Knochen -> [(Powershot-Knochen, Anteil)]; a = Abstand von der Körpermitte zur Seite
@@ -230,6 +356,9 @@ for o in [h] + teile:
         for g in v.groups:
             for kn, teil in knochen(gr[g.group], abs(v.co.x)):
                 w[kn] = w.get(kn, 0) + g.weight * teil
+        if o['feld'] == 'hemd':     # der Hemd-Saum soll nicht mit jedem Bein einzeln mitgehen (sonst reißt er vorn auf): Beine ziehen nur zu 30 %
+            for kn in ('thighR', 'thighL'):
+                if kn in w: w['pelvis'] = w.get('pelvis', 0) + 0.7 * w[kn]; w[kn] *= 0.3
         if not w: w = {'head' if v.co.z > 1.45 else 'pelvis': 1}; ohne += 1
         beste = sorted(w.items(), key=lambda x: -x[1])[:4]; summe = sum(x[1] for x in beste)
         beste += [(beste[0][0], 0)] * (4 - len(beste))
@@ -250,7 +379,7 @@ def farbbild(o):
 for o in [h] + teile:
     u0, v0, bu, bv = FELDER[o['feld']]
     x0, y0, bx, by = int(u0 * BILD), int(v0 * hoch), int(bu * BILD), int(bv * hoch)
-    b = farbbild(o)
+    b = None if o['feld'] in wahl.get('glatt', []) or o.get('glatt') else farbbild(o)
     if b:
         b = b.copy(); b.scale(bx, by)
         px = np.array(b.pixels[:], dtype=np.float32).reshape(by, bx, 4)
@@ -292,5 +421,5 @@ h.rotation_euler = (0, 0, math.pi); bpy.ops.object.transform_apply(location=True
 bpy.ops.object.shade_smooth()
 h.name = 'mensch'
 print('Maße', tuple(round(x, 3) for x in h.dimensions), 'Dreiecke', sum(len(p.vertices) - 2 for p in h.data.polygons))
-bpy.ops.export_scene.gltf(filepath=aus, export_format='GLB', export_yup=True, export_attributes=True, export_skins=False, export_animations=False, use_selection=True, export_tangents=False)
+bpy.ops.export_scene.gltf(filepath=aus, export_format='GLB', export_yup=True, export_attributes=True, export_vertex_color='NONE', export_skins=False, export_animations=False, use_selection=True, export_tangents=False)
 print('gespeichert', aus, os.path.getsize(aus))

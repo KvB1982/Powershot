@@ -1,6 +1,7 @@
 // Powershot – die Requisiten: fertige 3D-Modelle für Dinge, die am Platz herumstehen
 // (Schiedsrichterstuhl, Bank, Ballkind, Linienrichter, Ballmaschine, Pokale) und der Schläger.
 // Die Modelle kommen aus 3D AI Studio und liegen als GLB-Dateien im Ordner assets/.
+// Ballkind und Linienrichter sind Menschen aus MakeHuman (CC0, siehe assets/QUELLEN_MENSCHEN.md).
 // Alle Gesichter sind erfunden, nirgends stehen Logos oder Markennamen.
 //
 // Jedes Modell wird nur EINMAL geladen. Braucht das Spiel es mehrfach (zwei Bänke, sechs Ballkinder),
@@ -13,8 +14,10 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const LISTE = {
   schiedsrichter: ['schiedsrichter.glb', 2.75, Math.PI],
   bank:           ['bank.glb', 2.3, -Math.PI / 2],
-  ballkind:       ['ballkind.glb', 1.5, -Math.PI / 2],
-  linienrichter:  ['linienrichter.glb', 1.55, -Math.PI * 3 / 4],     // das Modell steht in seiner Datei schräg (45 Grad) – hier wird es gerade gedreht
+  // Ballkind und Linienrichter sind Menschen aus MakeHuman, fertig in ihrer Haltung „gebacken“ (tools/mensch/statist.mjs):
+  // schon in Metern und richtig gedreht, deshalb Größe 1 und Drehung 0
+  ballkind:       ['ballkind.glb', 1, 0],
+  linienrichter:  ['linienrichter.glb', 1, 0],
   ballmaschine:   ['ballmaschine.glb', 1.4, 0],
   pokal_silber:   ['pokal_silber.glb', 0.6, 0],
   pokal_gold:     ['pokal_gold.glb', 0.6, 0],
@@ -45,7 +48,8 @@ export function ladeRequisiten() {
         geo.userData.shared = true;          // nicht wegwerfen, wenn das Stadion neu gebaut wird
         const map = src.material.map;
         if (map) map.userData.shared = true;
-        fertig[name] = { geo, map };
+        // Haare aus MakeHuman sind dünne Blätter mit durchsichtigen Stellen: Das Modell sagt selbst, ob es so etwas hat
+        fertig[name] = { geo, map, loch: src.material.alphaTest || 0, seite: src.material.side };
       }).catch((e) => { console.warn('Requisit konnte nicht geladen werden:', datei, e); });
     }));
   }
@@ -59,7 +63,7 @@ export const requisitDa = (name) => !!fertig[name];
 export function requisit(name, opts = {}) {
   const f = fertig[name];
   if (!f) return null;
-  const mat = new THREE.MeshStandardMaterial({ map: f.map, roughness: opts.rau ?? 0.8, metalness: opts.metall ?? 0 });
+  const mat = new THREE.MeshStandardMaterial({ map: f.map, roughness: opts.rau ?? 0.8, metalness: opts.metall ?? 0, alphaTest: f.loch, side: f.seite });
   if (opts.farbe != null) faerben(mat, opts.farbe, opts.abY ?? -1e9, opts.hell ?? [0.3, 0.8]);
   const mesh = new THREE.Mesh(f.geo, mat);
   mesh.castShadow = opts.schatten ?? true;

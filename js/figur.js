@@ -1,4 +1,4 @@
-// Powershot – die realistischen Spielermodelle (assets/spieler_a.glb … spieler_f.glb).
+// Powershot – die Spielermodelle: Menschen aus MakeHuman (assets/mensch_a.glb … mensch_f.glb), als Rückfall die alten Modelle (assets/spieler_a.glb …).
 // Sechs Figuren mit verschiedenen Gesichtern, Frisuren und Kleidungsschnitten:
 //   a = kurze Haare, T-Shirt        b = längere Haare mit Stirnband, Polohemd
 //   c = Locken, ärmelloses Hemd     d = Bart, sehr kurze Haare, Schweißbänder
@@ -49,7 +49,7 @@ const SCHULTER_VOR = 0.07;
 const nachVorn = (p) => [p[0] + SCHULTER_VOR, p[1], p[2]];
 export const REST_MENSCH = { ...REST, sh: nachVorn(REST.sh), elbow: nachVorn(REST.elbow), grip: nachVorn(REST.grip) };
 // Welche Buchstaben gibt es schon als Mensch aus MakeHuman? (Dateien assets/mensch_<Buchstabe>.glb)
-export const MENSCHEN = [];
+export const MENSCHEN = ['a', 'b', 'c', 'd', 'e', 'f'];
 const ALTE_FIGUREN = typeof location !== 'undefined' && /[?&]altefiguren/.test(location.search);
 
 const ss = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -137,6 +137,9 @@ export function loadFigure() {
   return loading;
 }
 
+// Für die Werkzeuge (tools/mensch/statist.html): einen weiteren Menschen unter eigenem Namen laden
+export const ladeMenschAls = (key, url) => loadMensch(key, url);
+
 // Die T-Pose, in der dieses Modell gebaut ist (avatar.js rechnet daraus die Knochen in Ruhe)
 export function restFor(look) {
   const m = models[modelKey(look)];
@@ -152,7 +155,10 @@ function loadMensch(key, url) {
     const geo = src.geometry.clone();
     const ni = geo.getAttribute('_skini'), nw = geo.getAttribute('_skinw'), n = geo.attributes.position.count;
     const idx = new Uint16Array(n * 4), wt = new Float32Array(n * 4);
-    for (let i = 0; i < n * 4; i++) { idx[i] = Math.round(ni.array[i]); wt[i] = nw.array[i]; }
+    for (let i = 0; i < n; i++) {
+      idx.set([ni.getX(i), ni.getY(i), ni.getZ(i), ni.getW(i)].map(Math.round), i * 4);
+      wt.set([nw.getX(i), nw.getY(i), nw.getZ(i), nw.getW(i)], i * 4);
+    }
     geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(idx, 4));
     geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(wt, 4));
     geo.deleteAttribute('_skini'); geo.deleteAttribute('_skinw');
@@ -254,6 +260,7 @@ function materialMensch(model, look) {
     uHair: { value: new THREE.Color(look.hair ?? 0x2b1d14) },
     uTrim: { value: new THREE.Color(look.trim ?? look.shorts ?? 0xffffff) },
     uShoes: { value: new THREE.Color(look.shoes ?? 0xffffff) },
+    uBand: { value: new THREE.Color(look.band ?? 0xffffff) },      // Kappe, Stirnband, Schweißbänder
     uPattern: { value: look.pattern || 0 },
     uSkin: { value: new THREE.Vector3(skin.r / REF_SKIN.r, skin.g / REF_SKIN.g, skin.b / REF_SKIN.b).clampScalar(0.25, 1.7) },
   };
@@ -263,7 +270,7 @@ function materialMensch(model, look) {
       .replace('#include <common>', '#include <common>\nvarying vec3 vRest;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRest = position;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRest;\nuniform vec3 uShirt, uShorts, uHair, uSkin, uTrim, uShoes;\nuniform int uPattern;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRest;\nuniform vec3 uShirt, uShorts, uHair, uSkin, uTrim, uShoes, uBand;\nuniform int uPattern;')
       .replace('#include <map_fragment>', `#include <map_fragment>
         {
           vec3 c = diffuseColor.rgb;
@@ -282,6 +289,7 @@ function materialMensch(model, look) {
           else if (f.x < 0.75) c = c / 0.68 * uHair * 1.6;             // Haare
           else if (f.y >= 0.25 && f.x < 0.875) c = c / 0.68 * uShoes;  // Schuhe
           else if (f.y < 0.125 && f.x >= 0.8125 && f.x < 0.875) c = c / 0.68 * uHair * 1.2;   // Augenbrauen
+          else if (f.y >= 0.125 && !(f.y < 0.25 && f.x >= 0.875)) c = c / 0.68 * uBand;        // Kappe, Stirnband, Schweißbänder
           diffuseColor.rgb = c;
         }`);
   };
