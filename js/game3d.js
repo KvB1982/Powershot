@@ -210,7 +210,7 @@ export class Game3D {
     const licht = new THREE.DirectionalLight(0xfff4d8, 2.2); licht.position.set(1.5, 3, 2.5); szene.add(licht);
     const kamera = new THREE.PerspectiveCamera(30, bild.width / bild.height, 0.1, 20);
     kamera.position.set(0, 1.25, 4.3); kamera.lookAt(0, 0.95, 0);
-    this.figur = { bild, av, szene, kamera, stift: bild.getContext('2d'), winkel: 0.5 };
+    this.figur = { bild, av, szene, kamera, stift: bild.getContext('2d'), winkel: Math.PI + 0.45 };     // fängt von vorn an (π = Gesicht zur Kamera) und dreht sich dann weiter
   }
 
   figurZeichnen(dt) {
@@ -576,8 +576,14 @@ export class Game3D {
     this.camPos.lerp(tp, k); this.camLook.lerp(tl, k);
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.camLook);
-    // Ab welcher Entfernung gezeichnet wird (nur beim TV-Blick weit weg, und erst wenn die Kamera dort angekommen ist)
-    if (this.camPos.distanceTo(tp) > 1.5) nah = 0.3;
+    // Ab welcher Entfernung gezeichnet wird (nur beim TV-Blick). Am Anfang fährt die Kamera erst nach hinten in die Tribüne.
+    // Damit man dabei nicht auf eine blaue Wand schaut, rechnen wir mit der Stelle, an der die Kamera JETZT gerade ist:
+    // Wie weit ist es in Blickrichtung bis zum Boden vor der Tribüne (z = ab)? Alles davor wird weggelassen.
+    if (B === BLICK.tv && this.camPos.distanceTo(tp) > 0.05) {
+      const blick = new THREE.Vector3(); this.camera.getWorldDirection(blick);
+      const boden = new THREE.Vector3(this.camPos.x, 0, B.ab).sub(this.camPos);
+      nah = this.camPos.z > B.ab ? Math.max(0.3, boden.dot(blick)) : 0.3;
+    }
     if (this.nahVorher == null) this.nahVorher = this.camera.near;      // merken, wie es vor dem Match war
     if (this.camera.near !== nah) { this.camera.near = nah; this.camera.updateProjectionMatrix(); }
   }

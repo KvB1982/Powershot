@@ -393,12 +393,13 @@ export const ROUND_NAMES = { R128: 'Runde der 128', R64: 'Runde der 64', R32: 'R
 
 // ---------------------------------------------------------------
 // Schwierigkeit: ai = Faktoren für den Gegner, me = Hilfen für dich
+// aiAngriff = wie oft der Computer einen langsamen Ball in die Mitte hart in die Ecke schlägt (0 = nie, 1 = immer)
 // ---------------------------------------------------------------
 export const DIFFICULTY = {
-  leicht: { name: 'Leicht', aiStat: 0.74, aiSigma: 1.7, aiReact: 0.33, meSigma: 0.3, meNet: 0, clampIn: true, autoReturn: true, marker: true },
-  mittel: { name: 'Mittel', aiStat: 0.86, aiSigma: 1.3, aiReact: 0.27, meSigma: 0.6, meNet: 0.3, clampIn: true, autoReturn: false, marker: true },
-  schwer: { name: 'Schwer', aiStat: 0.94, aiSigma: 1.0, aiReact: 0.22, meSigma: 1.0, meNet: 1, clampIn: false, autoReturn: false, marker: true },
-  profi: { name: 'Profi', aiStat: 1.0, aiSigma: 0.9, aiReact: 0.18, meSigma: 1.0, meNet: 1, clampIn: false, autoReturn: false, marker: false },
+  leicht: { name: 'Leicht', aiStat: 0.74, aiSigma: 1.15, aiAngriff: 0.5, aiReact: 0.33, meReact: 0.16, meSigma: 0.3, meNet: 0, clampIn: true, autoReturn: true, marker: true },
+  mittel: { name: 'Mittel', aiStat: 0.86, aiSigma: 1.15, aiAngriff: 0.85, aiReact: 0.27, meReact: 0.2, meSigma: 0.6, meNet: 0.3, clampIn: true, autoReturn: false, marker: true },
+  schwer: { name: 'Schwer', aiStat: 0.94, aiSigma: 1.0, aiAngriff: 0.8, aiReact: 0.22, meReact: 0.2, meSigma: 1.0, meNet: 1, clampIn: false, autoReturn: false, marker: true },
+  profi: { name: 'Profi', aiStat: 1.0, aiSigma: 0.9, aiAngriff: 0.9, aiReact: 0.18, meReact: 0.22, meSigma: 1.0, meNet: 1, clampIn: false, autoReturn: false, marker: false },
 };
 
 // Matchlänge: sets = Gewinnsätze, games = Spiele pro Satz

@@ -94,7 +94,7 @@ export function newCareer(opts) {
     skills: { s: 52, vh: 52, rh: 52, v: 52, b: 52, a: 52, m: 52, k: 52 }, skillPoints: START_PUNKTE,
     xp: 0, level: 1, money: START_GELD,
     owned: [], equipped: {},
-    season: 2026, week: 0, erg: { me: [] }, stand: 0, v: 3, tournament: null, trainingLeft: 2,
+    season: 2027, week: 0, erg: { me: [] }, stand: 0, v: 3, tournament: null, trainingLeft: 2,
     history: [], titles: 0, bestRank: 2000,
   });
 }

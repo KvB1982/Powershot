@@ -273,7 +273,8 @@ function imSpiel(s) {
 const NAMEN = ['Ausholen', 'Treffen', 'Ausschwingen'];
 
 // Die Seite "Schlagarten": oben der gewählte Schlag mit Bildern, darunter alle Schläge zum Antippen
-export function schlagbuchHtml(kuerzel) {
+// wie = (Schlag) → Text „So spielst du ihn mit deiner Steuerung“ (kommt aus app.js, weil nur dort die Steuerung bekannt ist)
+export function schlagbuchHtml(kuerzel, wie) {
   const s = BUCH.find((x) => x.k === kuerzel) || BUCH[0];
   const treff = s.ball === false ? null : koerper(s.posen[1]).kopfS;
   const liste = GRUPPEN.map((g, i) => `<label>${g}</label><div class="row">${BUCH.filter((x) => x.gruppe === i).map((x) =>
@@ -289,6 +290,7 @@ export function schlagbuchHtml(kuerzel) {
       </div>
       <p class="sb-legende"><span class="sb-punkt uhr"></span> hier sitzt die Uhr (am Schlagarm)
         <span class="sb-punkt ball"></span> Ball <span class="sb-strich"></span> Weg deiner Hand</p>
+      ${wie && wie(s) ? `<p class="sb-wie">🎮 ${wie(s)}</p>` : ''}
       <p>💡 <b>Beim Aufnehmen:</b> ${s.tipp}</p>
       <p class="dim" style="margin-bottom:0">${imSpiel(s)}</p>
     </div>

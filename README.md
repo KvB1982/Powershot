@@ -29,12 +29,16 @@ bekommt man es als Vollbild-App.
 | **Freies Spiel** | Einen der Top 200 der Weltrangliste wählen (Stand 16. November 2026), Gegner und Stadion aussuchen. |
 | **Turnier** | Ein einzelnes Turnier mit einem Profi durchspielen. |
 | **Saison** | Einen echten Profi aussuchen und mit ihm das Jahr spielen. Für jedes Ergebnis gibt es Punkte im ATP Race (echte ATP-Punkte je Runde). Die besten 8 fahren zu den ATP Finals. Mit Zeitleiste, Race-Tabelle und Turnierbaum. |
-| **Karriere** | Eigenen Spieler erstellen, bei Platz 101 starten, die Saison spielen: 4 Grand Slams, 9 Masters 1000, ATP Finals. Ranglistenpunkte, Preisgeld, Ausrüstung kaufen, Fähigkeiten steigern. |
+| **Karriere** | Eigenen Spieler erstellen und ungefähr auf Platz 2000 mit 4.000 $ starten. 52 Wochen nach dem echten ATP-Kalender: kleine ITF-Turniere, Challenger, ATP 250/500, Masters, Grand Slams. Weltrangliste nach ATP-Regeln, Geld, Reisen, Ausrüstung, Team, Turniertage auf dem Gelände. |
+| **Erste Schritte** | Vier kurze Lektionen für den Anfang: Ball treffen, Zielen, Aufschlag, erstes Match. Wird beim ersten Start angeboten. |
 | **Training** | Ballmaschine (Zielfelder treffen) und Aufschlagtraining. In der Karriere bringt Training Erfahrung. |
 
-Vereinfachungen gegenüber der echten Tour: Grand Slams haben ein 32er-Feld, Masters ein 16er-Feld.
-Die ATP Finals laufen wie in echt: zwei Vierergruppen, Halbfinale, Finale. Die Weltrangliste rechnet
-wie die echte: Jedes Turnier ersetzt die Punkte desselben Turniers aus dem Vorjahr.
+Dazu im Hauptmenü: **Schlagarten** (Schlagbuch), **Tennis-Wissen** (Lernen und Quiz), **Turniergelände** (herumlaufen),
+**Mini-Spiele und Quiz**, **Was ist was?** (jeder Menüpunkt in einem Satz) und **Wer spielt?** – Profile für mehrere Leute an
+einem Gerät, jeder mit eigenen Spielständen und eigener Steuerung, dazu Spielstand als Datei sichern und laden.
+
+Turnierfelder wie in echt (Grand Slam 128, Masters 96 oder 56, ATP 500 32, ATP 250 28); Grand Slams gehen nur über zwei Gewinnsätze.
+Die ATP Finals laufen wie in echt: zwei Vierergruppen, Halbfinale, Finale.
 
 Alle 200 Spieler tragen die echten Namen, Plätze und Punkte der Weltrangliste vom 16. November 2026.
 Die Fähigkeitswerte und das Aussehen sind frei geschätzt (Platz 1 bis 20 von Hand, der Rest nach Platz und Spielertyp berechnet).
@@ -167,10 +171,12 @@ Geschlagen wird nur mit einem Wisch. Drei Dinge zählen:
 
 | Stufe | Hilfe für dich |
 |---|---|
-| Leicht | Deine Bälle bleiben immer im Feld, automatischer Rückschlag ohne Eingabe |
-| Mittel | Seitlich bleiben deine Bälle drin, kaum Netzfehler |
-| Schwer | Volle Streuung, Aus und Netz möglich |
+| Leicht | Deine Bälle bleiben immer im Feld. Schlägst du einmal nicht, kommt ein schwacher Hilfs-Schlag – dann greift der Gegner aber an |
+| Mittel | Seitlich bleiben deine Bälle drin, kaum Netzfehler. Wer nur in die Mitte spielt, wird angegriffen |
+| Schwer | Volle Streuung, Aus und Netz möglich, der Gegner greift oft an |
 | Profi | Wie Schwer, stärkster Gegner, kein Landepunkt-Ring |
+
+Nachmessen: `node tools/kind.mjs` lässt drei künstliche Spieler (macht nichts / drückt nur / zielt) auf jeder Stufe antreten.
 
 ## Aufbau des Codes
 
