@@ -109,17 +109,46 @@ const GANG = {
   ferse: 0.5,         // so stark rollt der Fuß ab: hinten geht die Ferse hoch, vorn zeigen die Zehen hoch (Bogenmaß)
 };
 // --- Joggen auf dem Turniergelände (kommt zum Gehen dazu, je schneller die Figur läuft) ---
+// Beim Joggen ist ein Fuß nur kurz am Boden, danach fliegt er in einem Bogen wieder nach vorn. Die Schritte sind
+// deshalb länger als die Beine reichen – den Rest "fliegt" die Figur. (Früher wurde der Fuß einfach so weit nach vorn
+// und hinten gestellt, wie der Schritt lang ist. Dafür waren die Beine zu kurz – also wurden sie langgezogen.)
 const JOGGEN = {
   schritt: 0.66,      // Schrittlänge beim Joggen in Metern …
   schrittTempo: 0.15, // … plus so viel für jeden Meter pro Sekunde Tempo (schneller = längere Schritte, nicht hektischere)
-  fussHoch: 0.09,     // so viel höher hebt der Fuß ab als beim Gehen (Meter)
-  ferseHoch: 0.34,    // hinten schwingt die Ferse hoch Richtung Po (Meter)
-  huepfen: 0.055,     // der Körper hebt bei jedem Schritt etwas ab (Meter)
+  vorn: 0.24,         // so weit vor der Hüfte setzt der Fuß auf (Meter)
+  hinten: 0.36,       // so weit hinter der Hüfte drückt er sich ab (Meter)
+  abdruck: 0.10,      // beim Abdrücken rollt der Fuß auf die Zehen, der Knöchel kommt so viel höher (Meter)
+  // Der Weg des Fußes durch die Luft, in sechs Stationen vom Abdrücken bis zum Aufsetzen:
+  flugVor: [0, -0.12, -0.20, 0.20, 0.34, 0],     // vor (+) oder hinter (−) der Hüfte; erste und letzte Zahl werden aus hinten/vorn berechnet
+  flugHoch: [0, 0.30, 0.36, 0.22, 0.07, 0],      // Höhe über dem Boden: hinten schwingt die Ferse hoch, vorn kommt das Knie hoch
+  flugFuss: [0.7, 1.1, 0.8, 0.3, -0.1, -0.1],    // Neigung des Fußes (+ = Ferse oben, Zehen zeigen nach unten)
+  tief: 0.035,        // beim Joggen sind die Knie etwas gebeugt, die Hüfte ist so viel tiefer (Meter)
+  huepfen: 0.05,      // der Körper hebt bei jedem Schritt etwas ab (Meter)
   vorlage: 0.07,      // der Oberkörper neigt sich leicht nach vorn (Meter)
-  armHoch: 0.24,      // die Hände kommen so viel höher – dadurch sind die Ellbogen angewinkelt (Meter)
-  armVor: 0.13,       // … und so viel weiter nach vorn (Meter)
-  armSchwung: 0.05,   // die Arme schwingen etwas weiter als beim Gehen (Meter)
+  // Die Arme sind beim Joggen angewinkelt (Ellbogen etwa im rechten Winkel). Wo die Hand ist, von der Schulter aus gemessen:
+  armVor: 0.12,       // in der Mitte des Schwungs so weit vor der Schulter (Meter) …
+  armSchwung: 0.17,   // … und so weit schwingt sie von dort vor und zurück
+  armTief: 0.26,      // in der Mitte des Schwungs so weit unter der Schulter (Meter) …
+  armHub: 0.13,       // … vorn kommt sie so viel höher (Richtung Brust), hinten so viel tiefer (Richtung Hüfte)
+  armInnen: 0.06,     // vorn schwingt die Hand so weit zur Körpermitte (Meter)
 };
+// Weiche Kurve durch vier Punkte (zwischen p1 und p2, t = 0…1)
+const kurve = (p0, p1, p2, p3, t) => 0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (3 * p1 - p0 - 3 * p2 + p3) * t * t * t);
+// Wo ist ein Fuß beim Joggen? u = 0…1 ist eine ganze Runde des Beins (0 = Fuß setzt vorn auf),
+// boden = Anteil der Runde, in dem der Fuß am Boden ist. Antwort: [vor, hoch, Neigung des Fußes]
+function joggFuss(u, boden) {
+  const J = JOGGEN, weg = J.vorn + J.hinten;
+  // Am Boden: Der Fuß bleibt stehen, der Körper läuft darüber weg – aus Sicht der Hüfte wandert er gleichmäßig nach hinten.
+  const amBoden = (t) => [J.vorn - weg * t, J.abdruck * smooth((t - 0.6) / 0.4), -0.1 + 0.8 * smooth((t - 0.45) / 0.55)];
+  if (u < boden) return amBoden(u / boden);
+  // In der Luft: weich durch die sechs Stationen
+  const n = J.flugVor.length - 1, s = (u - boden) / (1 - boden) * n, i = Math.min(n - 1, Math.floor(s)), t = s - i;
+  const dt = (1 - boden) / n / boden;                       // eine Station weiter, gemessen in "Boden-Zeit"
+  const davor = amBoden(1 - dt), danach = amBoden(dt);      // damit der Fuß ohne Ruck abhebt und aufsetzt
+  const P = (k, liste, erst, letzt) => i + k < 0 ? davor[erst] : i + k > n ? danach[erst] : i + k === 0 ? letzt[0] : i + k === n ? letzt[1] : liste[i + k];
+  const wert = (liste, erst, letzt) => kurve(P(-1, liste, erst, letzt), P(0, liste, erst, letzt), P(1, liste, erst, letzt), P(2, liste, erst, letzt), t);
+  return [wert(J.flugVor, 0, [-J.hinten, J.vorn]), Math.max(0, wert(J.flugHoch, 1, [J.abdruck, 0])), wert(J.flugFuss, 2, [J.flugFuss[0], J.flugFuss[n]])];
+}
 const UP = new THREE.Vector3(0, 1, 0);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const smooth = (s) => { s = clamp(s, 0, 1); return s * s * (3 - 2 * s); };
@@ -483,10 +512,14 @@ export class Avatar {
       pose = mixPose(pose, { ...wp, d: [wp.d[0] - 0.08 * armS * gehK, wp.d[1], wp.d[2]] }, walkK);
     }
     const run = a.run, still = 1 - run;
+    // Joggen: Wo in seiner Runde ist das rechte Bein (0 = setzt gerade vorn auf)? Und wie lange bleibt ein Fuß am Boden?
+    // Je länger der Schritt, desto kürzer ist der Fuß am Boden – der Rest ist Flug.
+    const joggU = ((a.step - Math.PI / 2) / (2 * Math.PI) % 1 + 1) % 1;
+    const joggBoden = clamp((JOGGEN.vorn + JOGGEN.hinten) / (2 * stepLen), 0.2, 0.5);
     const bob = Math.sin(a.time * 4) * 0.012 * still;
     // Beim Rennen hebt der Körper ab, wenn die Beine auseinander sind. Beim Gehen ist es umgekehrt:
     // Die Hüfte ist am höchsten, wenn ein Bein gerade unter dem Körper steht.
-    const hipH = 0.90 - pose.cr + pose.jp + bob + run * Math.abs(sinS) * 0.035 * (1 - walkK) - gehK * GANG.wippen * (1 - Math.cos(2 * a.step)) * (1 - jog) + gehK * jog * JOGGEN.huepfen * Math.abs(sinS);
+    const hipH = 0.90 - pose.cr + pose.jp + bob + run * Math.abs(sinS) * 0.035 * (1 - walkK) - gehK * GANG.wippen * (1 - Math.cos(2 * a.step)) * (1 - jog) + gehK * jog * (JOGGEN.huepfen * 0.5 * (1 - Math.cos(4 * Math.PI * (joggU - joggBoden / 2))) - JOGGEN.tief);
     const dm = this.dim;
     const shH = hipH + dm.shUp;
     const lean = (0.05 + 0.07 * run) * (1 - 0.7 * walkK) + pose.ln + GANG.nicken * Math.cos(2 * a.step) * gehK + JOGGEN.vorlage * jog * gehK;
@@ -515,11 +548,23 @@ export class Avatar {
     const schwung = sinS + (2 / Math.PI * Math.asin(sinS) - sinS) * 0.8 * walkK;      // −1 = Fuß hinten … +1 = Fuß vorn
     const swingLeg = schwung * a.amp;
     const liftH = 0.07 + 0.17 * run;
-    const lift = cosS * (liftH + (GANG.fussHoch + JOGGEN.fussHoch * jog - liftH) * walkK) * Math.min(1, a.amp * 4);
+    const lift = cosS * (liftH + (GANG.fussHoch - liftH) * walkK) * Math.min(1, a.amp * 4);
     // Abrollen: Ist der Fuß hinten, geht die Ferse hoch; ist er vorn, zeigen die Zehen nach oben.
     const hintenR = Math.max(0, -schwung) ** 2 * gehK, hintenL = Math.max(0, schwung) ** 2 * gehK;
-    let footR = [stepR + a.dir[0] * swingLeg, stance + a.dir[1] * swingLeg, 0.07 + dm.ankle + air + Math.max(0, lift) + (0.05 + JOGGEN.ferseHoch * jog) * hintenR];
-    let footL = [stepL - a.dir[0] * swingLeg, -stance - a.dir[1] * swingLeg, 0.07 + dm.ankle + air + Math.max(0, -lift) + (0.05 + JOGGEN.ferseHoch * jog) * hintenL];
+    let footR = [stepR + a.dir[0] * swingLeg, stance + a.dir[1] * swingLeg, 0.07 + dm.ankle + air + Math.max(0, lift) + 0.05 * hintenR];
+    let footL = [stepL - a.dir[0] * swingLeg, -stance - a.dir[1] * swingLeg, 0.07 + dm.ankle + air + Math.max(0, -lift) + 0.05 * hintenL];
+    // Joggen: Die Füße laufen ihre eigene Runde (kurz am Boden, dann im Bogen durch die Luft nach vorn).
+    const jw = jog * gehK;
+    let joggR = null, joggL = null;
+    if (jw > 0.001) {
+      joggR = joggFuss(joggU, joggBoden); joggL = joggFuss((joggU + 0.5) % 1, joggBoden);
+      const boden = 0.07 + dm.ankle;
+      footR = mix3(footR, [a.dir[0] * joggR[0], stance + a.dir[1] * joggR[0], boden + joggR[1]], jw);
+      footL = mix3(footL, [a.dir[0] * joggL[0], -stance + a.dir[1] * joggL[0], boden + joggL[1]], jw);
+    }
+    // Ein Bein kann nicht länger werden: Ist der Fuß weiter weg, als das Bein reicht, kommt er näher zur Hüfte.
+    footR = limitReach(hipR, footR, dm.thigh + dm.shin - 0.004);
+    footL = limitReach(hipL, footL, dm.thigh + dm.shin - 0.004);
     let kneeR = ik(hipR, footR, dm.thigh, dm.shin, [1, 0.15, 0.2]);
     let kneeL = ik(hipL, footL, dm.thigh, dm.shin, [1, -0.15, 0.2]);
 
@@ -532,9 +577,14 @@ export class Avatar {
       // Die Hände hängen ein Stück neben dem Körper; vorn schwingen sie leicht nach innen, hinten nach außen.
       const ab = GANG.armAbstand;
       // Ohne Schläger (auf dem Turniergelände) schwingen beide Arme gleich. Beim Joggen sind die Ellbogen angewinkelt: Die Hände kommen höher und weiter nach vorn.
-      const frei = st.ohneSchlaeger, weitR = frei ? GANG.armFrei : GANG.armSchlaeger, hoch = JOGGEN.armHoch * jog, vor = JOGGEN.armVor * jog;
-      const gehL = add3(shL, [0.04 + vor + (GANG.armFrei + JOGGEN.armSchwung * jog) * vorL, -(ab - 0.04 * vorL), -0.535 + hoch + GANG.armBeugen * Math.max(0, vorL)]);
-      const gehR = add3(shR, [(frei ? 0.04 : 0.06) + vor + (weitR + JOGGEN.armSchwung * jog) * vorR, ab - (frei ? 0.04 : 0.03) * vorR, (frei ? -0.535 : -0.51) + hoch + GANG.armBeugen * (frei ? 1 : 0.5) * Math.max(0, vorR)]);
+      const frei = st.ohneSchlaeger, weitR = frei ? GANG.armFrei : GANG.armSchlaeger;
+      let gehL = add3(shL, [0.04 + GANG.armFrei * vorL, -(ab - 0.04 * vorL), -0.535 + GANG.armBeugen * Math.max(0, vorL)]);
+      let gehR = add3(shR, [(frei ? 0.04 : 0.06) + weitR * vorR, ab - (frei ? 0.04 : 0.03) * vorR, (frei ? -0.535 : -0.51) + GANG.armBeugen * (frei ? 1 : 0.5) * Math.max(0, vorR)]);
+      if (jog > 0.001) {
+        const J = JOGGEN;
+        gehL = mix3(gehL, add3(shL, [J.armVor + J.armSchwung * vorL, -(ab - J.armInnen * vorL), -J.armTief + J.armHub * vorL]), jog);
+        gehR = mix3(gehR, add3(shR, [J.armVor + J.armSchwung * vorR, ab - J.armInnen * vorR, -J.armTief + J.armHub * vorR]), jog);
+      }
       handL = mix3(handL, limitReach(shL, gehL, dm.reach), walkK);
       handR = mix3(handR, limitReach(shR, gehR, dm.reach), walkK);
     }
@@ -589,6 +639,7 @@ export class Avatar {
     let footYawR = 0, footYawL = 0, headF = null, headU = null;
     let footNodR = GANG.ferse * (hintenR - 0.55 * Math.max(0, schwung) ** 2 * gehK);
     let footNodL = GANG.ferse * (hintenL - 0.55 * Math.max(0, -schwung) ** 2 * gehK);
+    if (joggR) { footNodR += (joggR[2] - footNodR) * jw; footNodL += (joggL[2] - footNodL) * jw; }
     const look = st.ball ? clamp(Math.atan2((st.ball.x - this.pos.x) * d, Math.abs(st.ball.z - this.pos.z) + 2), -0.7, 0.7) * hand : 0;
     const layers = [];
     if (iw > 0.001 && a.idf) layers.push([a.idf, iw, false]);
