@@ -58,9 +58,10 @@
       s.rotation.x = -Math.PI / 2; szene.add(s); streifen.push(s);
     }
     const kamera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
-    const BLICKE = [['von der Seite', [5.2, 1.1, 0]], ['schräg von vorn', [3.2, 1.3, -4.2]], ['von vorn', [0, 1.2, -5.4]], ['von hinten', [0, 1.6, 5.4]]];
+    const BLICKE = [['von der Seite', [5.2, 1.1, 0]], ['schräg von vorn', [3.2, 1.3, -4.2]], ['von vorn', [0, 1.2, -5.4]], ['von hinten', [0, 1.6, 5.4]],
+      ['nah an der Schlaghand', [2.3, 1.0, -1.1], [0.25, 0.75, -0.1]], ['nah von vorn', [0.5, 1.0, -2.6], [0.2, 0.8, 0]], ['schräg von hinten', [2.6, 1.4, 3.6]]];
     let blick = +(wunsch.get('blick') || 0), mitSchlaeger = !wunsch.has('ohne');
-    const kameraStellen = () => { kamera.position.set(...BLICKE[blick][1]); kamera.lookAt(0, 0.95, 0); document.getElementById('blick').textContent = 'Blick: ' + BLICKE[blick][0]; };
+    const kameraStellen = () => { kamera.position.set(...BLICKE[blick][1]); kamera.lookAt(...(BLICKE[blick][2] || [0, 0.95, 0])); document.getElementById('blick').textContent = 'Blick: ' + BLICKE[blick][0]; };
     document.getElementById('blick').onclick = () => { blick = (blick + 1) % BLICKE.length; kameraStellen(); };
     document.getElementById('schlaeger').onclick = (e) => { mitSchlaeger = !mitSchlaeger; e.target.textContent = 'Schläger: ' + (mitSchlaeger ? 'ja' : 'nein'); };
     document.getElementById('schlaeger').textContent = 'Schläger: ' + (mitSchlaeger ? 'ja' : 'nein');
