@@ -154,7 +154,7 @@ Geschlagen wird nur mit einem Wisch. Drei Dinge zählen:
 - **Wie schnell** du wischst = Härte.
 - **Zwei Finger nach oben:** Lob. **Doppelt tippen:** ans Netz und wieder zurück.
 - **Aufschlag:** ↑ gerade · ↓ Slice · zwei Finger ↑ Kick · zwei Finger ↓ von unten. Schräg gewischt = Richtung im Aufschlagfeld.
-- Laufen wie bei „Touch“: Finger links auflegen und ziehen. Gewischt wird deshalb rechts davon (ab etwa 4/10 der Breite).
+- Mit Laufhilfe „Voll“ wischst du überall auf dem Bildschirm. Bei „Nur seitlich“ oder „Aus“ läufst du wie bei „Touch“ mit dem Finger links (auflegen und ziehen); ein schneller Wisch zählt auch dort als Schlag.
 - Zahlen zum Einstellen: `WISCH_…` oben in `js/controls.js`. Prüfen ohne Gerät: `node tools/wisch.mjs`.
 
 ### Klassik (Maus) – wie in der Python-Version

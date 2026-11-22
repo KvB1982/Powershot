@@ -418,7 +418,7 @@ actions.settings = (v) => {
         <b>Wohin</b> du wischst, bestimmt den Schlag: ↑ hoher Topspin · ↗ Topspin · → gerader, flacher Schlag · ↘ langer Slice · ↓ kurzer Slice (ganz langsam = Stoppball).
         <b>Wie schnell</b> du wischst, bestimmt die Härte. Zwei Finger nach oben = Lob. Doppelt tippen = ans Netz und zurück.<br>
         <b>Aufschlag:</b> ↑ gerade · ↓ Slice · zwei Finger ↑ Kick · zwei Finger ↓ von unten. Schräg wischen = Richtung.
-        Laufen: Finger links auflegen und ziehen (oder Laufhilfe „Voll“).</p>` : ''}
+        Mit Laufhilfe „Voll“ kannst du überall wischen. Bei „Nur seitlich“ oder „Aus“ läufst du mit dem Finger links (auflegen und ziehen) – ein schneller Wisch zählt auch dort als Schlag.</p>` : ''}
       <p class="dim" style="margin:6px 0 0;font-size:13px">🎮 ${controls.pad.connected
         ? `Verbunden: ${esc(controls.pad.name)} · ${controls.pad.motion ? 'Schwingen wird erkannt' : 'nur Tasten und Stick (kein Schwingen)'}`
         : 'Kein Controller verbunden. Koppeln: iPad-Einstellungen → Bluetooth, am Joy-Con die kleine runde Taste gedrückt halten.'}</p>
@@ -483,6 +483,7 @@ actions.set = (v) => {
   game.realFigures = settings.figures === 'echt';
   if (key === 'quality') game.loadVenue(D.tournamentById(menuVenue));
   if (key === 'control' && match) { controls.setMode(settings.control); match.cfg.controlMode = settings.control; }
+  controls.laufhilfe = settings.assist;
   if (key === 'assist' && match) match.cfg.assist = settings.assist;
   actions.settings();
 };
@@ -2726,6 +2727,7 @@ function startMatch(o) {
   game.tascheZeigen(tasche ? tasche.color ?? 0x2a2a34 : null);
   game.showAvatars(true);
   controls.setMode(settings.control);
+  controls.laufhilfe = settings.assist;      // beim Wischen mit Laufhilfe „Voll“ gibt es keinen Joystick
   controls.enabled = true;
   const names = [o.me.short, o.opp.short];
   // Spielzug-Training (o.lernen): läuft wie ein Match, aber gezählt werden nur die Versuche – deshalb "unendlich" lange Sätze
