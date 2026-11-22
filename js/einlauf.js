@@ -3,7 +3,7 @@
 // Wie im Fernsehen, bevor es losgeht:
 //   einlaufen   → beide Spieler kommen auf den Platz und gehen zu ihrer Grundlinie
 //   einspielen  → sie schlagen sich ein paar lockere Bälle zu
-//   steckbrief  → erst dein Gegner, dann du: Nahaufnahme und eine Karte mit den wichtigsten Daten
+//   steckbrief  → erst dein Gegner, dann du: eine Karte mit den wichtigsten Daten – dabei schlagen beide weiter Bälle
 //
 // Diese Datei rechnet nur aus, WO alle stehen, wo der Ball ist und wo die Kamera hinschaut.
 // Gezeichnet wird in game3d.js (einlaufBild), die Karte und die Knöpfe baut app.js.
@@ -18,7 +18,7 @@ const START_X = -8.0, START_Z = 9.0; // hier kommen sie herein: am Rand neben de
 const EIN_WECHSEL = 3.0;             // nach so vielen Sekunden wechselt die Kamera beim Einlaufen vom Gegner zu dir
 const EIN_VOR = 6.6, EIN_SEITE = 2.1; // dort steht die Kamera beim Einlaufen: so weit vor dem Spieler und so weit neben seinem Weg (Meter)
 const HEIM_Z = C.L + 0.6;            // hier stehen sie am Ende: knapp hinter der Mitte der Grundlinie – genau dort beginnt das Match
-const BAELLE = 6;                    // so viele Schläge dauert das Einspielen
+const BAELLE = 6;                    // nach so vielen Schlägen kommt der erste Steckbrief (gespielt wird dabei weiter)
 const ANLAUF = 1.1;                  // so lange dauert es, bis der erste Ball geschlagen wird (Sekunden)
 const BALL_TEMPO = 17;               // so schnell fliegt der Ball beim Einspielen (Meter pro Sekunde, etwa 60 km/h – ganz locker)
 const NACH_AUFPRALL = 0.68;          // nach dem Aufspringen ist der Ball nur noch so schnell (Anteil)
@@ -27,8 +27,9 @@ const AUFPRALL_Z = [7.6, 9.2];       // so weit hinter dem Netz springt der Ball
 const STREUT_X = 1.3;                // so weit links oder rechts von der Mitte kommt der Ball an
 const SEITE = 0.62;                  // so weit neben dem Körper wird der Ball getroffen (wie im Match)
 const LAUF_MAX = 3.4;                // schneller laufen die Spieler beim Einspielen nicht
-const NACH_LETZTEM = 0.6;            // so lange schaut man dem letzten Ball noch nach
-const KARTE_WEIT = 5.0, KARTE_NEBEN = 0.85;   // Steckbrief: so weit steht die Kamera vor dem Spieler, und so weit schaut sie neben ihn (damit rechts Platz für die Karte ist)
+const NACH_LETZTEM = 0.6;            // so lange schaut man dem letzten Ball noch nach, bevor die Kamera zum Steckbrief wechselt
+const KARTE_WEIT = 7.5, KARTE_NEBEN = 1.6;    // Steckbrief: so weit steht die Kamera vor dem Spieler, und so weit schaut sie neben ihn (damit rechts Platz für die Karte ist)
+const KARTE_SEITE = 3.6, KARTE_HOCH = 1.55;   // … und so weit steht sie neben der Platzmitte (damit kein Ball in die Kamera fliegt) und so hoch
 const KARTE_ZEIT = 5.5;              // so lange steht ein Steckbrief da (Sekunden)
 const G = 9.81;                      // Erdanziehung
 
@@ -76,22 +77,20 @@ export class Einlauf {
     this.kamera.schnitt = true;        // die Kamera springt (ein „Schnitt“ wie im Film) statt zu fahren
     const teil = this.teil;
     if (!teil) return this.ueberspringen();
-    for (const p of this.leute) { p.tHit = null; p.vx = p.vz = 0; }
-    this.ball.da = false; this.ball.hand = null;
-    this.daSeit = 0; this.kamWer = null;
-    if (teil === 'einlaufen') {
-      for (const p of this.leute) { p.x = START_X; p.z = p.dz * START_Z; p.walk = true; p.face = null; }
-    } else {
-      // In allen anderen Teilen stehen die Spieler an ihrer Grundlinie
-      for (const p of this.leute) { p.x = 0; p.z = p.dz * HEIM_Z; p.zielX = 0; }
-    }
-    if (teil === 'einspielen') {
-      for (const p of this.leute) { p.walk = false; p.face = null; }
+    this.daSeit = 0; this.kamWer = null; this.kamSeite = null; this.ende = null;
+    // Läuft schon ein Ballwechsel (vom Einspielen her)? Dann geht er einfach weiter – nur die Kamera wechselt.
+    const laeuft = teil !== 'einlaufen' && !!this.flug;
+    if (!laeuft) {
+      for (const p of this.leute) { p.tHit = null; p.vx = p.vz = 0; }
+      this.ball.da = false; this.ball.hand = null;
       this.flug = null; this.schlagNr = 0; this.amZug = 1;       // der Gegner spielt den ersten Ball an
-      this.ende = null; this.kamSeite = null;
-    }
-    if (teil === 'steckbrief1' || teil === 'steckbrief0') {
-      for (const p of this.leute) p.walk = true;                 // locker hinstellen, der Schläger hängt neben dem Bein
+      if (teil === 'einlaufen') {
+        for (const p of this.leute) { p.x = START_X; p.z = p.dz * START_Z; p.walk = true; p.face = null; }
+      } else {
+        // In allen anderen Teilen stehen die Spieler an ihrer Grundlinie und fangen an, sich Bälle zuzuspielen
+        for (const p of this.leute) { p.x = 0; p.z = p.dz * HEIM_Z; p.zielX = 0; p.walk = false; p.face = null; }
+        this.anspiel = 0;                                        // Zeit, bis der erste Ball geschlagen wird
+      }
     }
     this.wenn('teil', { teil, seite: teil === 'steckbrief1' ? 1 : teil === 'steckbrief0' ? 0 : null }, this);
   }
@@ -101,7 +100,7 @@ export class Einlauf {
     if (!this.an) return;
     this.an = false;
     for (const p of this.leute) { p.x = 0; p.z = p.dz * HEIM_Z; p.vx = p.vz = 0; p.walk = false; p.face = null; p.tHit = null; }
-    this.ball.da = false; this.ball.hand = null;
+    this.ball.da = false; this.ball.hand = null; this.flug = null;
     this.wenn('fertig', {}, this);
   }
 
@@ -148,7 +147,7 @@ export class Einlauf {
   }
 
   // ---------------------------------------------------------------
-  // Teil 2: Einspielen. Der Ball fliegt in zwei Bögen: vom Schläger bis zum Aufspringen und von dort bis zum Schläger des anderen.
+  // Teil 2 (und weiter bei den Steckbriefen): Einspielen. Der Ball fliegt in zwei Bögen: vom Schläger bis zum Aufspringen und von dort bis zum Schläger des anderen.
   // ---------------------------------------------------------------
   // Wo wird der nächste Ball getroffen? schlaeger = wer ihn schlägt, von = Treffpunkt [x, y, z]
   neuerFlug(schlaeger, von) {
@@ -180,16 +179,31 @@ export class Einlauf {
   }
 
   einspielen(dt) {
+    this.ballwechsel(dt);
+    // Nach genug Schlägen noch kurz dem Ball nachschauen, dann kommt der erste Steckbrief (der Ballwechsel läuft weiter)
+    if (this.schlagNr >= BAELLE) {
+      this.ende = (this.ende ?? NACH_LETZTEM) - dt;
+      if (this.ende <= 0) return this.weiter();
+    }
+    // Kamera: erst schräg hinter dir, ab der Hälfte schräg hinter dem Gegner
+    const hinten = this.schlagNr <= BAELLE / 2 ? 1 : -1;
+    if (hinten !== this.kamSeite) { this.kamSeite = hinten; this.kamera.schnitt = true; }
+    this.kameraSetzen([hinten * 2.4, 2.7, hinten * 18.4], [-hinten * 0.3 + this.ball.x * 0.08, 1.1, 0], 50);
+  }
+
+  // Die beiden spielen sich den Ball zu – so lange, bis die Szene vorbei ist.
+  ballwechsel(dt) {
     const B = this.ball, L = this.leute;
     if (!this.flug) {
+      this.anspiel += dt;
       // Vor dem ersten Ball: Der Gegner hält den Ball in der Hand und holt zur Vorhand aus
       const a = L[this.amZug];
-      a.stroke = 'fh'; a.tHit = ANLAUF - this.t; a.planY = 0.85;
+      a.stroke = 'fh'; a.tHit = ANLAUF - this.anspiel; a.planY = 0.85;
       B.da = true; B.hand = a.side;
       const treff = [a.x + a.hand * a.dz * SEITE, 0.85, a.z - a.dz * 0.12];
       B.x = treff[0]; B.y = treff[1]; B.z = treff[2];                // (game3d.js lässt ihn aus der Hand dorthin fallen)
       B.fall = clamp(1 - a.tHit / 0.4, 0, 1);                         // 0 = noch in der Hand, 1 = am Treffpunkt
-      if (this.t >= ANLAUF) this.schlagen(a, treff);
+      if (this.anspiel >= ANLAUF) this.schlagen(a, treff);
     } else {
       const F = this.flug;
       F.t += dt;
@@ -198,24 +212,16 @@ export class Einlauf {
       const ort = this.ballOrt(F, F.t);
       B.x = ort[0]; B.y = ort[1]; B.z = ort[2];
       const rest = F.t1 + F.t2 - F.t;
-      if (this.ende == null) { f.tHit = rest; f.planY = TREFF_HOCH; }
-      if (this.ende != null) {
-        // Der letzte Ball ist unterwegs: kurz nachschauen, dann geht es weiter zu den Steckbriefen
-        this.ende -= dt;
-        if (this.ende <= 0) return this.weiter();
-      } else if (rest <= 0) this.schlagen(f, F.ziel);
+      f.tHit = rest; f.planY = TREFF_HOCH;
+      if (rest <= 0) this.schlagen(f, F.ziel);
     }
     // Laufen: Wer den Ball bekommt, stellt sich hin. Der andere geht gemütlich zurück zur Mitte.
     for (const p of L) {
-      const dran = this.flug && this.flug.schlaeger !== p.side && this.ende == null;
+      const dran = this.flug && this.flug.schlaeger !== p.side;
       const ziel = dran ? p.zielX : 0, v = clamp((ziel - p.x) * 4, -1, 1) * (dran ? LAUF_MAX : 1.6);
       p.vx = Math.abs(ziel - p.x) > 0.03 ? v : 0; p.vz = 0;
       p.x += p.vx * dt;
     }
-    // Kamera: erst schräg hinter dir, ab der Hälfte schräg hinter dem Gegner
-    const hinten = this.schlagNr <= BAELLE / 2 ? 1 : -1;
-    if (hinten !== this.kamSeite) { this.kamSeite = hinten; this.kamera.schnitt = true; }
-    this.kameraSetzen([hinten * 2.4, 2.7, hinten * 18.4], [-hinten * 0.3 + B.x * 0.08, 1.1, 0], 50);
   }
 
   // Ein Spieler trifft den Ball: Der Schwung beginnt, und der Ball fliegt zum anderen.
@@ -225,23 +231,20 @@ export class Einlauf {
     this.wenn('schlag', { side: p.side, kind: p.stroke, y: treff[1] }, this);
     this.schlagNr++;
     this.flug = this.neuerFlug(p.side, treff);
-    if (this.schlagNr >= BAELLE) this.ende = NACH_LETZTEM;
   }
 
   // ---------------------------------------------------------------
-  // Teil 3 und 4: Nahaufnahme mit Steckbrief (seite = wer vorgestellt wird)
+  // Teil 3 und 4: Steckbrief (seite = wer vorgestellt wird). Beide schlagen dabei weiter Bälle.
   // ---------------------------------------------------------------
   vorstellen(dt, seite) {
+    this.ballwechsel(dt);
     const p = this.leute[seite], k = weich(this.t / KARTE_ZEIT);
-    // Die Kamera steht ein paar Schritte vor dem Spieler und fährt ganz langsam näher. Sie schaut ein Stück neben ihn,
-    // damit die Figur links im Bild steht und rechts Platz für die Karte ist. (Von der Kamera aus ist „rechts“ = −dz in x.)
-    // (Nicht zu nah: Aus zwei Metern sieht man, dass die Gesichter der Figuren nur grob gemalt sind.)
-    const weit = mix(KARTE_WEIT + 0.5, KARTE_WEIT, k), hoch = 1.3 * p.gross;
-    const von = [p.x + p.dz * mix(0.9, 0.3, k), hoch, p.z - p.dz * weit];
-    this.kameraSetzen(von, [p.x - p.dz * KARTE_NEBEN, 1.2 * p.gross, p.z], 36);
-    // Der Spieler dreht sich fast zur Kamera – ein kleines Stück zur Seite gedreht sieht natürlicher aus als ganz von vorn.
-    // (st.face rechnet aus Sicht der Figur: 0 = zum Netz)
-    for (const q of this.leute) q.face = q === p ? Math.atan2((von[0] - q.x) * q.dz, -(von[2] - q.z) * q.dz) + 0.3 * q.hand : 0;
+    // Die Kamera steht ein gutes Stück vor dem Spieler schräg neben der Platzmitte und fährt ganz langsam näher.
+    // Sie schaut ein Stück neben ihn, damit die Figur links im Bild steht und rechts Platz für die Karte ist.
+    // (Von der Kamera aus ist „rechts“ = −dz in x.) Läuft der Spieler zum Ball, schwenkt die Kamera ein wenig mit.
+    const weit = mix(KARTE_WEIT + 1, KARTE_WEIT, k);
+    const von = [p.dz * KARTE_SEITE, KARTE_HOCH, p.z - p.dz * weit];
+    this.kameraSetzen(von, [p.x * 0.6 - p.dz * KARTE_NEBEN, 1.1 * p.gross, p.z], 42);
     if (this.t >= KARTE_ZEIT) this.weiter();
   }
 

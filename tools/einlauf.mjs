@@ -14,6 +14,7 @@ function zufallAus(saat) { let s = saat; return () => { s = (s * 16807) % 214748
 
 function lauf(art, paar, saat) {
   const teile = [], schlaege = [];
+  let beimSteckbrief = 0;
   let fertig = false, flugVorher = null, knapp = 9, tief = 9;
   const E = new Einlauf({ art, spieler: paar, zufall: zufallAus(saat) }, (name, info, E) => {
     if (name === 'teil') teile.push([info.teil, +E.zeit.toFixed(2)]);
@@ -21,6 +22,7 @@ function lauf(art, paar, saat) {
       // Stand der Spieler richtig, als er traf? (Der Ball soll etwa eine Armlänge neben ihm sein.)
       const p = E.leute[info.side], ab = Math.abs(E.ball.x - p.x);
       schlaege.push(info.kind);
+      if (/^steckbrief/.test(E.teil)) beimSteckbrief++;
       if (laut) console.log(`    ${E.zeit.toFixed(2)} s  Seite ${info.side} ${info.kind}  Ball ${E.ball.x.toFixed(2)}  Spieler ${p.x.toFixed(2)}`);
       pruef(ab > 0.35 && ab < 0.95, `Schlag ${schlaege.length}: Ball ${ab.toFixed(2)} m neben dem Spieler (soll etwa 0,62 m sein)`);
     }
@@ -44,8 +46,9 @@ function lauf(art, paar, saat) {
   pruef(fertig, 'Szene wird nicht fertig');
   pruef(teile.map((t) => t[0]).join() === TEILE[art].join(), 'Teile fehlen: ' + teile.map((t) => t[0]).join());
   for (const p of E.leute) pruef(p.x === 0 && Math.abs(p.z) === ZAHLEN.HEIM_Z && !p.walk, 'Spieler steht am Ende nicht am Match-Anfang');
+  pruef(beimSteckbrief >= 4, `nur ${beimSteckbrief} Schläge, während die Steckbriefe gezeigt werden`);
   if (art === 'an') {
-    pruef(schlaege.length === ZAHLEN.BAELLE, `${schlaege.length} Schläge statt ${ZAHLEN.BAELLE}`);
+    pruef(schlaege.length - beimSteckbrief === ZAHLEN.BAELLE, `${schlaege.length - beimSteckbrief} Schläge beim Einspielen statt ${ZAHLEN.BAELLE}`);
     pruef(knapp > 0.3 && knapp < 3, `Ball fliegt ${knapp.toFixed(2)} m über dem Netz`);
     pruef(tief > 0, 'Ball unter dem Boden');
   }
