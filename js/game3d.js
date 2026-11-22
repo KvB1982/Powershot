@@ -508,6 +508,7 @@ export class Game3D {
     P.unshift(P.pop().copy(this.ball.position));
     K.pop(); K.unshift(flying ? clamp((tempo - SCHWEIF_AB) / (SCHWEIF_VOLL - SCHWEIF_AB), 0, 1) : 0);
     if (!flying) { for (const p of P) p.copy(this.ball.position); K.fill(0); }
+    flying = flying && !!this.schweifAn;       // in den Einstellungen abschaltbar (Standard: aus)
     this.trail.visible = flying;
     if (!flying) return;
     const pos = this.trail.geometry.attributes.position, col = this.trail.geometry.attributes.color;

@@ -57,6 +57,7 @@ const settings = Object.assign({
   spielzuege: 'aus',       // taktische Spielzüge im Match: 'aus' oder 'an'
   blick: 'tv',             // Blick auf den Platz im Match: 'tv' (wie im Fernsehen) oder 'nah' (dicht hinter dir)
   tempo: 'schnell',        // Spieltempo im Match: 'echt', 'schnell' oder 'turbo' (siehe TEMPO_MAL)
+  schweif: 'aus',          // leuchtender Schweif hinter dem Ball: 'aus' oder 'an'
   einlauf: 'an',           // Einlaufszene vor dem Match: 'an' (ganz), 'kurz' (nur Steckbriefe) oder 'aus'
 }, (() => { try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch (e) { return {}; } })());
 // Welche Spielzüge hast du schon gelernt? { id: { t: im Training geschafft, m: im Match geschafft } }
@@ -93,6 +94,7 @@ game.setQuality(settings.quality);
 game.setScharfAuto(settings.schaerfe !== 'fest');
 game.anlage.artSetzen(settings.gelaende);      // Steuerung auf dem Turniergelände: 'reit' = wie im Reitturnier, 'frei' = mit freier Kamera
 game.blick = settings.blick;
+game.schweifAn = settings.schweif === 'an';
 game.realFigures = settings.figures === 'echt';
 const controls = new Controls($('#touch'), $('#stick'));
 // Laufen mit der Kamera: kameraLauf rechnet (kamera.js), kameraBild holt das Bild und erkennt den Körper (kamerabild.js)
@@ -454,6 +456,7 @@ actions.settings = (v) => {
       ${optionRow('Einlaufen vor dem Match', 'einlauf', { an: 'Ganze Szene', kurz: 'Nur Steckbriefe', aus: 'Aus' })}
       <p class="dim" style="margin:6px 0 0;font-size:13px">Vor jedem Match kommen die Spieler auf den Platz, spielen sich kurz ein und werden mit einem Steckbrief vorgestellt.
         Ein Tipp auf den Bildschirm springt zum nächsten Teil, „Überspringen“ gleich zum Match.</p>
+      ${optionRow('Schweif am Ball', 'schweif', { aus: 'Aus', an: 'An' })}
       ${optionRow('Spieltempo', 'tempo', { echt: 'Echt', schnell: 'Schnell', turbo: 'Turbo' })}
       <p class="dim" style="margin:6px 0 0;font-size:13px">Wie schnell die Zeit im Match läuft. „Schnell“ spielt alles 10 % flotter ab (Ball und Spieler zusammen),
         „Turbo“ 22 %. Je schneller, desto weniger Zeit hast du zum Schlagen.</p>
@@ -480,6 +483,7 @@ actions.set = (v) => {
   game.anlage.artSetzen(settings.gelaende);
   if (game.anlage.an) anlageZeigen();
   game.blick = settings.blick;
+  game.schweifAn = settings.schweif === 'an';
   game.realFigures = settings.figures === 'echt';
   if (key === 'quality') game.loadVenue(D.tournamentById(menuVenue));
   if (key === 'control' && match) { controls.setMode(settings.control); match.cfg.controlMode = settings.control; }
