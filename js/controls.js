@@ -48,6 +48,10 @@ const WISCH_FRUEH = 0.46;              // so viele Sekunden vor dem Treffen = ga
 const WISCH_MITTE = 0.23;              // so viele Sekunden vor dem Treffen = genau in die Mitte
 const WISCH_HALTBAR = 0.8;             // so lange "gilt" ein Wisch, bis der Ball da sein muss (danach verfällt er: zu früh)
 export const WISCH_SPAET = 0.18;       // so lange nach dem besten Moment darf man noch wischen (bleibt ganz longline), danach "Zu spät!"
+// Der Joystick links: Beim Wischen gibt es ihn nur, wenn du selbst laufen musst (Laufhilfe "Nur seitlich" oder "Aus").
+// Mit Laufhilfe "Voll" ist der GANZE Bildschirm zum Wischen da – auch die linke Seite, wo man bei der Rückhand gern wischt.
+const STICK_AB = 0.22;                 // erst wenn der Finger so lange (Sekunden) links liegt, wird er zum Joystick
+const WISCH_KURZ = 0.4;                // ein Wisch links, der kürzer dauert als das, ist ein Schlag und kein Laufen
 const DOPPEL_TIPP = 0.4;               // so schnell nacheinander (Sekunden) müssen zwei Tipps kommen
 
 // Aus der Wisch-Richtung wird die Schlagart. dx = nach rechts, dy = nach unten (in Pixeln, wie auf dem Bildschirm).
@@ -128,6 +132,7 @@ export class Controls {
     this.stick = { id: null, x0: 0, y0: 0, x: 0, f: 0 };
     this.swipe = null;
     this.lastTap = -9;
+    this.laufhilfe = 'voll';      // wird von app.js gesetzt: 'voll', 'seitlich' oder 'aus' (bei 'voll' braucht das Wischen keinen Joystick)
     this.schlagSeite = 1;         // Timing: Ist der Ball rechts (+1) oder links (-1) von dir? Setzt das Match vor jedem Schlag.
     this.tippZeit = -9;           // Wischen: wann zuletzt getippt wurde (für den Doppel-Tipp)
     this.lastClick = -9;
@@ -385,9 +390,12 @@ export class Controls {
     const x = e.clientX - r.left, y = e.clientY - r.top;
     this.kurzeSeite = Math.min(r.width, r.height) || 700;      // Maß für "wie schnell gewischt" (unabhängig von der Größe des Geräts)
     if (this.zweiStart(e.pointerId, x, y, zeitVon(e))) return;
-    if (x < r.width * 0.42 && this.stick.id === null) {
-      this.stick = { id: e.pointerId, x0: x, y0: y, x: 0, f: 0 };
-      this.showStick(true, x, y, 0, 0);
+    const wisch = this.mode === 'wisch';
+    // Beim Wischen mit Laufhilfe "Voll" gibt es keinen Joystick: Überall auf dem Bildschirm zählt ein Wisch als Schlag.
+    const mitStick = !(wisch && this.laufhilfe === 'voll');
+    if (mitStick && x < r.width * 0.42 && this.stick.id === null) {
+      this.stick = { id: e.pointerId, x0: x, y0: y, x: 0, f: 0, t0: this.time, wartet: wisch };
+      if (!wisch) this.showStick(true, x, y, 0, 0);     // beim Wischen erscheint der Joystick erst nach einem Moment (siehe STICK_AB)
     } else if (!this.swipe) {
       this.swipe = { id: e.pointerId, x0: x, y0: y, x, y, t0: this.time, w: r.width };
     }
@@ -407,7 +415,7 @@ export class Controls {
       const l = Math.hypot(dx, dy);
       if (l > 1) { dx /= l; dy /= l; }
       this.stick.x = dx; this.stick.f = -dy;
-      this.showStick(true, this.stick.x0, this.stick.y0, dx * R, dy * R);
+      if (!this.stickWartet()) this.showStick(true, this.stick.x0, this.stick.y0, dx * R, dy * R);
     } else if (this.swipe && e.pointerId === this.swipe.id) {
       this.swipe.x = x; this.swipe.y = y;
       if (!wisch) this.live = this.swipeRaw(this.swipe, false);
@@ -503,7 +511,14 @@ export class Controls {
       else this.tippZeit = t;
       return;
     }
-    if (warWisch) this.wischFertig(wischStueck(fi, t), 1);
+    // Ein schneller Wisch auf der linken Seite ist auch ein Schlag (und kein Laufen mit dem Joystick).
+    if (warWisch || (warStick && this.time - fi.t0 <= WISCH_KURZ)) this.wischFertig(wischStueck(fi, t), 1);
+  }
+
+  // Wischen: Liegt der Finger links erst ganz kurz auf? Dann ist noch offen, ob es ein Wisch oder Laufen wird –
+  // so lange bewegt der Joystick den Spieler noch nicht.
+  stickWartet() {
+    return !!this.stick.wartet && this.time - this.stick.t0 < STICK_AB;
   }
 
   // Ein Wisch ist fertig – hier wird daraus ein Schlag oder ein Aufschlag.
@@ -631,6 +646,7 @@ export class Controls {
       };
     }
     if (this.mode === 'controller') return { x: this.pad.x, f: this.pad.f };
+    if (this.stickWartet()) return { x: 0, f: 0 };
     return { x: this.stick.x, f: this.stick.f };
   }
 

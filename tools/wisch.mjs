@@ -73,6 +73,24 @@ console.log('Doppelt tippen:');
   tipp(c, 720, 410); pruefe('zweiter Tipp = ans Netz / zurück', c.takeNetz() === 'wechsel'); }
 { const c = neu('rally'); tipp(c, 200, 400); tipp(c, 210, 400); pruefe('geht auch links (wo sonst der Joystick ist)', c.takeNetz() === 'wechsel'); }
 
+console.log('Wischen auf der linken Bildschirmseite (dort wischt man gern bei der Rückhand):');
+const LINKS = [[200, 420]];
+{ const c = neu('rally'); wisch(c, LINKS, 150, -150, 120); const lauf = c.move(); const r = c.peek(false, 0.2);
+  pruefe('Laufhilfe „Voll“: Wisch links = Schlag', !!r && r.type === 'drive', r ? r.type : 'nichts'); pruefe('… und die Figur läuft nicht los', lauf.x === 0 && lauf.f === 0); }
+for (const hilfe of ['seitlich', 'aus']) {
+  const c = neu('rally'); c.laufhilfe = hilfe;
+  const ev = (x, y) => ({ pointerId: 1, clientX: x, clientY: y, timeStamp: uhr, preventDefault() {} });
+  c.onDown(ev(200, 420)); let gelaufen = false;
+  for (let s = 1; s <= 5; s++) { uhr += 24; c.update(0.024); c.onMove(ev(200 + 30 * s, 420 - 30 * s)); const m = c.move(); if (m.x || m.f) gelaufen = true; }
+  c.onUp(ev(350, 270)); uhr += 600;
+  const r = c.peek(false, 0.2);
+  pruefe(`Laufhilfe „${hilfe}“: schneller Wisch links = Schlag, ohne loszulaufen`, !!r && r.type === 'drive' && !gelaufen, r ? r.type : 'nichts');
+  const d = neu('rally'); d.laufhilfe = hilfe;
+  d.onDown(ev(200, 420)); uhr += 100; d.update(0.1); d.onMove(ev(240, 420)); uhr += 500; d.update(0.5); d.onMove(ev(260, 420));
+  const m = d.move(); d.onUp(ev(260, 420)); uhr += 600;
+  pruefe(`Laufhilfe „${hilfe}“: Finger links liegen lassen und ziehen = laufen, kein Schlag`, m.x > 0.5 && d.peek(false, null) === null, 'Joystick ' + m.x.toFixed(2));
+}
+
 console.log('Aufschlag:');
 for (const [name, f, dx, dy, art, seite] of [
   ['hoch = gerade', EINER, 0, -200, 'gerade', 0], ['hoch und nach rechts geneigt', EINER, 80, -200, 'gerade', 1], ['hoch und nach links geneigt', EINER, -80, -200, 'gerade', -1],

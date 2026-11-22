@@ -171,7 +171,7 @@ Die Figur rechnet intern in `[vor, seite, hoch]` (seite: + = Schlaghand); Linksh
 - Schlagart = Steilheit des Wischs (`wischArt`, links/rechts egal): ↑ `topspin`, ↗ `drive`, → `flach`, ↘ `slice` lang, ↓ `slice` kurz (Tiefe 0,45; langsamer als `WISCH_STOPP` = `drop`). Härte = Tempo des letzten Stücks (`WISCH_FENSTER`) in Bildschirmhöhen pro Sekunde (`WISCH_LANGSAM` … `WISCH_SCHNELL`).
 - Zwei Finger im Ballwechsel: hoch = Lob, runter = nichts. Doppelt tippen (überall) = ans Netz und zurück (`netzWechsel = 'wechsel'`). „Zwei Finger hoch = ans Netz“ gilt nur noch in `touch`.
 - Aufschlag: ↑ gerade, ↓ Slice, zwei Finger ↑ Kick, zwei Finger ↓ von unten; seitliche Neigung des Wischs = Richtung (`WISCH_SCHRAEG`). Die Geste überstimmt die Aufschlag-Knöpfe.
-- Laufen: Joystick links (erste 42 % der Breite) wie bei `touch` – dort zählt ein Wisch nicht als Schlag.
+- Laufen: Mit Laufhilfe „Voll“ (`controls.laufhilfe`, setzt `app.js`) gibt es beim Wischen keinen Joystick, der ganze Bildschirm ist zum Wischen da. Sonst Joystick links (erste 42 % der Breite), aber erst nach `STICK_AB` 0,22 s; ein Wisch dort, der kürzer als `WISCH_KURZ` 0,4 s dauert, zählt als Schlag. Grund: Bei der Rückhand wischt man gern links – früher wurde das zum Joystick, der Schlag fehlte und die Figur lief vom Ball weg.
 - Geprüft: `tools/wisch.mjs` und im Test-Browser mit künstlichen Finger-Ereignissen (auch zwei Finger). Nicht geprüft: echtes iPad, echte Finger – alle `WISCH_…`-Zahlen sind geschätzt.
 
 ## Taktische Spielzüge (optional)
