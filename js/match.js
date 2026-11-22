@@ -11,8 +11,11 @@ import { ZUEGE, ZugZaehler, zielfeld, zielPunkt, lieblingsZuege, ZUG_REAKTION, Z
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const NOFX = new Proxy({}, { get: () => () => {} });
-const SPAET_WISCH = 0.18;    // Wischen: hier ist die Frist etwas länger (gleiche Zahl wie WISCH_SPAET in controls.js)
-const SPAET_FENSTER = 0.15;  // Controller: so lange (Sekunden) darf man nach dem besten Moment noch schlagen (= Ball geht nach rechts)
+const SPAET_WISCH = 0.18;    // Wischen: so lange nach dem besten Moment darf man noch wischen (gleiche Zahl wie WISCH_SPAET in controls.js)
+const SPAET_FENSTER = 0.35;  // Controller und Uhr: so lange (Sekunden) darf man nach dem besten Moment noch schlagen (= Ball geht longline).
+                             // Seit 22.11.2026 länger (vorher 0.15): Die Uhr meldet einen Schwung immer ein bisschen verspätet, dann hieß es oft "Zu spät!".
+                             // Wer so spät schlägt, trifft den Ball an der Stelle, an der er am Schläger vorbeikam (siehe spaetVon in tryHit).
+const REACH_SCHWUNG = 0.3;   // Controller und Uhr: so viel weiter (Meter) reicht der Schläger – man kann beim Schwingen ja nicht fein hinlaufen
 // Tempo im Spiel (seit 21.11.2026 schneller, Wunsch von Kristian: mehr Action). Ball und Beine müssen zusammenpassen:
 // Wer hier die Bälle schneller macht (js/schlaege.js), muss auch die Spieler schneller machen – sonst gibt es nur noch Winner.
 const LAUF_LANGSAM = 4.6, LAUF_SCHNELL = 7.3;         // Lauftempo in m/s: Spieler mit wenig und mit viel Beinarbeit
@@ -517,7 +520,7 @@ export class Match {
     this.predIn = !!f && !this.pred.net && this.inArea(f.x, f.z, p.side, isServe);
     const opp = this.P[1 - p.side];
     opp.plan = null; opp.planAge = 9; opp.missed = false; opp.lastDist = 99;
-    opp.spaetSeit = null;        // Controller: ab wann der beste Moment zum Schlagen vorbei ist
+    opp.spaetVon = null; opp.spaetSeit = null;        // Controller: ab wann der beste Moment zum Schlagen vorbei ist
     // Taktik des Schlägers: Ein kluger Spieler verrät spät, wohin er spielt – der Gegner reagiert später.
     opp.react = opp.isHuman ? (opp.hilfe ? HILFS_SPAET : this.diff.meReact ?? 0.04) : this.diff.aiReact * (1.15 - 0.3 * opp.t) * (isServe ? 0.65 : 1 + TAKTIK_TARNT * (p.tak - 0.5));
     if (shot.schwung && !opp.isHuman && !isServe) opp.react *= SCHWUNG_UEBERRASCHT;      // Schwung-Hilfe: Der Computer braucht länger, um loszulaufen
@@ -887,19 +890,23 @@ export class Match {
     const dist = Math.hypot(b.pos.x - p.x, b.pos.z - p.z);
     const receding = dist > p.lastDist + 1e-5;
     p.lastDist = dist;
-    const reach = b.isServe ? REACH + 0.3 : REACH;      // beim Return streckt man sich weiter
     // Controller und Wischen: Der beste Moment ist vorbei, aber für einen kurzen Augenblick darf man noch (zu spät) schlagen.
     const pad = p.isHuman && (this.cfg.controlMode === 'controller' || this.cfg.controlMode === 'wisch');
+    const reach = (b.isServe ? REACH + 0.3 : REACH)      // beim Return streckt man sich weiter
+      + (p.isHuman && this.cfg.controlMode === 'controller' ? REACH_SCHWUNG : 0);
     const spaet = pad && p.spaetSeit != null ? this.sinceHit - p.spaetSeit : 0;
     const nachzuegler = pad && p.spaetSeit != null && b.pos.y >= 0.1;     // läuft, bis getroffen oder endgültig verpasst
     if (!nachzuegler && (dist > reach || b.pos.y > 2.75 || b.pos.y < 0.1)) return;
     const passed = (b.pos.z - p.z) * p.dz > 0.15;
     if (!nachzuegler && !(dist <= 0.85 || receding || passed)) return;
 
-    const from = { x: b.pos.x, y: Math.max(b.pos.y, 0.25), z: b.pos.z };
-    let stretch = clamp((dist - 0.75) / (reach - 0.75), 0, 1);
+    // Wer zu spät schlägt, trifft den Ball dort, wo er am Schläger vorbeikam (gemerkt in spaetVon) –
+    // sonst käme der Schlag von einer Stelle weit hinter dem Spieler.
+    const wo = nachzuegler && p.spaetVon ? p.spaetVon : { x: b.pos.x, y: b.pos.y, z: b.pos.z, dist };
+    const from = { x: wo.x, y: Math.max(wo.y, 0.25), z: wo.z };
+    let stretch = clamp((wo.dist - 0.75) / (reach - 0.75), 0, 1);
     if (!volley && (from.y < 0.4 || from.y > 1.9)) stretch = Math.min(1, stretch + 0.25);
-    const fh = (b.pos.x - p.x) * p.dz * p.hand >= 0;
+    const fh = (wo.x - p.x) * p.dz * p.hand >= 0;
     const o = { from, stretch, volley, incoming: Math.hypot(b.vel.x, b.vel.y, b.vel.z) };
 
     let intent;
@@ -907,14 +914,12 @@ export class Match {
       if (this.controls) this.controls.schlagSeite = (fh ? 1 : -1) * p.hand * p.dz;      // Ball rechts (+1) oder links (-1) von dir
       let raw = this.controls ? this.controls.consume(spaet) : null;
       if (!raw && pad && (p.spaetSeit == null || spaet < (this.cfg.controlMode === 'wisch' ? SPAET_WISCH : SPAET_FENSTER))) {
-        if (p.spaetSeit == null) p.spaetSeit = this.sinceHit;      // ab jetzt läuft die kurze Frist für "spät"
+        if (p.spaetSeit == null) { p.spaetSeit = this.sinceHit; p.spaetVon = wo; }      // ab jetzt läuft die kurze Frist für "spät"
         return;
       }
-      // Controller und Ball über dem Kopf: Schmettern geht nur mit einem Schwung von oben nach unten.
-      if (raw && pad && from.y > 2.0 && (raw.type === 'drive' || raw.type === 'slice')) {
-        if (raw.vonOben) raw = { ...raw, type: 'drive' };
-        else { raw = { ...raw, type: 'lob' }; this.fx.message('Für den Smash von oben schwingen!', 'warn'); }
-      }
+      // Controller und Ball über dem Kopf: Jeder Schwung wird ein Schmetterball.
+      // (Früher musste man dafür von oben nach unten schwingen, sonst gab es nur einen Lob – das hat oft nicht geklappt.)
+      if (raw && pad && from.y > 2.0 && (raw.type === 'drive' || raw.type === 'slice')) raw = { ...raw, type: 'drive' };
       // Stufe "Leicht": Wer gar nicht schlägt, bekommt den Ball trotzdem zurück – aber nur als schwachen, kurzen Ball.
       p.hilfe = false;
       if (!raw && this.diff.autoReturn && !this.cfg.ohneHilfe) {      // ohneHilfe: in den Lektionen „Erste Schritte“ soll man selbst schlagen

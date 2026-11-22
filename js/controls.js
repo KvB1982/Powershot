@@ -76,7 +76,11 @@ export function wischArt(dx, dy) {
 const SWING_START = 1.6;               // ab dieser Beschleunigung (in g, 1 g = Erdanziehung) zählt es als Schwung
 const SWING_VOLL = 5.0;                // so stark muss man schwingen für volle Kraft
 const SWING_PAUSE = 0.4;               // Sekunden Ruhe nach einem Schwung (sonst zählt einer doppelt)
-const PAD_HALTBAR = 0.6;               // so lange "gilt" ein Schwung oder Tastendruck, bis der Ball da sein muss
+const PAD_HALTBAR = 0.6;               // so lange "gilt" ein Tastendruck, bis der Ball da sein muss
+// Ein echter Schwung (Uhr, iPhone, Joy-Con) gilt viel länger (seit 22.11.2026, Wunsch von Kristian: den Ball öfter treffen).
+// Wer schwingt, sobald der Gegner geschlagen hat, trifft also trotzdem – der Ball geht dann nur ganz cross.
+// (Ein Schwung, BEVOR der Gegner schlägt, zählt weiter nicht: Der wird beim Schlag des Gegners gelöscht.)
+const SCHWUNG_HALTBAR = 1.6;
 // --- Schwingen mit Uhr, iPhone oder Controller: Hilfen, damit man damit auch Punkte macht (seit 21.11.2026, alle Zahlen geschätzt) ---
 const SCHWUNG_MIN = 0.5;               // so hart ist schon der sanfteste Schwung (0 bis 1). Früher 0.3 – da kam der Ball zu lahm.
 const SCHWUNG_KURVE = 0.6;             // kleiner als 1 = schon ein mittlerer Schwung gibt fast volle Härte
@@ -98,7 +102,7 @@ export const schwungRichtung = (lr) => Math.sign(lr) * Math.pow(Math.abs(lr), SC
 //
 const TIMING_FRUEH = 0.38;             // so viele Sekunden vor dem Treffen = ganz nach links
 const TIMING_MITTE = 0.19;             // so viele Sekunden vor dem Treffen = genau geradeaus
-export const TIMING_SPAET = 0.15;      // so lange nach dem Treffmoment darf man noch schlagen (bleibt ganz rechts), danach "Zu spät!"
+export const TIMING_SPAET = 0.35;      // so lange nach dem Treffmoment darf man noch schlagen (bleibt ganz rechts), danach "Zu spät!"
 // Ein Schwung wird erst erkannt, wenn er schon einen Moment läuft. Diese Zeit rechnen wir zurück.
 const SCHWUNG_VERZUG = 0.08;           // iPhone oder Controller in der Hand
 const UHR_VERZUG = 0.04;               // Apple Watch (zusätzlich zur gemessenen Funkzeit)
@@ -310,12 +314,9 @@ export class Controls {
   schwungFertig(kraft, hochAnteil, alter) {
     if (this.onSchwung) this.onSchwung(kraft);      // z. B. damit das Handy als Schläger kurz rüttelt
     // Ging der Schwung senkrecht (von oben nach unten oder umgekehrt) oder eher seitlich?
-    // Aufschlag und Schmetterball brauchen einen senkrechten Schwung – wie beim echten Tennis über dem Kopf.
+    // Früher brauchten Aufschlag und Schmetterball einen senkrechten Schwung. Das war zu streng:
+    // Die Uhr hielt manchen richtigen Schwung für seitlich, und dann passierte gar nichts. Jetzt zählt jeder Schwung.
     const senkrecht = Math.abs(hochAnteil) > 0.35;
-    if (this.ctx === 'serve' && !senkrecht) {
-      if (this.onHint) this.onHint('Aufschlag: von oben nach unten schwingen!');
-      return;
-    }
     // Von oben nach unten geschwungen = Slice, sonst Topspin
     const type = hochAnteil < -0.35 ? 'slice' : 'drive';
     this.commitPad(type, schwungHaerte(kraft), senkrecht, this.aufschlagArt);
@@ -632,7 +633,7 @@ export class Controls {
       if (this.charging) this.power = Math.min(this.ctx === 'serve' ? 1.25 : 1, this.power + dt / 0.5);
     } else if (this.mode === 'controller' || this.mode === 'wisch') {
       // Zu früh geschwungen oder gewischt? Dann verfällt der Schlag wieder – wie beim echten Tennis muss das Timing stimmen.
-      if (this.committed && this.ctx === 'rally' && this.time - this.padAt > (this.mode === 'wisch' ? WISCH_HALTBAR : PAD_HALTBAR)) this.committed = null;
+      if (this.committed && this.ctx === 'rally' && this.time - this.padAt > (this.mode === 'wisch' ? WISCH_HALTBAR : this.committed.schwung ? SCHWUNG_HALTBAR : PAD_HALTBAR)) this.committed = null;
     }
   }
 
