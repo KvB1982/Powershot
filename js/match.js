@@ -82,6 +82,10 @@ export class Match {
     this.lastPoint = null;
     this.wechselPruefen = false;    // wird wahr, sobald ein Punkt zu Ende ist (siehe next)
     this.zugEinrichten();
+    // Match-Rekorder (js/rekorder.js): schreibt mit, was passiert. Meistens ist er aus (null) – dann kostet er nichts.
+    this.rek = cfg.rekorder || null;
+    this.rekInfo = null;            // was der Rekorder zum nächsten Schlag wissen soll (Eingabe, Bedrängnis …)
+    if (this.rek) this.rek.start(this);
   }
 
   // Taktische Spielzüge (siehe js/spielzuege.js). Zwei Möglichkeiten:
@@ -154,6 +158,7 @@ export class Match {
   // ---------------------------------------------------------------
   update(dt) {
     dt = Math.min(dt, 1 / 30);
+    if (this.rek) this.rek.takt(dt, this);
     this.timer -= dt;
     const st = this.state;
     this.netzWunsch();
@@ -216,12 +221,14 @@ export class Match {
   next() {
     if (this.lernZug && this.training.done >= this.training.balls) {
       this.state = 'over';
+      if (this.rek) this.rek.ende(this.score);
       this.fx.trainingOver(this.training);
       return;
     }
     if (this.mode !== 'match') {
       if (this.training.done >= this.training.balls) {
         this.state = 'over';
+        if (this.rek) this.rek.ende(null);
         this.fx.trainingOver(this.training);
         return;
       }
@@ -230,6 +237,7 @@ export class Match {
     }
     if (this.score.winner !== null) {
       this.state = 'over';
+      if (this.rek) this.rek.ende(this.score);
       this.fx.matchOver(this.score);
       return;
     }
@@ -291,6 +299,7 @@ export class Match {
     this.prellK = null; this.prellNr = 0;
     this.timer = srv.isHuman ? 0 : 0.45 + this.prellDauer + 0.4;
     if (srv.isHuman && this.controls) this.controls.begin('serve');
+    if (this.rek) this.rek.punktStart(this);
     this.fx.serveSetup({ server: s, serveNo: this.score.serveNo, box: this.serveBox });
     if (this.mode === 'aufschlag') this.makeServeZones();
   }
@@ -321,6 +330,7 @@ export class Match {
     this.prellK = null;
     this.tossT = 0;
     this.state = 'toss';
+    if (this.rek) this.rek.wurf(this, intent);
   }
 
   // Wo ist der Ball beim Hochwerfen? t = Sekunden seit Beginn
@@ -346,6 +356,7 @@ export class Match {
     const shot = this.buildShot(p, this.serveIntent, { from, stretch: 0, serveNo: sc.serveNo, incoming: 0 });
     if (this.mode === 'match' && sc.serveNo === 1) sc.stats[p.side].firstTotal++;
     this.state = 'rally';
+    this.rekInfo = { intent: this.serveIntent };
     this.launch(p, from, shot, true);
     // Von unten sieht der Schlag aus wie ein Vorhand-Slice, sonst wie ein Aufschlag über dem Kopf
     if (this.serveUnten) this.fx.swing(p.side, 'fh', from.y, 'slice'); else this.fx.swing(p.side, 'sv', from.y);
@@ -524,6 +535,7 @@ export class Match {
     // Taktik des Schlägers: Ein kluger Spieler verrät spät, wohin er spielt – der Gegner reagiert später.
     opp.react = opp.isHuman ? (opp.hilfe ? HILFS_SPAET : this.diff.meReact ?? 0.04) : this.diff.aiReact * (1.15 - 0.3 * opp.t) * (isServe ? 0.65 : 1 + TAKTIK_TARNT * (p.tak - 0.5));
     if (shot.schwung && !opp.isHuman && !isServe) opp.react *= SCHWUNG_UEBERRASCHT;      // Schwung-Hilfe: Der Computer braucht länger, um loszulaufen
+    if (this.rek) { this.rek.schlag(this, p, from, shot, isServe, this.rekInfo || {}); this.rekInfo = null; }
     this.zugSchlag(p, opp, from, shot, isServe);
     p.plan = null; p.prep = 0;
     p.homeX = f ? clamp(f.x * 0.2, -1.2, 1.2) : 0;
@@ -598,6 +610,7 @@ export class Match {
     if (r.fertig) {
       p.sicher = r.fertig.durchschaut ? 0 : ZUG_SICHER * r.fertig.wirkung;
       p.zugPlan = null;
+      if (this.rek) this.rek.notiz('spielzug', { s: p.side, id: r.fertig.id, wirkung: r.fertig.wirkung, durchschaut: r.fertig.durchschaut || undefined });
       this.fx.spielzug({ side: p.side, id: r.fertig.id, name: r.fertig.zug.name, wirkung: r.fertig.wirkung, durchschaut: r.fertig.durchschaut, mensch: p.isHuman });
     }
   }
@@ -659,6 +672,7 @@ export class Match {
     p.netRush = vor;
     p.homeZ = vor ? NETZ_Z : GRUND_Z;
     p.plan = null; p.planAge = 9;
+    if (this.rek) this.rek.notiz('netzwunsch', { s: 0, vor });
     this.fx.message(vor ? 'Ans Netz!' : 'Zurück an die Grundlinie', 'info');
   }
 
@@ -679,12 +693,14 @@ export class Match {
   onBallEvent(e) {
     if (e.type === 'net' || e.type === 'cord') {
       this.netHit = e.type === 'net' || this.netHit;
+      if (this.rek) this.rek.netz(e.type, this.ball);
       this.fx.net(e.type);
       return;
     }
     const b = this.ball;
     const hitter = b.lastHitter;
     const ok = e.n === 1 ? this.inArea(e.x, e.z, hitter, b.isServe) : true;
+    if (this.rek) this.rek.aufprall(this, e, ok);
     this.fx.bounce({ x: e.x, z: e.z, n: e.n, in: ok, speed: e.speed });
     if (this.state !== 'rally') return;
 
@@ -717,6 +733,7 @@ export class Match {
 
   fault() {
     const sc = this.score;
+    if (this.rek) this.rek.fehler(sc.serveNo, this.netHit ? 'netz' : 'aus');
     if (sc.serveNo === 1) {
       sc.serveNo = 2;
       this.state = 'faultPause';
@@ -751,6 +768,7 @@ export class Match {
     this.P[winner].mood = big ? 'cheer' : null;
     this.P[loser].mood = events.includes('set') ? 'sad' : null;
     this.lastPoint = { winner, reason, events, rally: this.rally };
+    if (this.rek) this.rek.punktEnde(this, winner, reason, events);
     this.wechselPruefen = true;     // nach diesem Punkt darf next() einmal nach dem Seitenwechsel schauen
     this.fx.point(this.lastPoint);
   }
@@ -928,13 +946,16 @@ export class Match {
       }
       if (!raw) {
         p.missed = true;
+        if (this.rek) this.rek.verpasst(this, p, wo, spaet);
         this.fx.message('Zu spät!', 'warn');
         return;
       }
       intent = this.humanIntent(p, raw, false);
+      if (this.rek) this.rekInfo = { raw, hilfe: p.hilfe, spaet };
     } else {
       intent = this.aiShot(p, o);
     }
+    if (this.rek) this.rekInfo = { ...this.rekInfo, intent, stretch, volley, incoming: o.incoming };
     const shot = this.buildShot(p, intent, o);
     const kind = shot.type === 'smash' ? 'sv' : fh ? 'fh' : 'bh';
     shot.hand = fh ? 'fh' : 'bh';
@@ -1017,6 +1038,7 @@ export class Match {
     this.state = 'rally';
     const from = { x: ai.x + 0.5, y: 0.9, z: ai.z + 0.4 };
     const shot = this.buildShot(ai, this.feedIntent(), { from, stretch: 0, incoming: 0 });
+    if (this.rek) this.rek.punktStart(this);        // für den Rekorder ist jeder zugespielte Ball ein eigener "Punkt"
     this.launch(ai, from, shot, false);
     this.fx.swing(1, 'fh', 0.9);
     this.fx.hit({ side: 1, speed: shot.speed, power: 0.5, type: 'drive' });
@@ -1053,6 +1075,7 @@ export class Match {
     if (ok) tr.drin = (tr.drin || 0) + 1;            // so viele Bälle waren im Feld
     if (pts > 2) tr.treffer = (tr.treffer || 0) + 1;   // … und so viele in einem Zielfeld
     tr.done++;
+    if (this.rek) this.rek.notiz('training', { punkte: pts, drin: !!ok });
     this.fx.trainingUpdate(tr, pts, ok);
     this.state = 'feedWait';
     this.timer = 1.3;

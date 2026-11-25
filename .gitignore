@@ -9,3 +9,4 @@ aufnahmen/
 
 # Große Vorlagen der Besucher (entstehen mit tools/mensch/bau.sh b1 … b7; im Repository liegen nur die kleinen in klein/)
 tools/mensch/statisten/b*.glb
+tools/rekorder.svg

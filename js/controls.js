@@ -158,6 +158,8 @@ export class Controls {
     this.menuDir = '';            // Richtung, in die der Stick gerade gedrückt ist
     this.menuAt = 0;              // wann die Richtung zuletzt gemeldet wurde (zum Wiederholen beim Festhalten)
     this.kamera = null;           // wird von app.js gesetzt: Laufen mit der Kamera (siehe kamera.js)
+    this.onRek = null;            // Match-Rekorder (js/rekorder.js): bekommt jede Eingabe gemeldet. null = Rekorder aus
+    this.rekAlt = null; this.rekHielt = false;
     this.bind();
   }
 
@@ -176,6 +178,8 @@ export class Controls {
   // ctx: 'serve' | 'rally'
   begin(ctx) {
     const keepAim = this.mode === 'klassik' && ctx === 'rally' ? 0 : 0;
+    // Für den Rekorder: Ein Schlag-Wunsch, der schon wartet, bevor der Gegner überhaupt geschlagen hat, wird hier gelöscht.
+    if (this.onRek && ctx === 'rally' && this.committed) this.onRek('geloescht', { art: this.committed.type });
     this.ctx = ctx;
     this.reset();
     if (ctx === 'serve') this.aufschlagArt = null;      // vor jedem Aufschlag gilt wieder der Standard
@@ -313,6 +317,7 @@ export class Controls {
   //   alter: so viele Sekunden ist der Schwung schon her (bei der Apple Watch dauert die Meldung einen Moment)
   schwungFertig(kraft, hochAnteil, alter) {
     if (this.onSchwung) this.onSchwung(kraft);      // z. B. damit das Handy als Schläger kurz rüttelt
+    if (this.onRek) this.onRek('schwung', { kraft: Math.round(kraft * 100) / 100, hoch: Math.round(hochAnteil * 100) / 100, alter: Math.round(alter * 100) / 100, uhr: !!this.uhrAktiv || undefined, ctx: this.ctx });
     // Ging der Schwung senkrecht (von oben nach unten oder umgekehrt) oder eher seitlich?
     // Früher brauchten Aufschlag und Schmetterball einen senkrechten Schwung. Das war zu streng:
     // Die Uhr hielt manchen richtigen Schwung für seitlich, und dann passierte gar nichts. Jetzt zählt jeder Schwung.
@@ -532,6 +537,7 @@ export class Controls {
     const kraft = clamp((tempo - WISCH_LANGSAM) / (WISCH_SCHNELL - WISCH_LANGSAM), 0, 1);
     const power = 0.25 + 0.75 * kraft;
     const hoch = w.dy < 0;
+    if (this.onRek) this.onRek('wisch', { dx: Math.round(w.dx), dy: Math.round(w.dy), dauer: Math.round(w.dauer * 100) / 100, tempo: Math.round(tempo * 100) / 100, finger, ctx: this.ctx });
     if (this.ctx === 'serve') {
       // Aufschlag: hoch = gerade, runter = Slice; mit zwei Fingern hoch = Kick, runter = von unten.
       if (Math.abs(w.dy) < 0.4 * len) { if (this.onHint) this.onHint('Aufschlag: nach oben oder nach unten wischen!'); return; }
@@ -633,7 +639,33 @@ export class Controls {
       if (this.charging) this.power = Math.min(this.ctx === 'serve' ? 1.25 : 1, this.power + dt / 0.5);
     } else if (this.mode === 'controller' || this.mode === 'wisch') {
       // Zu früh geschwungen oder gewischt? Dann verfällt der Schlag wieder – wie beim echten Tennis muss das Timing stimmen.
-      if (this.committed && this.ctx === 'rally' && this.time - this.padAt > (this.mode === 'wisch' ? WISCH_HALTBAR : this.committed.schwung ? SCHWUNG_HALTBAR : PAD_HALTBAR)) this.committed = null;
+      if (this.committed && this.ctx === 'rally' && this.time - this.padAt > (this.mode === 'wisch' ? WISCH_HALTBAR : this.committed.schwung ? SCHWUNG_HALTBAR : PAD_HALTBAR)) {
+        if (this.onRek) this.onRek('verfallen', { art: this.committed.type, alt: Math.round((this.time - this.padAt) * 100) / 100 });
+        this.committed = null;
+      }
+    }
+    if (this.onRek) this.rekSchau();
+  }
+
+  // Für den Match-Rekorder: Ist seit dem letzten Bild ein neuer Schlag-Wunsch entstanden? Dann wird er gemeldet.
+  // (Läuft nur, wenn der Rekorder an ist.)
+  rekSchau() {
+    const c = this.committed || null, r = (v) => (v == null ? undefined : Math.round(v * 100) / 100);
+    if (c !== this.rekAlt) {
+      this.rekAlt = c;
+      if (c) {
+        const pad = this.mode === 'controller' || this.mode === 'wisch';
+        this.onRek('eingabe', {
+          ctx: this.ctx, art: c.type, kraft: r(c.power), ziel: r(c.aim), aufschlag: c.art || undefined,
+          schwung: c.schwung || undefined, name: c.name,
+          seit: pad ? r(this.time - this.padAt) : undefined,       // so alt ist die Eingabe schon (ein Schwung von der Uhr ist ein Stück unterwegs)
+        });
+      }
+    }
+    // Maus und Tastatur: Die Taste wird gehalten und erst beim Treffen ausgewertet – gemeldet wird der Anfang des Haltens.
+    if (this.charging !== this.rekHielt) {
+      this.rekHielt = this.charging;
+      if (this.charging) this.onRek('eingabe', { ctx: this.ctx, art: this.type, halten: true });
     }
   }
 

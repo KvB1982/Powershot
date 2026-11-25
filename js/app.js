@@ -37,6 +37,10 @@ import * as PS from './profisaison.js';
 import * as SZ from './spielzuege.js';
 import * as LE from './lernen.js';
 import * as PR from './profile.js';
+import { Rekorder, kurzName } from './rekorder.js';
+import * as RS from './rekorderspeicher.js';
+import { auswerten, bericht, STEUERUNG_NAME } from './rekorderauswertung.js';
+import { Wiedergabe } from './wiedergabe.js';
 import { bracketHtml, timelineHtml, raceHtml, pointsHtml, weltHtml, zeitungHtml } from './saisonansicht.js';
 
 const $ = (s) => document.querySelector(s);
@@ -59,6 +63,7 @@ const settings = Object.assign({
   tempo: 'schnell',        // Spieltempo im Match: 'echt', 'schnell' oder 'turbo' (siehe TEMPO_MAL)
   schweif: 'aus',          // leuchtender Schweif hinter dem Ball: 'aus' oder 'an'
   einlauf: 'an',           // Einlaufszene vor dem Match: 'an' (ganz), 'kurz' (nur Steckbriefe) oder 'aus'
+  rekorder: 'aus',         // Match-Rekorder: 'aus' oder 'an' (schreibt jedes Match mit, siehe js/rekorder.js)
 }, (() => { try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch (e) { return {}; } })());
 // Welche Spielzüge hast du schon gelernt? { id: { t: im Training geschafft, m: im Match geschafft } }
 const ZUG_KEY = 'powershot.spielzuege.v1';
@@ -463,11 +468,18 @@ actions.settings = (v) => {
       <p class="dim" style="margin:6px 0 0;font-size:13px">Der Platz hat immer die echten Maße (23,77 m lang). „Wie im Fernsehen“ schaut von weit hinten und oben –
         beide Spieler sehen ähnlich groß aus. „Nah am Spieler“ ist der alte Blick: du bist groß, der Gegner klein.</p>
     </div>
+    <div class="panel">
+      ${optionRow('Match-Rekorder', 'rekorder', { aus: 'Aus', an: 'An ⏺' })}
+      <p class="dim" style="margin:6px 0 0;font-size:13px">Mit „An“ schreibt das Spiel bei jedem Match und Training mit, was passiert: jede Eingabe, jeden Schlag,
+        jeden verpassten Ball und jeden Punkt (keine Bilder, nur Zahlen). Damit lässt sich prüfen, wie gut Steuerung und Schwierigkeit passen.
+        Die letzten ${RS.HOECHSTENS} Aufnahmen bleiben auf diesem Gerät.</p>
+      <div class="row" style="margin-top:8px"><button data-a="rekorder">📼 Aufnahmen ansehen, auswerten und sichern</button></div>
+    </div>
     ${window.__powershotVersion ? `<p class="dim" style="font-size:12px">App-Version ${esc(window.__powershotVersion)} – iPad, iPhone und Uhr sollten dieselbe Nummer haben.</p>` : ''}
     <p class="dim">Auf „Leicht“ bleiben deine Bälle immer im Feld, und du schlägst auch ohne Eingabe zurück.
     Auf „Schwer“ und „Profi“ kannst du ins Aus und ins Netz schlagen.</p>`);
 };
-actions.set = (v) => {
+actions.set = (v, el) => {
   const [key, raw] = v.split(':');
   let val = raw;
   if (raw === 'true' || raw === 'false') val = raw === 'true';
@@ -489,6 +501,7 @@ actions.set = (v) => {
   if (key === 'control' && match) { controls.setMode(settings.control); match.cfg.controlMode = settings.control; }
   controls.laufhilfe = settings.assist;
   if (key === 'assist' && match) match.cfg.assist = settings.assist;
+  if (el && el.dataset.nach === 'rekorder') return actions.rekorder();
   actions.settings();
 };
 
@@ -2738,7 +2751,9 @@ function startMatch(o) {
   const lernen = o.lernen || null;
   const mitZuegen = !lernen && mode === 'match' && settings.spielzuege === 'an';
   session = { o, names, over: false, mode: lernen ? 'spielzug' : mode, zugScore: 0, zuege: [0, 0], mitZuegen };
+  rekStart(o);
   match = new Match({
+    rekorder: rek,
     players: [o.me, o.opp], human: 0, surface: o.def.surface, difficulty: o.difficulty || settings.difficulty,
     sets: lernen ? 3 : len.sets, games: lernen ? 99 : len.games, mode, balls: o.balls, assist: settings.assist, controlMode: settings.control,
     ohneHilfe: !!o.ohneHilfe,
@@ -2901,10 +2916,12 @@ const hud = {
   },
   trainingOver(tr) {
     session.over = true;
+    if (session.wiedergabe) return setTimeout(wiedergabeEnde, 1500);
     setTimeout(() => showResult({ training: tr }), 600);
   },
   matchOver(score) {
     session.over = true;
+    if (session.wiedergabe) return setTimeout(wiedergabeEnde, 1500);
     setTimeout(() => showResult({ score }), 400);
   },
 };
@@ -2983,7 +3000,7 @@ function togglePause() {
       <button class="primary" data-a="resume">Weiterspielen</button>
       <button data-a="settings" data-v="pauseMenu">Einstellungen</button>
       <button data-a="help" data-v="pauseMenu">Steuerung</button>
-      <button data-a="quit">${session.mode === 'match' ? 'Match aufgeben' : 'Training beenden'}</button></div></div>`);
+      <button data-a="quit">${session.wiedergabe ? 'Wiedergabe beenden' : session.mode === 'match' ? 'Match aufgeben' : 'Training beenden'}</button></div></div>`);
     quitArmed = false;
   } else hide();
 }
@@ -3017,6 +3034,8 @@ actions.quit = (v, el) => {
 };
 
 function endMatch() {
+  rekEnde();
+  wgBox.classList.remove('on');
   kameraBild.stop();                // Kamera aus, das Einmessen bleibt gemerkt
   controls.enabled = false;
   controls.showStick(false);
@@ -3106,7 +3125,8 @@ function loop(now) {
   if (MS.offen()) return requestAnimationFrame(loop);
   // Im Match läuft die Zeit nach dem eingestellten Spieltempo. Bei einem langen Bild rechnen wir in zwei halben Schritten,
   // damit ein sehr schneller Ball nicht in einem einzigen Schritt am Schläger vorbeifliegt.
-  const dm = match ? dt * tempoMal() : dt;
+  const dm = match ? dt * (session && session.wiedergabe ? wgMal : tempoMal()) : dt;
+  if (match && session && session.wiedergabe) wgFrame();
   if (match && !paused && !einlaufAn()) {
     controls.update(dt);       // die Steuerung rechnet in echter Zeit: Die Zeitfenster zum Schlagen werden durch das Spieltempo nicht kürzer
     const teile = dm > 0.022 ? 2 : 1;
@@ -3119,6 +3139,141 @@ function loop(now) {
   kameraFrame();
   requestAnimationFrame(loop);
 }
+
+// ---------------------------------------------------------------
+// Match-Rekorder: schreibt mit, was im Match passiert (js/rekorder.js). Nur wenn er in den Einstellungen an ist.
+// Hier: Aufnahme beginnen und speichern, die Liste der Aufnahmen, Auswertung, Sichern als Datei, Abspielen.
+// ---------------------------------------------------------------
+let rek = null;             // die Aufnahme, die gerade läuft (null = Rekorder aus)
+let rekLetzte = null;       // die zuletzt fertig gewordene Aufnahme (für Tests und für die Liste)
+function rekStart(o) {
+  rek = null; controls.onRek = null;
+  if (settings.rekorder !== 'an') return;
+  rek = new Rekorder({
+    titel: o.title || '', ort: o.def.id, steuerung: settings.control, kamera: settings.kamera,
+    tempo: settings.tempo, tempoMal: tempoMal(), laenge: o.length || settings.length, blick: settings.blick,
+    spielzuege: settings.spielzuege, version: window.__powershotVersion || '',
+    geraet: { touch: touchDevice, breit: window.innerWidth, hoch: window.innerHeight, app: !!window.webkit?.messageHandlers?.powershot },
+  });
+  controls.onRek = (was, d) => { if (rek) rek.eingabe(was, d); };
+}
+// Das Match ist vorbei (oder wurde abgebrochen): Aufnahme abschließen und aufheben
+function rekEnde() {
+  if (!rek) return;
+  const r = rek;
+  rek = null; controls.onRek = null;
+  if (!r.fertig) r.ende(match && match.score, true);
+  // Womit wurde geschwungen? (Das weiß man erst am Ende sicher.)
+  if (settings.control === 'controller') { r.kopf.schlaeger = controls.pad.connected ? controls.pad.name : ''; r.kopf.uhr = !!controls.uhrAktiv; }
+  if (match && match.hilfsZahl) r.kopf.hilfsSchlaege = match.hilfsZahl;
+  const a = r.daten();
+  if (!a.punkte.length) return;          // gleich wieder abgebrochen: nichts zum Aufheben
+  rekLetzte = a;
+  RS.speichern(a);
+}
+const datumKurz = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); };
+let rekListe = [];
+actions.rekorder = async (meldung) => {
+  rekListe = await RS.alle();
+  const zeile = (a) => {
+    const K = a.kopf;
+    return `<div class="rekZeile"><div><b>${esc(kurzName(a))}</b><br><small class="dim">${esc(datumKurz(K.wann))} · ${esc(K.titel || K.modus)} · Stufe ${esc(K.stufe)} · ${esc(STEUERUNG_NAME[K.steuerung] || K.steuerung)} · ${a.punkte.length} Punkte</small></div>
+      <div class="row"><button data-a="rekZahlen" data-v="${esc(a.id)}">📊</button><button data-a="rekAbspielen" data-v="${esc(a.id)}">▶</button><button data-a="rekWeg" data-v="${esc(a.id)}">🗑</button></div></div>`;
+  };
+  show(`<button class="back" data-a="settings">‹ Zurück</button><h1>Match-Rekorder</h1>
+    ${meldung && typeof meldung === 'string' ? `<p class="gold">${esc(meldung)}</p>` : ''}
+    <div class="panel">
+      <p>Der Rekorder ist <b>${settings.rekorder === 'an' ? 'an ⏺' : 'aus'}</b>. ${settings.rekorder === 'an' ? 'Jedes Match und jedes Training wird mitgeschrieben.' : 'Schalte ihn in den Einstellungen ein, dann wird jedes Match mitgeschrieben.'}</p>
+      <div class="row"><button data-a="set" data-v="rekorder:${settings.rekorder === 'an' ? 'aus' : 'an'}" data-nach="rekorder">${settings.rekorder === 'an' ? 'Rekorder ausschalten' : '⏺ Rekorder einschalten'}</button></div>
+    </div>
+    <div class="panel"><h3>${rekListe.length} Aufnahme${rekListe.length === 1 ? '' : 'n'}</h3>
+      ${rekListe.length ? `<div class="row"><button class="primary" data-a="rekZahlen" data-v="alle">📊 Alle auswerten</button>
+        <button data-a="rekSichern">💾 Als Datei sichern</button><button data-a="rekAllesWeg">🗑 Alle löschen</button></div>
+        <p class="dim" style="font-size:13px">📊 = Zahlen und Auffälligkeiten · ▶ = im Stadion abspielen · Die Datei kannst du Claude geben („Spiel als externer Reviewer prüfen“)
+          oder mit <code>node tools/rekorder.mjs datei.json</code> auswerten.</p>
+        ${rekListe.map(zeile).join('')}` : '<p class="dim">Noch keine Aufnahmen. Schalte den Rekorder ein und spiele ein Match.</p>'}
+    </div>`);
+};
+actions.rekZahlen = (id) => {
+  const l = id === 'alle' ? rekListe : rekListe.filter((a) => a.id === id);
+  const text = bericht(auswerten(l)).join('\n');
+  show(`<button class="back" data-a="rekorder">‹ Zurück</button><h1>Auswertung</h1>
+    <p class="dim">${l.length === 1 ? esc(kurzName(l[0])) : l.length + ' Aufnahmen, getrennt nach Steuerung und Stufe'}. „Auffällig“ sind einfache Faustregeln – sie zeigen, wo man hinschauen sollte.</p>
+    <div class="panel"><pre class="rekText">${esc(text)}</pre></div>`);
+};
+let rekWegArm = '';
+actions.rekWeg = async (id, el) => {
+  if (rekWegArm !== id) { rekWegArm = id; el.textContent = 'Löschen?'; setTimeout(() => { rekWegArm = ''; }, 3000); return; }
+  rekWegArm = ''; await RS.loeschen(id); actions.rekorder();
+};
+actions.rekAllesWeg = async (v, el) => {
+  if (rekWegArm !== 'alle') { rekWegArm = 'alle'; el.textContent = 'Wirklich alle löschen? Nochmal tippen'; setTimeout(() => { rekWegArm = ''; }, 4000); return; }
+  rekWegArm = ''; await RS.allesLoeschen(); actions.rekorder('Alle Aufnahmen gelöscht.');
+};
+// Alle Aufnahmen in eine Datei: auf iPad und iPhone über „Teilen“ (dort gibt es kein einfaches Herunterladen), sonst als Download
+actions.rekSichern = async () => {
+  const text = await RS.paket(), name = `powershot-aufnahmen-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.json`;
+  try {
+    const datei = new File([text], name, { type: 'application/json' });
+    if (touchDevice && navigator.canShare && navigator.canShare({ files: [datei] })) { await navigator.share({ files: [datei], title: 'Powershot-Aufnahmen' }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; /* Teilen ging nicht – dann eben herunterladen */ }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+};
+
+// Eine Aufnahme im Stadion abspielen. Die Wiedergabe (js/wiedergabe.js) tut so, als wäre sie ein Match.
+const wgBox = $('#wgBox');
+let wgMal = 1, wgKey = '';
+actions.rekAbspielen = (id) => {
+  const a = rekListe.find((x) => x.id === id);
+  if (!a) return;
+  const K = a.kopf, sp = K.spieler || [];
+  const def = D.tournamentById(K.ort) || D.TOURNAMENTS[0];
+  const figur = (s, i) => ({ name: s.name || (i ? 'Gegner' : 'Du'), short: s.kurz || s.name || (i ? 'Gegner' : 'Du'), hand: s.hand || 1, look: s.look || {}, stats: s.stats || {} });
+  const me = figur(sp[0] || {}, 0), opp = figur(sp[1] || {}, 1);
+  hide();
+  menuVenue = def.id;
+  game.loadVenue(def);
+  game.setPlayers(me, opp);
+  game.tascheZeigen(null);
+  game.showAvatars(true);
+  controls.enabled = false;
+  const names = [me.short, opp.short];
+  session = { o: { title: '▶ Aufnahme vom ' + datumKurz(K.wann), def, me, opp, onEnd: () => actions.rekorder() }, names, over: false, mode: 'wiedergabe', wiedergabe: true, zugScore: 0, zuege: [0, 0] };
+  match = new Wiedergabe(a, game.makeFx(names), [me, opp]);
+  game.attach(match, hud);
+  paused = false;
+  hudEl.hidden = false;
+  $('#trainBox').classList.remove('on');
+  $('#scoreboard').style.display = match.mode === 'match' ? '' : 'none';
+  $('#hint').textContent = `${STEUERUNG_NAME[K.steuerung] || K.steuerung} · Stufe ${K.stufe} · Laufhilfe ${K.laufhilfe}`;
+  wgMal = K.tempoMal || 1; wgKey = '';
+  wgBox.classList.add('on');
+  hud.update();
+};
+function wiedergabeEnde() {
+  if (!session || !session.wiedergabe) return;
+  endMatch();
+  enterMenu();
+  actions.rekorder();
+}
+// Der Kasten unten bei der Wiedergabe: was gerade passiert ist, dazu Knöpfe für Punkt zurück/vor und das Tempo
+function wgFrame() {
+  const m = match, P = m.punkt;
+  const key = [m.i, m.zeilen.length, wgMal, paused].join('|');
+  if (key === wgKey) return;
+  wgKey = key;
+  const zeilen = m.zeilen.slice(-4).map((z, i, l) => `<div class="${i === l.length - 1 ? 'neu' : ''}">${esc(z)}</div>`).join('');
+  const tempo = [0.25, 0.5, 1, 2].map((t) => `<button class="${Math.abs(wgMal - t) < 0.13 ? 'an' : ''}" data-a="wgTempo" data-v="${t}">${t === 0.25 ? '¼' : t === 0.5 ? '½' : t}×</button>`).join('');
+  wgBox.innerHTML = `<div class="wgText"><b>Punkt ${P ? P.nr : m.anzahl} von ${m.anzahl}</b>${zeilen}</div>
+    <div class="wgKnopf"><button data-a="wgPunkt" data-v="-1">⏮</button><button data-a="wgPunkt" data-v="0">↺</button><button data-a="wgPunkt" data-v="1">⏭</button>${tempo}<button data-a="wgAus">✕</button></div>`;
+}
+actions.wgPunkt = (v) => { if (match && match.wiedergabe) { match.springe(match.i + (+v)); hud.update(); } };
+actions.wgTempo = (v) => { wgMal = +v; };
+actions.wgAus = () => wiedergabeEnde();
 
 // Für Tests: das Spiel von Hand um n Bilder weiterdrehen
 function step(n = 60) {
@@ -3229,7 +3384,7 @@ controls.onPause = () => togglePause();
 window.__powershotPad = (s) => { controls.nativePad = true; controls.setPad(s); };
 window.__powershotPadWeg = () => { controls.nativePad = false; controls.padWeg(); };
 
-window.__powershot = { game, controls, settings, step, kameraLauf, kameraBild, get match() { return match; }, get career() { return career; }, get season() { return season; }, actions, karte: gKarte, handy, foto: { start: fotoStart, knips: fotoKnips, ende: fotoEnde } };
+window.__powershot = { game, controls, settings, step, kameraLauf, kameraBild, get match() { return match; }, get career() { return career; }, get season() { return season; }, actions, rekorder: { speicher: RS, get laeuft() { return rek; }, get letzte() { return rekLetzte; } }, karte: gKarte, handy, foto: { start: fotoStart, knips: fotoKnips, ende: fotoEnde } };
 // Das Spielermodell laden (höchstens 8 Sekunden warten – sonst geht es mit den einfachen Figuren los)
 await Promise.race([Promise.all([loadFigure(), loadMocap(), loadGang(), ladeRequisiten()]), new Promise((r) => setTimeout(r, 8000))]);
 $('#loading').remove();
