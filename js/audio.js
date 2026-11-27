@@ -20,11 +20,12 @@ const STIMME_LAUT = 1.3;          // Lautstärke des Schiedsrichters (1 = so lau
 const LINIE_LAUT = 1.0;           // Lautstärke der Linienrichter
 export const KLAENGE = {
   // --- Match ---
-  schlag: { v: [1, 2, 3, 4, 5].map((n) => [`match/schlag_${n}.mp3`, 1]) },
-  slice: { v: [['match/slice_1.mp3', 1], ['match/slice_2.mp3', 1], ['match/slice_3.mp3', 1], ['match/ki_slice_1.mp3', 1]] },
-  aufschlag: { v: [['match/aufschlag_1.mp3', 1], ['match/aufschlag_2.mp3', 1], ['match/aufschlag_3.mp3', 1], ['match/ki_aufschlag_1.mp3', 1]] },
-  aufprall: { v: [1, 2, 3, 4, 5].map((n) => [`match/aufprall_${n}.mp3`, 1]) },
-  netz: { v: [1, 2, 3].map((n) => [`match/netz_${n}.mp3`, 0.5]) },
+  // Schlag, Aufschlag, Slice, Aufprall und Netz sind seit 27.11.2026 erzeugt (3D AI Studio), zugeschnitten mit tools/schlag_bau.py
+  schlag: { v: [1, 2, 3, 4].map((n) => [`match/ki_schlag_${n}.mp3`, 1]) },
+  slice: { v: [1, 2].map((n) => [`match/ki_slice_${n}.mp3`, 1]) },
+  aufschlag: { v: [1, 2].map((n) => [`match/ki_aufschlag_${n}.mp3`, 1.15]) },
+  aufprall: { v: [1, 2, 3, 4, 5].map((n) => [`match/ki_aufprall_${n}.mp3`, 1]) },
+  netz: { v: [1, 2, 3, 4].map((n) => [`match/ki_netz_${n}.mp3`, 0.5]) },
   quietschen: { v: [1, 2, 3, 4].map((n) => [`match/quietschen_${n}.mp3`, 0.12]) },
   rutschen: { v: [1, 2].map((n) => [`match/rutschen_${n}.mp3`, 0.25]) },
   // --- Publikum --- (Applaus: lang und laut / mittel / kurz). Seit 27.11.2026 erzeugt mit 3D AI Studio:
@@ -35,7 +36,7 @@ export const KLAENGE = {
   jubel: { bus: 'raum', v: [['publikum/jubel.mp3', 0.7]] },
   raunen: { bus: 'raum', v: [1, 2, 3].map((n) => [`publikum/raunen_${n}.mp3`, 0.5]) },
   schreck: { bus: 'raum', v: [1, 2, 3].map((n) => [`publikum/schreck_${n}.mp3`, 0.45]) },
-  stadion: { bus: 'raum', v: [['publikum/ki_stadion.mp3', 0.69]] },       // Schleife im Hintergrund (gebaut mit tools/stadion_bau.py)
+  stadion: { bus: 'raum', v: [['publikum/ki_stadion.mp3', 0.8]] },        // Schleife im Hintergrund (tools/stadion_bau.py)
   // --- Publikum je Spielsituation (seit 27.11.2026, erzeugt mit 3D AI Studio – siehe `reaktion` weiter unten) ---
   applausWenige: { bus: 'raum', v: [1, 2, 3].map((n) => [`publikum/ki_wenige_${n}.mp3`, 1]) },                  // eine Handvoll Leute am kleinen Platz
   applausJubel: { bus: 'raum', v: [['publikum/ki_jubel_1.mp3', 0.9], ['publikum/ki_jubel_2.mp3', 0.78], ['publikum/ki_jubel_3.mp3', 0.85]] },   // begeisterter Applaus mit Rufen und Pfiffen
