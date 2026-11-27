@@ -21,20 +21,21 @@ const LINIE_LAUT = 1.0;           // Lautstärke der Linienrichter
 export const KLAENGE = {
   // --- Match ---
   schlag: { v: [1, 2, 3, 4, 5].map((n) => [`match/schlag_${n}.mp3`, 1]) },
-  slice: { v: [1, 2, 3].map((n) => [`match/slice_${n}.mp3`, 1]) },
-  aufschlag: { v: [1, 2, 3, 4].map((n) => [`match/aufschlag_${n}.mp3`, 1]) },
+  slice: { v: [['match/slice_1.mp3', 1], ['match/slice_2.mp3', 1], ['match/slice_3.mp3', 1], ['match/ki_slice_1.mp3', 1]] },
+  aufschlag: { v: [['match/aufschlag_1.mp3', 1], ['match/aufschlag_2.mp3', 1], ['match/aufschlag_3.mp3', 1], ['match/ki_aufschlag_1.mp3', 1]] },
   aufprall: { v: [1, 2, 3, 4, 5].map((n) => [`match/aufprall_${n}.mp3`, 1]) },
   netz: { v: [1, 2, 3].map((n) => [`match/netz_${n}.mp3`, 0.5]) },
   quietschen: { v: [1, 2, 3, 4].map((n) => [`match/quietschen_${n}.mp3`, 0.12]) },
   rutschen: { v: [1, 2].map((n) => [`match/rutschen_${n}.mp3`, 0.25]) },
-  // --- Publikum --- (Applaus: lang und laut / mittel / kurz)
-  applausGross: { bus: 'raum', v: [['publikum/applaus_gross_1.mp3', 0.415], ['publikum/applaus_gross_2.mp3', 0.415]] },
-  applausMittel: { bus: 'raum', v: [['publikum/applaus_mittel_1.mp3', 0.345], ['publikum/applaus_mittel_2.mp3', 0.752]] },
-  applausKlein: { bus: 'raum', v: [['publikum/applaus_klein_1.mp3', 0.413], ['publikum/applaus_klein_2.mp3', 0.402], ['publikum/applaus_klein_3.mp3', 0.326]] },
+  // --- Publikum --- (Applaus: lang und laut / mittel / kurz). Seit 27.11.2026 erzeugt mit 3D AI Studio:
+  // In den alten Aufnahmen (Mitschnitte echter Matches) sprach im Hintergrund ein echter Schiedsrichter irgendeinen Spielstand.
+  applausGross: { bus: 'raum', v: [['publikum/ki_gross_1.mp3', 0.36], ['publikum/ki_gross_2.mp3', 0.42]] },
+  applausMittel: { bus: 'raum', v: [['publikum/ki_mittel_1.mp3', 0.42], ['publikum/ki_mittel_2.mp3', 0.43]] },
+  applausKlein: { bus: 'raum', v: [['publikum/ki_klein_1.mp3', 0.29], ['publikum/ki_klein_2.mp3', 0.29], ['publikum/ki_klein_3.mp3', 0.31]] },
   jubel: { bus: 'raum', v: [['publikum/jubel.mp3', 0.7]] },
   raunen: { bus: 'raum', v: [1, 2, 3].map((n) => [`publikum/raunen_${n}.mp3`, 0.5]) },
   schreck: { bus: 'raum', v: [1, 2, 3].map((n) => [`publikum/schreck_${n}.mp3`, 0.45]) },
-  stadion: { bus: 'raum', v: [['publikum/stadion.mp3', 0.78]] },          // Schleife im Hintergrund
+  stadion: { bus: 'raum', v: [['publikum/ki_stadion.mp3', 0.69]] },       // Schleife im Hintergrund (gebaut mit tools/stadion_bau.py)
   // --- Publikum je Spielsituation (seit 27.11.2026, erzeugt mit 3D AI Studio – siehe `reaktion` weiter unten) ---
   applausWenige: { bus: 'raum', v: [1, 2, 3].map((n) => [`publikum/ki_wenige_${n}.mp3`, 1]) },                  // eine Handvoll Leute am kleinen Platz
   applausJubel: { bus: 'raum', v: [['publikum/ki_jubel_1.mp3', 0.9], ['publikum/ki_jubel_2.mp3', 0.78], ['publikum/ki_jubel_3.mp3', 0.85]] },   // begeisterter Applaus mit Rufen und Pfiffen

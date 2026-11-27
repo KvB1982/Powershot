@@ -8,9 +8,8 @@ Wir nennen die Leute trotzdem, weil sie sich die Mühe gemacht haben. Danke!
 - Stand: 21.11.2026. Bei jeder Freesound-Aufnahme wurde die Lizenz auf der Seite der Aufnahme nachgesehen.
 - Für das Spiel wurde jede Aufnahme zugeschnitten (nur die Stelle, die gebraucht wird), auf ähnliche Lautstärke gebracht und als MP3 gespeichert.
 - Anhören: `python tools/server.py`, dann http://localhost:8765/tools/sounds.html · Prüfen: `node tools/sounds.mjs`
-- Von Freesound wurde die MP3-Fassung zum Vorhören geladen (gleiche Aufnahme, gleiche Lizenz). Applaus und Stadion stammen aus den beiden
-  Aufnahmen, die schon vorher im Spiel waren (damals über Pixabay geladen, Konto „freesound_community“); dass es die hier genannten
-  Freesound-Aufnahmen sind, wurde an Titel und Länge erkannt (298 s und 105 s).
+- Von Freesound wurde die MP3-Fassung zum Vorhören geladen (gleiche Aufnahme, gleiche Lizenz). Applaus und Stadion kommen seit 27.11.2026
+  nicht mehr von Freesound (siehe unten, „Publikum je Spielsituation“).
 - Die genaue Liste (welche Datei aus welcher Stelle welcher Aufnahme) steht in `quellen.json`.
 
 **Nicht nehmen** für neue Geräusche: Pixabay, Mixkit, Zapsplat und ähnliche Seiten. Dort ist das Benutzen im Spiel erlaubt, aber nicht das Weitergeben der Dateien –
@@ -23,14 +22,12 @@ und dieses Repository ist öffentlich. Bei Freesound nur „Creative Commons 0�
 | [Tennis-Ball-Hit](https://freesound.org/people/kletton97/sounds/710041/) | kletton97 | `match/schlag_5.mp3` |
 | [Tennis Slices 4](https://freesound.org/people/jamesdrake89/sounds/662268/) | jamesdrake89 | `match/slice_1.mp3`, `match/slice_2.mp3`, `match/slice_3.mp3` |
 | [Tennis Serves 3](https://freesound.org/people/jamesdrake89/sounds/662266/) | jamesdrake89 | `match/aufschlag_1.mp3`, `match/aufschlag_2.mp3` |
-| [tennis_serves.wav](https://freesound.org/people/itsadrizzit/sounds/439340/) | itsadrizzit | `match/aufschlag_3.mp3`, `match/aufschlag_4.mp3` |
+| [tennis_serves.wav](https://freesound.org/people/itsadrizzit/sounds/439340/) | itsadrizzit | `match/aufschlag_3.mp3` |
 | [TennisBallBounce.wav](https://freesound.org/people/drivr3joe/sounds/533410/) | drivr3joe | `match/aufprall_1.mp3`, `match/aufprall_2.mp3`, `match/aufprall_3.mp3` |
 | [Sports Tennis Ball Bouncing](https://freesound.org/people/amsaenz03/sounds/788264/) | amsaenz03 | `match/aufprall_4.mp3`, `match/aufprall_5.mp3` |
 | [Net Impact Tennis Ball Smacks Bounces](https://freesound.org/people/amsaenz03/sounds/788265/) | amsaenz03 | `match/netz_1.mp3`, `match/netz_2.mp3`, `match/netz_3.mp3` |
 | [sneaker squeak rubber.wav](https://freesound.org/people/shakaharu/sounds/88502/) | shakaharu | `match/quietschen_1.mp3`, `match/quietschen_2.mp3`, `match/quietschen_3.mp3`, `match/quietschen_4.mp3` |
 | [Footdrags Dirt.wav](https://freesound.org/people/worthahep88/sounds/319209/) | worthahep88 | `match/rutschen_1.mp3`, `match/rutschen_2.mp3` |
-| [tennis match.wav](https://freesound.org/people/huubjeroen/sounds/114052/) | huubjeroen | `publikum/applaus_gross_1.mp3`, `publikum/applaus_gross_2.mp3`, `publikum/applaus_mittel_1.mp3`, `publikum/applaus_klein_1.mp3`, `publikum/applaus_klein_2.mp3`, `publikum/applaus_klein_3.mp3`, `publikum/stadion.mp3` |
-| [43 Tennis.flac](https://freesound.org/people/D.jones/sounds/527843/) | D.jones | `publikum/applaus_mittel_2.mp3` |
 | [Crowd Cheer](https://freesound.org/people/FoolBoyMedia/sounds/397434/) | FoolBoyMedia | `publikum/jubel.mp3` |
 | [Crowd Ooohs and Ahhhs in Excitement](https://freesound.org/people/noah0189/sounds/264499/) | noah0189 | `publikum/raunen_1.mp3`, `publikum/raunen_2.mp3`, `publikum/raunen_3.mp3` |
 | [small crowd gasp shock surprise](https://freesound.org/people/HowardV/sounds/264376/) | HowardV | `publikum/schreck_1.mp3` |
@@ -58,6 +55,16 @@ auch gewerblich). Das sind keine fremden Aufnahmen und deshalb nicht CC0 – sie
 Arten: Applaus von wenigen, begeisterter Applaus, Ovation, Empfang, Stöhnen, Staunen, Gemurmel, „Schhh“, Klatschen im Takt.
 Die Beschreibung, mit der jede Art erzeugt wurde, steht in `quellen.json` (Feld `titel`). Zugeschnitten mit `tools/publikum_bau.py`,
 die Roh-Dateien liegen in den Projektdateien unter `publikum/roh/`.
+
+Am selben Tag sind auch die alten Applaus-Aufnahmen und die Stadion-Schleife ersetzt worden (`ki_klein_…`, `ki_mittel_…`, `ki_gross_…`,
+`ki_stadion.mp3`): Die alten waren Mitschnitte echter Tennis-Matches von Freesound, und darin sprach im Hintergrund ein echter
+Schiedsrichter irgendeinen Spielstand. Roh-Dateien: `publikum/roh2/`. Die Stadion-Schleife baut `tools/stadion_bau.py` aus den Murmel-Klängen.
+
+## Erzeugte Schläge (Dateien `match/ki_…`)
+
+`ki_aufschlag_1.mp3` und `ki_slice_1.mp3`: ebenfalls mit 3D AI Studio erzeugt, zugeschnitten mit `tools/schlag_bau.py`
+(Roh-Dateien in den Projektdateien unter `schlag/roh/`). Von 18 erzeugten Schlag-, Aufprall- und Netz-Klängen waren nur diese zwei
+brauchbar – die anderen waren fast still oder nur ein dumpfes Wummern.
 
 ## Stimmen (Ordner `stimme/`)
 

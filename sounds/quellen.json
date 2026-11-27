@@ -121,17 +121,6 @@
   "kb": 6.2
  },
  {
-  "datei": "sounds/match/aufschlag_4.mp3",
-  "was": "Aufschlag und Schmetterball",
-  "von": "itsadrizzit",
-  "titel": "tennis_serves.wav",
-  "url": "https://freesound.org/people/itsadrizzit/sounds/439340/",
-  "lizenz": "CC0 1.0",
-  "stelle": "41.81 s + 0.45 s",
-  "sek": 0.47,
-  "kb": 6.2
- },
- {
   "datei": "sounds/match/aufprall_1.mp3",
   "was": "Ball springt auf (Sand und Rasen: im Spiel dumpfer gemacht)",
   "von": "drivr3joe",
@@ -284,94 +273,6 @@
   "stelle": "3.94 s + 0.45 s",
   "sek": 0.5,
   "kb": 6.8
- },
- {
-  "datei": "sounds/publikum/applaus_gross_1.mp3",
-  "was": "Langer Applaus (Spiel, Satz, Sieg)",
-  "von": "huubjeroen",
-  "titel": "tennis match.wav",
-  "url": "https://freesound.org/people/huubjeroen/sounds/114052/",
-  "lizenz": "CC0 1.0",
-  "stelle": "121.8 s + 8.6 s",
-  "sek": 8.6,
-  "kb": 118.6
- },
- {
-  "datei": "sounds/publikum/applaus_gross_2.mp3",
-  "was": "Langer Applaus (Spiel, Satz, Sieg)",
-  "von": "huubjeroen",
-  "titel": "tennis match.wav",
-  "url": "https://freesound.org/people/huubjeroen/sounds/114052/",
-  "lizenz": "CC0 1.0",
-  "stelle": "287.6 s + 8.2 s",
-  "sek": 8.2,
-  "kb": 112.9
- },
- {
-  "datei": "sounds/publikum/applaus_mittel_1.mp3",
-  "was": "Mittlerer Applaus (schöner Punkt)",
-  "von": "huubjeroen",
-  "titel": "tennis match.wav",
-  "url": "https://freesound.org/people/huubjeroen/sounds/114052/",
-  "lizenz": "CC0 1.0",
-  "stelle": "193.6 s + 6.2 s",
-  "sek": 6.2,
-  "kb": 85.8
- },
- {
-  "datei": "sounds/publikum/applaus_mittel_2.mp3",
-  "was": "Mittlerer Applaus (schöner Punkt)",
-  "von": "D.jones",
-  "titel": "43 Tennis.flac",
-  "url": "https://freesound.org/people/D.jones/sounds/527843/",
-  "lizenz": "CC0 1.0",
-  "stelle": "91.6 s + 6.2 s",
-  "sek": 6.2,
-  "kb": 85.8
- },
- {
-  "datei": "sounds/publikum/applaus_klein_1.mp3",
-  "was": "Kurzer Applaus",
-  "von": "huubjeroen",
-  "titel": "tennis match.wav",
-  "url": "https://freesound.org/people/huubjeroen/sounds/114052/",
-  "lizenz": "CC0 1.0",
-  "stelle": "21.6 s + 4.6 s",
-  "sek": 4.6,
-  "kb": 64.0
- },
- {
-  "datei": "sounds/publikum/applaus_klein_2.mp3",
-  "was": "Kurzer Applaus",
-  "von": "huubjeroen",
-  "titel": "tennis match.wav",
-  "url": "https://freesound.org/people/huubjeroen/sounds/114052/",
-  "lizenz": "CC0 1.0",
-  "stelle": "157.6 s + 4.6 s",
-  "sek": 4.6,
-  "kb": 64.0
- },
- {
-  "datei": "sounds/publikum/applaus_klein_3.mp3",
-  "was": "Kurzer Applaus",
-  "von": "huubjeroen",
-  "titel": "tennis match.wav",
-  "url": "https://freesound.org/people/huubjeroen/sounds/114052/",
-  "lizenz": "CC0 1.0",
-  "stelle": "89.6 s + 4.6 s",
-  "sek": 4.6,
-  "kb": 64.0
- },
- {
-  "datei": "sounds/publikum/stadion.mp3",
-  "was": "Leises Stadion im Hintergrund (Schleife)",
-  "von": "huubjeroen",
-  "titel": "tennis match.wav",
-  "url": "https://freesound.org/people/huubjeroen/sounds/114052/",
-  "lizenz": "CC0 1.0",
-  "stelle": "54.5 s + 13 s",
-  "sek": 13.01,
-  "kb": 179.0
  },
  {
   "datei": "sounds/publikum/jubel.mp3",
@@ -944,5 +845,115 @@
   "stelle": "ganz, hinten gekürzt und ausgeblendet (tools/publikum_bau.py)",
   "sek": 4.73,
   "kb": 46.5
+ },
+ {
+  "datei": "sounds/publikum/ki_klein_1.mp3",
+  "was": "Kurzer Applaus (nach einem Punkt)",
+  "von": "3D AI Studio (erzeugt am 27.11.2026)",
+  "titel": "Tennis stadium audience applause, short polite hand clapping from a large crowd after a point, only clapping, no voices, no announcer",
+  "url": "https://www.3daistudio.com/",
+  "lizenz": "erzeugt (3D AI Studio)",
+  "stelle": "ganz, hinten gekürzt und ausgeblendet (tools/publikum_bau.py)",
+  "sek": 4.44,
+  "kb": 43.7
+ },
+ {
+  "datei": "sounds/publikum/ki_klein_2.mp3",
+  "was": "Kurzer Applaus (nach einem Punkt)",
+  "von": "3D AI Studio (erzeugt am 27.11.2026)",
+  "titel": "Tennis stadium audience applause, short polite hand clapping from a large crowd after a point, only clapping, no voices, no announcer",
+  "url": "https://www.3daistudio.com/",
+  "lizenz": "erzeugt (3D AI Studio)",
+  "stelle": "ganz, hinten gekürzt und ausgeblendet (tools/publikum_bau.py)",
+  "sek": 3.94,
+  "kb": 38.8
+ },
+ {
+  "datei": "sounds/publikum/ki_klein_3.mp3",
+  "was": "Kurzer Applaus (nach einem Punkt)",
+  "von": "3D AI Studio (erzeugt am 27.11.2026)",
+  "titel": "Tennis stadium audience applause, short polite hand clapping from a large crowd after a point, only clapping, no voices, no announcer",
+  "url": "https://www.3daistudio.com/",
+  "lizenz": "erzeugt (3D AI Studio)",
+  "stelle": "ganz, hinten gekürzt und ausgeblendet (tools/publikum_bau.py)",
+  "sek": 4.75,
+  "kb": 46.7
+ },
+ {
+  "datei": "sounds/publikum/ki_mittel_1.mp3",
+  "was": "Mittlerer Applaus (guter Ballwechsel, Spiel)",
+  "von": "3D AI Studio (erzeugt am 27.11.2026)",
+  "titel": "Tennis stadium audience applause, warm steady hand clapping from a large crowd after a good rally, only clapping, no voices, no announcer",
+  "url": "https://www.3daistudio.com/",
+  "lizenz": "erzeugt (3D AI Studio)",
+  "stelle": "ganz, hinten gekürzt und ausgeblendet (tools/publikum_bau.py)",
+  "sek": 7.08,
+  "kb": 69.4
+ },
+ {
+  "datei": "sounds/publikum/ki_mittel_2.mp3",
+  "was": "Mittlerer Applaus (guter Ballwechsel, Spiel)",
+  "von": "3D AI Studio (erzeugt am 27.11.2026)",
+  "titel": "Tennis stadium audience applause, warm steady hand clapping from a large crowd after a good rally, only clapping, no voices, no announcer",
+  "url": "https://www.3daistudio.com/",
+  "lizenz": "erzeugt (3D AI Studio)",
+  "stelle": "ganz, hinten gekürzt und ausgeblendet (tools/publikum_bau.py)",
+  "sek": 7.03,
+  "kb": 68.9
+ },
+ {
+  "datei": "sounds/publikum/ki_gross_1.mp3",
+  "was": "Langer Applaus (Satz, Sieg)",
+  "von": "3D AI Studio (erzeugt am 27.11.2026)",
+  "titel": "Big tennis stadium crowd, long loud enthusiastic applause from thousands of people with a few distant whistles, no speech, no announcer",
+  "url": "https://www.3daistudio.com/",
+  "lizenz": "erzeugt (3D AI Studio)",
+  "stelle": "ganz, hinten gekürzt und ausgeblendet (tools/publikum_bau.py)",
+  "sek": 8.88,
+  "kb": 87.0
+ },
+ {
+  "datei": "sounds/publikum/ki_gross_2.mp3",
+  "was": "Langer Applaus (Satz, Sieg)",
+  "von": "3D AI Studio (erzeugt am 27.11.2026)",
+  "titel": "Big tennis stadium crowd, long loud enthusiastic applause from thousands of people with a few distant whistles, no speech, no announcer",
+  "url": "https://www.3daistudio.com/",
+  "lizenz": "erzeugt (3D AI Studio)",
+  "stelle": "ganz, hinten gekürzt und ausgeblendet (tools/publikum_bau.py)",
+  "sek": 9.51,
+  "kb": 93.2
+ },
+ {
+  "datei": "sounds/publikum/ki_stadion.mp3",
+  "was": "Leises Stadion im Hintergrund (Schleife)",
+  "von": "3D AI Studio (erzeugt am 27.11.2026)",
+  "titel": "Tense quiet murmur of a tennis crowd (dieselben Roh-Dateien wie ki_gemurmel)",
+  "url": "https://www.3daistudio.com/",
+  "lizenz": "erzeugt (3D AI Studio)",
+  "stelle": "aus gemurmel_1 und gemurmel_2 gebaut: gleich laut gemacht, dumpfer, vorwärts und rückwärts ineinander geblendet (tools/stadion_bau.py)",
+  "sek": 14.84,
+  "kb": 174.2
+ },
+ {
+  "datei": "sounds/match/ki_aufschlag_1.mp3",
+  "was": "Aufschlag und Schmetterball",
+  "von": "3D AI Studio (erzeugt am 27.11.2026)",
+  "titel": "Single powerful tennis serve impact, racket strings smashing a tennis ball very hard, loud sharp crack, close microphone, one-shot",
+  "url": "https://www.3daistudio.com/",
+  "lizenz": "erzeugt (3D AI Studio)",
+  "stelle": "0 s + 0.3 s aus Aufnahme 4 (tools/schlag_bau.py)",
+  "sek": 0.34,
+  "kb": 4.3
+ },
+ {
+  "datei": "sounds/match/ki_slice_1.mp3",
+  "was": "Slice und Stoppball",
+  "von": "3D AI Studio (erzeugt am 27.11.2026)",
+  "titel": "Single soft tennis slice shot, racket strings brushing under a tennis ball, gentle muted swish and soft pop, one-shot",
+  "url": "https://www.3daistudio.com/",
+  "lizenz": "erzeugt (3D AI Studio)",
+  "stelle": "0.68 s + 0.25 s aus Aufnahme 2 (tools/schlag_bau.py)",
+  "sek": 0.29,
+  "kb": 3.7
  }
 ]
