@@ -6,12 +6,12 @@
 // Welche Aufnahmen gibt es für welches Geräusch? Mehrere Dateien = es wird jedes Mal eine andere genommen, damit es echter klingt.
 // Die Zahl hinter dem Dateinamen ist die Lautstärke (1 = so laut wie die Datei ist). Zu laut oder zu leise? Hier ändern.
 // bus: 'raum' = Publikum und Umgebung (lässt sich in den Einstellungen leiser stellen), sonst zählt nur die Lautstärke.
-import { dateienFuer, LINIE } from './stimme.js';
+import { dateienFuer, LINIE, LUECKE } from './stimme.js';
+import { baueLautsprecher, sprechTeil } from './lautsprecher.js';
 const D = new URL('../sounds/', import.meta.url).href;      // der Ordner sounds/ (liegt neben dem Ordner js/)
 // Stimmen von Schiedsrichter und Linienrichtern (Aufnahmen in sounds/stimme/, was gesagt wird steht in js/stimme.js)
 const STIMME_LAUT = 1.3;          // Lautstärke des Schiedsrichters (1 = so laut wie die Datei ist). Zu leise oder zu laut? Hier ändern.
 const LINIE_LAUT = 1.0;           // Lautstärke der Linienrichter
-const STIMME_LUECKE = 0.05;       // winzige Pause zwischen zwei Aufnahmen einer Ansage (Sekunden)
 export const KLAENGE = {
   // --- Match ---
   schlag: { v: [1, 2, 3, 4, 5].map((n) => [`match/schlag_${n}.mp3`, 1]) },
@@ -61,6 +61,9 @@ export class Sound {
     this.ctx = null;
     this.enabled = true;
     this.stimme = 'aufnahme';     // Wer spricht? 'aufnahme' = die aufgenommenen Stimmen (Englisch), 'geraet' = Sprachausgabe des Geräts (Deutsch), 'aus'
+    this.durchsage = 'an';        // 'an' = der Schiedsrichter klingt wie über Mikrofon und Stadion-Lautsprecher (js/lautsprecher.js), 'aus' = Stimme pur
+    this.box = null;              // der Lautsprecher (wird beim ersten Mal gebaut)
+    this.ortWunsch = [1, false];  // wo wir gerade spielen: [wie groß das Stadion ist, Halle?]
     this.stimmen = {};            // geladene Stimmen-Aufnahmen: 'en/deuce' → Tonspur
     this.sprichtBis = 0;          // bis zu diesem Zeitpunkt redet der Schiedsrichter noch
     this.spricht = [];            // was der Schiedsrichter gerade sagt (damit man ihn unterbrechen kann)
@@ -403,7 +406,9 @@ export class Sound {
     const holen = async (clip) => {
       try {
         const data = await (await fetch(D + 'stimme/' + clip + '.mp3')).arrayBuffer();
-        this.stimmen[clip] = await new Promise((ok, err) => this.ctx.decodeAudioData(data, ok, err));
+        const buf = await new Promise((ok, err) => this.ctx.decodeAudioData(data, ok, err));
+        buf.teil = sprechTeil(buf);          // wo in der Aufnahme wirklich gesprochen wird (ohne die Stille vorn und hinten)
+        this.stimmen[clip] = buf;
       } catch (e) { console.warn('Stimme fehlt:', clip, e); }
     };
     // Die Namen zuerst (es sind nur zwei), dann der Rest – immer acht Dateien gleichzeitig, damit es schnell geht
@@ -440,12 +445,29 @@ export class Sound {
       src.buffer = this.stimmen[teil];
       const g = this.ctx.createGain();
       g.gain.value = STIMME_LAUT;
-      src.connect(g).connect(this.master);
-      src.start(t);
+      src.connect(g).connect(this.stimmeZiel());
+      const { ab, lang } = src.buffer.teil || { ab: 0, lang: src.buffer.duration };
+      src.start(t, ab, lang);              // nur das gesprochene Stück, sonst werden die Pausen zwischen den Aufnahmen zu lang
       this.spricht.push(src);
-      t += src.buffer.duration + STIMME_LUECKE;
+      t += lang + LUECKE;
     }
     this.sprichtBis = t;
+  }
+
+  // Wohin geht die Stimme des Schiedsrichters? Durch den Stadion-Lautsprecher (wenn er an ist) oder direkt ins Ohr.
+  stimmeZiel() {
+    if (this.durchsage !== 'an') return this.master;
+    if (!this.box) {
+      try { this.box = baueLautsprecher(this.ctx, this.master); this.box.ort(...this.ortWunsch); }
+      catch (e) { console.warn('Lautsprecher geht nicht:', e); this.durchsage = 'aus'; return this.master; }
+    }
+    return this.box.eingang;
+  }
+  // Sagt dem Lautsprecher, wo gespielt wird: gross = wie groß und voll das Stadion ist (0 … 1), halle = unter einem Dach.
+  // Im großen Stadion hört man mehr Echo, in der Halle mehr Hall.
+  stimmeOrt(gross = 1, halle = false) {
+    this.ortWunsch = [gross, halle];
+    if (this.box) this.box.ort(gross, halle);
   }
 
   // Der Schiedsrichter hört mitten im Satz auf (weil schon die nächste Ansage kommt)

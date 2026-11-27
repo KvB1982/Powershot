@@ -45,7 +45,8 @@ export const NAMEN = new Set(`
 `.split(/\s+/).filter(Boolean));
 
 // Zahlen zum Einstellen
-export const PAUSE = 0.32;          // Pause zwischen zwei Sätzen einer Ansage (Sekunden)
+export const PAUSE = 0.2;           // Pause zwischen zwei Sätzen einer Ansage (Sekunden) – „Thirty forty. | Break point.“
+export const LUECKE = 0.05;         // Pause zwischen zwei Aufnahmen im selben Satz (Sekunden) – „Advantage | Sinner“. Gemessen ohne die Stille in den Dateien
 export const QUIET_OFT = 0.3;       // so oft bittet der Schiedsrichter vor einem Satz- oder Matchball um Ruhe (0.3 = bei 3 von 10)
 
 // Aus einem Namen wird das Kürzel der Aufnahme: "J. M. Cerundolo" → "cerundolo", "Davidovich F." → "davidovich", "Rütli" → "rutli"

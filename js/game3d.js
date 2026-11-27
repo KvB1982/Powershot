@@ -352,6 +352,7 @@ export class Game3D {
     const snd = this.sound, self = this;
     const hud = () => self.hud || {};
     const call = (f, ...a) => { const h = hud(); if (h[f]) h[f](...a); };
+    snd.stimmeOrt(this.venue ? this.venue.zuschauer ?? 1 : 1, !!this.venue && this.venue.surface === 'indoor');   // Lautsprecher-Klang: großes Stadion = mehr Echo, Halle = mehr Hall
     snd.stimmeLaden(names);          // die Stimmen von Schiedsrichter und Linienrichtern holen (und die zwei Namen)
     let erster = true;               // der allererste Aufschlag des Matches? Dann sagt der Schiedsrichter "Play"
     self.wechselLief = false;

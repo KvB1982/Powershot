@@ -88,6 +88,8 @@ const ASSIST_NAMES = { voll: 'Voll (läuft von allein)', seitlich: 'Nur seitlich
 // ---------------------------------------------------------------
 const sound = new Sound();
 sound.stimme = settings.stimme;
+if (!['an', 'aus'].includes(settings.durchsage)) settings.durchsage = 'an';   // Schiedsrichter klingt wie über Stadion-Lautsprecher
+sound.durchsage = settings.durchsage;
 sound.volume = settings.volume;
 sound.umgebung = settings.umgebung;      // Publikum und Umgebung: 1 normal, 0.5 leise, 0 aus
 sound.enabled = settings.sound;
@@ -455,6 +457,9 @@ actions.settings = (v) => {
       ${optionRow('Schiedsrichter und Linienrichter', 'stimme', { aufnahme: 'Englisch (wie im Fernsehen)', geraet: 'Deutsch (Stimme des Geräts)', aus: 'Aus' })}
       <p class="dim" style="margin:6px 0 0;font-size:13px">„Englisch“: aufgenommene Stimmen wie bei einem echten Turnier – „Fifteen love“ heißt 15:0, „Deuce“ Einstand,
         „Advantage“ Vorteil, „Out“ Aus, „Fault“ Fehler. Auf dem Bildschirm steht alles weiter auf Deutsch.</p>
+      ${optionRow('Schiedsrichter über Lautsprecher', 'durchsage', { an: 'An (wie im Stadion)', aus: 'Aus (Stimme pur)' })}
+      <p class="dim" style="margin:6px 0 0;font-size:13px">„An“: Der Schiedsrichter klingt wie durch ein Mikrofon – im großen Stadion mit Echo, in der Halle mit Hall.
+        Gilt nur für die aufgenommenen Stimmen. Die Linienrichter rufen ohne Mikrofon.</p>
       ${optionRow('Grafik', 'quality', { hoch: 'Schön', niedrig: 'Schnell (ältere Geräte)' })}
       ${optionRow('Bildschärfe', 'schaerfe', { auto: 'Automatisch', fest: 'Immer voll' })}
       <p class="dim" style="margin:6px 0 0;font-size:13px">„Automatisch“: Wenn das Bild ruckelt (zum Beispiel auf einem großen Turniergelände), malt das Spiel
@@ -493,6 +498,7 @@ actions.set = (v, el) => {
   settings[key] = val;
   saveSettings();
   sound.stimme = settings.stimme;
+  sound.durchsage = settings.durchsage;
   if (key === 'stimme') { sound.still(); sound.stimmeLaden(); }       // gerade auf „Englisch“ gestellt? Dann die Aufnahmen holen
   sound.setVolume(settings.volume);
   sound.setUmgebung(settings.umgebung);

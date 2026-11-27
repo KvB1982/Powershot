@@ -18,6 +18,15 @@
 <p>Hier kannst du jede Aufnahme einzeln anhören. Klingt eine falsch (ein Name wird komisch ausgesprochen, ein Ruf ist zu leise)?
   Dann merk dir, was auf dem Knopf steht – das ist auch der Name der Datei in <code>sounds/stimme/</code>.</p>
 
+<p><b>Schiedsrichter über Lautsprecher:</b>
+  <select id="box">
+    <option value="gross">großes Stadion (wie im Spiel bei großen Turnieren)</option>
+    <option value="klein">kleiner Platz</option>
+    <option value="halle">Halle</option>
+    <option value="aus">aus (Stimme pur)</option>
+  </select>
+  – die Linienrichter rufen immer ohne Mikrofon.</p>
+
 <h2>So klingt es im Match (mehrere Aufnahmen hintereinander)</h2>
 <div id="bsp"></div>
 <h2>Schiedsrichter</h2>
@@ -28,22 +37,51 @@
 <div id="namen"></div>
 
 <script type="module">
-// Diese Seite benutzt dieselben Listen wie das Spiel (js/stimme.js) und spielt die Dateien ganz einfach nacheinander ab.
-import { ANSAGEN, ANSAGE_TEXT, LINIE, NAMEN, PAUSE } from '../js/stimme.js';
+// Diese Seite benutzt dieselben Listen wie das Spiel (js/stimme.js) und spielt die Ansagen genauso ab wie das Spiel.
+import { ANSAGEN, ANSAGE_TEXT, LINIE, NAMEN, PAUSE, LUECKE } from '../js/stimme.js';
+import { baueLautsprecher, sprechTeil } from '../js/lautsprecher.js';
+// Derselbe Lautsprecher-Klang und dieselben Pausen wie im Spiel (js/lautsprecher.js, js/audio.js).
+// Der Ton-Baukasten wird beim ersten Knopfdruck gebaut (Browser-Regel).
+let ctx = null, box = null, laeuft = [], lauf = 0;
 const ORDNER = '../sounds/stimme/';
-const warte = (s) => new Promise((ok) => setTimeout(ok, s * 1000));
-let lauf = 0;
+const spuren = {};
+const ORTE = { gross: [1, false], klein: [0.2, false], halle: [1, true] };
+async function hole(clip) {
+  if (!spuren[clip]) {
+    const data = await (await fetch(ORDNER + clip + '.mp3')).arrayBuffer();
+    const buf = await new Promise((ok, err) => ctx.decodeAudioData(data, ok, err));
+    buf.teil = sprechTeil(buf);
+    spuren[clip] = buf;
+  }
+  return spuren[clip];
+}
 // Spielt eine Ansage ab: Texte sind Aufnahmen, Zahlen sind Pausen
 async function spiele(teile, knopf) {
   const ich = ++lauf;
+  if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); box = baueLautsprecher(ctx, ctx.destination); }
+  if (ctx.state !== 'running') ctx.resume();
+  for (const s of laeuft) { try { s.stop(); } catch (e) { /* war schon fertig */ } }
+  laeuft = [];
+  document.querySelectorAll('button.an').forEach((b) => b.classList.remove('an'));
   knopf.classList.add('an');
-  for (const t of teile) {
-    if (ich !== lauf) break;
-    if (typeof t === 'number') { await warte(t); continue; }
-    const a = new Audio(ORDNER + t + '.mp3');
-    await new Promise((ok) => { a.onended = ok; a.onerror = ok; a.play().catch(ok); });
+  try { await Promise.all(teile.filter((t) => typeof t === 'string').map(hole)); } catch (e) { console.warn('Aufnahme fehlt:', e); }
+  if (ich !== lauf) return;
+  const wahl = document.querySelector('#box').value;
+  if (wahl !== 'aus') box.ort(...ORTE[wahl]);
+  let t = ctx.currentTime + 0.05;
+  for (const teil of teile) {
+    if (typeof teil === 'number') { t += teil; continue; }
+    const buf = spuren[teil];
+    if (!buf) continue;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    // nur der Schiedsrichter spricht ins Mikrofon, die Linienrichter rufen so
+    src.connect(wahl !== 'aus' && !teil.startsWith('linie/') ? box.eingang : ctx.destination);
+    src.start(t, buf.teil.ab, buf.teil.lang);
+    laeuft.push(src);
+    t += buf.teil.lang + LUECKE;
   }
-  knopf.classList.remove('an');
+  setTimeout(() => { if (ich === lauf) knopf.classList.remove('an'); }, (t - ctx.currentTime) * 1000);
 }
 function knopf(wo, text, teile) {
   const b = document.createElement('button');
