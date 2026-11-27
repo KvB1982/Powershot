@@ -60,6 +60,10 @@ xcodebuild -project Powershot.xcodeproj -scheme Powershot -configuration Release
 xcodebuild -exportArchive -archivePath ~/Library/Developer/Xcode/Archives/Powershot.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath ~/Library/Developer/Xcode/Archives/Powershot-export -allowProvisioningUpdates
 ```
 
+**Am einfachsten:** im Ordner `ios/` das Skript `./testflight.sh` starten. Es baut das Archiv und lädt es hoch – mit dem
+App-Store-Connect-Schlüssel, falls `~/.appstoreconnect/powershot.env` (zwei Zeilen: `ASC_KEY_ID`, `ASC_ISSUER_ID`) und die Datei
+`~/.appstoreconnect/private_keys/AuthKey_<ID>.p8` da sind. Der Schlüssel läuft nicht ab und gehört nie ins Projekt.
+
 Bei jedem neuen Upload muss die Build-Nummer steigen (Ziel „Powershot“ → General → Build).
 
 ## Bewegungsaufnahmen (nur privat)

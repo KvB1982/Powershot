@@ -8,13 +8,15 @@
 # ein Programm Builds hochladen darf, ohne dass sich jemand in Xcode anmelden muss. Er läuft nicht ab.
 #
 # Der Schlüssel selbst (Datei AuthKey_….p8) ist geheim und liegt NIE hier im Projekt, sondern im
-# Benutzerordner unter ~/.appstoreconnect/private_keys/. Hier im Projekt steht nur, WELCHER Schlüssel
-# gemeint ist – in der Datei ios/testflight.env (die wird nicht zu GitHub übertragen):
+# Benutzerordner unter ~/.appstoreconnect/private_keys/. Daneben liegt eine kleine Datei, in der steht,
+# WELCHER Schlüssel gemeint ist: ~/.appstoreconnect/powershot.env (genau wie bei Rennspiel und Flugsimulator).
+# Darin stehen zwei Zeilen:
 #
 #   ASC_KEY_ID=ABC123DEFG                               ← Schlüssel-ID (10 Zeichen)
 #   ASC_ISSUER_ID=12345678-1234-1234-1234-123456789012  ← Issuer-ID (Aussteller)
 #
 # Fehlt diese Datei, versucht das Skript den Upload mit der Anmeldung aus Xcode (wie früher).
+# (Zur Not geht auch eine Datei ios/testflight.env mit denselben zwei Zeilen – sie wird nicht zu GitHub übertragen.)
 set -e
 cd "$(dirname "$0")"
 
@@ -23,21 +25,23 @@ DATEN="$HOME/Library/Developer/Xcode/DerivedData/Powershot-cli"
 NUMMER=$(grep -m1 -o "CURRENT_PROJECT_VERSION = [0-9]*" Powershot.xcodeproj/project.pbxproj | grep -o "[0-9]*$")
 ARCHIV="$ARCHIVE/Powershot-1.0-$NUMMER.xcarchive"
 
-# Den Schlüssel suchen (nur wenn testflight.env da ist)
+# Den Schlüssel suchen (nur wenn die kleine Datei mit den zwei IDs da ist)
 SCHLUESSEL=""
-if [ -f testflight.env ]; then
-  . ./testflight.env
+ANGABEN="$HOME/.appstoreconnect/powershot.env"
+[ -f "$ANGABEN" ] || ANGABEN="./testflight.env"
+if [ -f "$ANGABEN" ]; then
+  . "$ANGABEN"
   DATEI="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
   if [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ]; then
-    echo "In testflight.env fehlt ASC_KEY_ID oder ASC_ISSUER_ID."; exit 1
+    echo "In $ANGABEN fehlt ASC_KEY_ID oder ASC_ISSUER_ID."; exit 1
   fi
   if [ ! -f "$DATEI" ]; then
     echo "Die Schlüssel-Datei fehlt: $DATEI"; exit 1
   fi
   SCHLUESSEL="-authenticationKeyPath $DATEI -authenticationKeyID $ASC_KEY_ID -authenticationKeyIssuerID $ASC_ISSUER_ID"
-  echo "Upload mit API-Schlüssel $ASC_KEY_ID."
+  echo "Upload mit API-Schlüssel (Angaben aus $ANGABEN)."
 else
-  echo "Keine testflight.env gefunden – Upload mit der Anmeldung aus Xcode."
+  echo "Keine powershot.env gefunden – Upload mit der Anmeldung aus Xcode."
 fi
 
 if [ "$1" != "--nur-upload" ]; then
