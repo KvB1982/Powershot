@@ -669,8 +669,12 @@ export class Avatar {
         }
         let ges = 0;
         for (const [f, anteil] of teile) { ges += anteil; bein = bein ? mocapMix(bein, f, anteil / ges) : f; }
-        a.beinWeg = weg / ges;
-        beinW = a.beinK * (1 - walkK);
+        // Nur wenn wirklich eine Bein-Aufnahme zusammengekommen ist. (Sind alle drei Anteile winzig, bleibt die Liste
+        // leer – dann laufen die Beine in diesem Augenblick wie früher mit dem gebauten Schritt, statt abzustürzen.)
+        if (bein) {
+          a.beinWeg = weg / ges;
+          beinW = a.beinK * (1 - walkK);
+        }
       }
     } else a.beinK = 0;
 
