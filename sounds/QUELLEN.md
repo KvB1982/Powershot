@@ -52,13 +52,20 @@ Am selben Tag sind auch die alten Applaus-Aufnahmen und die Stadion-Schleife ers
 Schiedsrichter irgendeinen Spielstand. Roh-Dateien: `publikum/roh2/`. Die Stadion-Schleife ist eine eigens erzeugte Schleife von 20 s
 (`schlag/roh2/stadion.wav`), mit `tools/stadion_bau.py` gleichmäßiger und lauter gemacht.
 
-## Erzeugte Schläge (Dateien `match/ki_…`)
+## Schläge: echte Aufnahmen, Aufprall und Netz erzeugt
 
-Schlag, Slice, Aufschlag, Aufprall und Netz (17 Dateien) sind ebenfalls am 27.11.2026 mit 3D AI Studio erzeugt und ersetzen die
-Freesound-Aufnahmen (Kristian: „hören sich nicht gut an, sollte realistischer sein“). Erzeugt wurden 42 Klänge in zwei Durchgängen;
-etwa die Hälfte war unbrauchbar (fast still oder nur ein dumpfes Wummern). Welches Stück aus welcher Roh-Datei kommt, steht in
-`tools/schlag_bau.py` (`STUECKE`), die Roh-Dateien liegen in den Projektdateien unter `schlag/roh/` und `schlag/roh2/`.
-Quietschen und Rutschen der Schuhe sind weiter von Freesound.
+Die erzeugten Schlag-Geräusche vom 27.11.2026 klangen nicht nach Tennis (Kristian: „haben absolut gar nichts mit echten
+Tennisschlag-Geräuschen zu tun“). Deshalb sind Schlag, Slice und Aufschlag jetzt wieder **echte Aufnahmen von Freesound (CC0)**,
+die Kristian auf `tools/schlag_probe.html` selbst angehört und ausgesucht hat:
+
+| Dateien | Aufnahme | Von | Lizenz |
+|---|---|---|---|
+| `match/vorhand_1…6.mp3` | [Tennis Forehand 2](https://freesound.org/people/jamesdrake89/sounds/662263/) | jamesdrake89 | CC0 1.0 |
+| `match/schnitt_1…4.mp3` | [Tennis Slices 2](https://freesound.org/people/jamesdrake89/sounds/662269/) | jamesdrake89 | CC0 1.0 |
+| `match/einzel_1.mp3` | [SFXTennis-EXT_Hitting a tennis ball](https://freesound.org/people/rvdw2004/sounds/709678/) | rvdw2004 | CC0 1.0 |
+
+Aufprall und Netz (9 Dateien `match/ki_…`) sind weiter mit 3D AI Studio erzeugt (`tools/schlag_bau.py`, Roh-Dateien in den
+Projektdateien unter `schlag/roh/` und `schlag/roh2/`). Quietschen und Rutschen der Schuhe sind von Freesound.
 
 ## Stimmen (Ordner `stimme/`)
 

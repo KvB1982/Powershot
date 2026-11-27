@@ -20,10 +20,11 @@ const STIMME_LAUT = 1.3;          // Lautstärke des Schiedsrichters (1 = so lau
 const LINIE_LAUT = 1.0;           // Lautstärke der Linienrichter
 export const KLAENGE = {
   // --- Match ---
-  // Schlag, Aufschlag, Slice, Aufprall und Netz sind seit 27.11.2026 erzeugt (3D AI Studio), zugeschnitten mit tools/schlag_bau.py
-  schlag: { v: [1, 2, 3, 4].map((n) => [`match/ki_schlag_${n}.mp3`, 1]) },
-  slice: { v: [1, 2].map((n) => [`match/ki_slice_${n}.mp3`, 1]) },
-  aufschlag: { v: [1, 2].map((n) => [`match/ki_aufschlag_${n}.mp3`, 1.15]) },
+  // Schläge: echte Aufnahmen von Freesound (CC0), die Kristian am 27.11.2026 selbst ausgesucht hat (tools/schlag_probe.html).
+  // Aufprall und Netz sind erzeugt (3D AI Studio), zugeschnitten mit tools/schlag_bau.py
+  schlag: { v: [1, 2, 3, 4, 5, 6].map((n) => [`match/vorhand_${n}.mp3`, 1]) },
+  slice: { v: [1, 2, 3, 4].map((n) => [`match/schnitt_${n}.mp3`, 1]) },
+  aufschlag: { v: [['match/einzel_1.mp3', 1.15], ['match/vorhand_2.mp3', 1.15], ['match/vorhand_5.mp3', 1.15]] },
   aufprall: { v: [1, 2, 3, 4, 5].map((n) => [`match/ki_aufprall_${n}.mp3`, 1]) },
   netz: { v: [1, 2, 3, 4].map((n) => [`match/ki_netz_${n}.mp3`, 0.5]) },
   quietschen: { v: [1, 2, 3, 4].map((n) => [`match/quietschen_${n}.mp3`, 0.12]) },

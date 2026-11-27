@@ -770,28 +770,6 @@
   "kb": 2.8
  },
  {
-  "datei": "sounds/match/ki_aufschlag_1.mp3",
-  "was": "Aufschlag und Schmetterball",
-  "von": "3D AI Studio (erzeugt am 27.11.2026)",
-  "titel": "Powerful tennis serve, racket smashing the ball, very loud sharp crack and pop, single hit",
-  "url": "https://www.3daistudio.com/",
-  "lizenz": "erzeugt (3D AI Studio)",
-  "stelle": "ein Stück, siehe STUECKE in tools/schlag_bau.py",
-  "sek": 0.34,
-  "kb": 4.3
- },
- {
-  "datei": "sounds/match/ki_aufschlag_2.mp3",
-  "was": "Aufschlag und Schmetterball",
-  "von": "3D AI Studio (erzeugt am 27.11.2026)",
-  "titel": "Powerful tennis serve, racket smashing the ball, very loud sharp crack and pop, single hit",
-  "url": "https://www.3daistudio.com/",
-  "lizenz": "erzeugt (3D AI Studio)",
-  "stelle": "ein Stück, siehe STUECKE in tools/schlag_bau.py",
-  "sek": 0.39,
-  "kb": 4.9
- },
- {
   "datei": "sounds/match/ki_netz_1.mp3",
   "was": "Ball im Netz",
   "von": "3D AI Studio (erzeugt am 27.11.2026)",
@@ -836,72 +814,6 @@
   "kb": 6.2
  },
  {
-  "datei": "sounds/match/ki_schlag_1.mp3",
-  "was": "Schlag (Vorhand, Rückhand, Volley)",
-  "von": "3D AI Studio (erzeugt am 27.11.2026)",
-  "titel": "Tennis racket hitting a tennis ball, hard forehand, loud crisp pop of the strings / Professional tennis groundstroke, sharp hollow thwack / Tennis slice shot, soft short pop",
-  "url": "https://www.3daistudio.com/",
-  "lizenz": "erzeugt (3D AI Studio)",
-  "stelle": "ein Stück, siehe STUECKE in tools/schlag_bau.py",
-  "sek": 0.26,
-  "kb": 3.4
- },
- {
-  "datei": "sounds/match/ki_schlag_2.mp3",
-  "was": "Schlag (Vorhand, Rückhand, Volley)",
-  "von": "3D AI Studio (erzeugt am 27.11.2026)",
-  "titel": "Tennis racket hitting a tennis ball, hard forehand, loud crisp pop of the strings / Professional tennis groundstroke, sharp hollow thwack / Tennis slice shot, soft short pop",
-  "url": "https://www.3daistudio.com/",
-  "lizenz": "erzeugt (3D AI Studio)",
-  "stelle": "ein Stück, siehe STUECKE in tools/schlag_bau.py",
-  "sek": 0.44,
-  "kb": 5.6
- },
- {
-  "datei": "sounds/match/ki_schlag_3.mp3",
-  "was": "Schlag (Vorhand, Rückhand, Volley)",
-  "von": "3D AI Studio (erzeugt am 27.11.2026)",
-  "titel": "Tennis racket hitting a tennis ball, hard forehand, loud crisp pop of the strings / Professional tennis groundstroke, sharp hollow thwack / Tennis slice shot, soft short pop",
-  "url": "https://www.3daistudio.com/",
-  "lizenz": "erzeugt (3D AI Studio)",
-  "stelle": "ein Stück, siehe STUECKE in tools/schlag_bau.py",
-  "sek": 0.24,
-  "kb": 3.1
- },
- {
-  "datei": "sounds/match/ki_schlag_4.mp3",
-  "was": "Schlag (Vorhand, Rückhand, Volley)",
-  "von": "3D AI Studio (erzeugt am 27.11.2026)",
-  "titel": "Tennis racket hitting a tennis ball, hard forehand, loud crisp pop of the strings / Professional tennis groundstroke, sharp hollow thwack / Tennis slice shot, soft short pop",
-  "url": "https://www.3daistudio.com/",
-  "lizenz": "erzeugt (3D AI Studio)",
-  "stelle": "ein Stück, siehe STUECKE in tools/schlag_bau.py",
-  "sek": 0.24,
-  "kb": 3.1
- },
- {
-  "datei": "sounds/match/ki_slice_1.mp3",
-  "was": "Slice und Stoppball",
-  "von": "3D AI Studio (erzeugt am 27.11.2026)",
-  "titel": "Tennis slice shot, racket strings cutting under the ball, soft short pop with a light brushing sound, single hit",
-  "url": "https://www.3daistudio.com/",
-  "lizenz": "erzeugt (3D AI Studio)",
-  "stelle": "ein Stück, siehe STUECKE in tools/schlag_bau.py",
-  "sek": 0.29,
-  "kb": 3.7
- },
- {
-  "datei": "sounds/match/ki_slice_2.mp3",
-  "was": "Slice und Stoppball",
-  "von": "3D AI Studio (erzeugt am 27.11.2026)",
-  "titel": "Tennis slice shot, racket strings cutting under the ball, soft short pop with a light brushing sound, single hit",
-  "url": "https://www.3daistudio.com/",
-  "lizenz": "erzeugt (3D AI Studio)",
-  "stelle": "ein Stück, siehe STUECKE in tools/schlag_bau.py",
-  "sek": 0.29,
-  "kb": 3.7
- },
- {
   "datei": "sounds/publikum/ki_stadion.mp3",
   "was": "Leises Stadion im Hintergrund (Schleife)",
   "von": "3D AI Studio (erzeugt am 27.11.2026)",
@@ -911,5 +823,126 @@
   "stelle": "ganz, gleichmäßiger und lauter gemacht (tools/stadion_bau.py)",
   "sek": 20.04,
   "kb": 235.1
+ },
+ {
+  "datei": "sounds/match/vorhand_1.mp3",
+  "was": "Schlag (Vorhand, Rückhand, Volley) – von Kristian am 27.11.2026 ausgesucht (D1)",
+  "von": "jamesdrake89",
+  "titel": "Tennis Forehand 2",
+  "url": "https://freesound.org/people/jamesdrake89/sounds/662263/",
+  "lizenz": "CC0 1.0",
+  "stelle": "0.13 s + 0.5 s",
+  "sek": 0.55,
+  "kb": 6.8
+ },
+ {
+  "datei": "sounds/match/vorhand_2.mp3",
+  "was": "Schlag (Vorhand, Rückhand, Volley) – von Kristian am 27.11.2026 ausgesucht (D2)",
+  "von": "jamesdrake89",
+  "titel": "Tennis Forehand 2",
+  "url": "https://freesound.org/people/jamesdrake89/sounds/662263/",
+  "lizenz": "CC0 1.0",
+  "stelle": "0.69 s + 0.5 s",
+  "sek": 0.55,
+  "kb": 6.8
+ },
+ {
+  "datei": "sounds/match/vorhand_3.mp3",
+  "was": "Schlag (Vorhand, Rückhand, Volley) – von Kristian am 27.11.2026 ausgesucht (D3)",
+  "von": "jamesdrake89",
+  "titel": "Tennis Forehand 2",
+  "url": "https://freesound.org/people/jamesdrake89/sounds/662263/",
+  "lizenz": "CC0 1.0",
+  "stelle": "1.34 s + 0.5 s",
+  "sek": 0.55,
+  "kb": 6.8
+ },
+ {
+  "datei": "sounds/match/vorhand_4.mp3",
+  "was": "Schlag (Vorhand, Rückhand, Volley) – von Kristian am 27.11.2026 ausgesucht (D4)",
+  "von": "jamesdrake89",
+  "titel": "Tennis Forehand 2",
+  "url": "https://freesound.org/people/jamesdrake89/sounds/662263/",
+  "lizenz": "CC0 1.0",
+  "stelle": "1.89 s + 0.5 s",
+  "sek": 0.55,
+  "kb": 6.8
+ },
+ {
+  "datei": "sounds/match/vorhand_5.mp3",
+  "was": "Schlag (Vorhand, Rückhand, Volley) – von Kristian am 27.11.2026 ausgesucht (D5)",
+  "von": "jamesdrake89",
+  "titel": "Tennis Forehand 2",
+  "url": "https://freesound.org/people/jamesdrake89/sounds/662263/",
+  "lizenz": "CC0 1.0",
+  "stelle": "2.71 s + 0.5 s",
+  "sek": 0.55,
+  "kb": 6.8
+ },
+ {
+  "datei": "sounds/match/vorhand_6.mp3",
+  "was": "Schlag (Vorhand, Rückhand, Volley) – von Kristian am 27.11.2026 ausgesucht (D6)",
+  "von": "jamesdrake89",
+  "titel": "Tennis Forehand 2",
+  "url": "https://freesound.org/people/jamesdrake89/sounds/662263/",
+  "lizenz": "CC0 1.0",
+  "stelle": "3.38 s + 0.5 s",
+  "sek": 0.47,
+  "kb": 5.9
+ },
+ {
+  "datei": "sounds/match/schnitt_1.mp3",
+  "was": "Slice und Stoppball – von Kristian am 27.11.2026 ausgesucht (E1)",
+  "von": "jamesdrake89",
+  "titel": "Tennis Slices 2",
+  "url": "https://freesound.org/people/jamesdrake89/sounds/662269/",
+  "lizenz": "CC0 1.0",
+  "stelle": "0.24 s + 0.5 s",
+  "sek": 0.55,
+  "kb": 6.8
+ },
+ {
+  "datei": "sounds/match/schnitt_2.mp3",
+  "was": "Slice und Stoppball – von Kristian am 27.11.2026 ausgesucht (E2)",
+  "von": "jamesdrake89",
+  "titel": "Tennis Slices 2",
+  "url": "https://freesound.org/people/jamesdrake89/sounds/662269/",
+  "lizenz": "CC0 1.0",
+  "stelle": "1.6 s + 0.5 s",
+  "sek": 0.55,
+  "kb": 6.8
+ },
+ {
+  "datei": "sounds/match/schnitt_3.mp3",
+  "was": "Slice und Stoppball – von Kristian am 27.11.2026 ausgesucht (E3)",
+  "von": "jamesdrake89",
+  "titel": "Tennis Slices 2",
+  "url": "https://freesound.org/people/jamesdrake89/sounds/662269/",
+  "lizenz": "CC0 1.0",
+  "stelle": "2.71 s + 0.5 s",
+  "sek": 0.55,
+  "kb": 6.8
+ },
+ {
+  "datei": "sounds/match/schnitt_4.mp3",
+  "was": "Slice und Stoppball – von Kristian am 27.11.2026 ausgesucht (E4)",
+  "von": "jamesdrake89",
+  "titel": "Tennis Slices 2",
+  "url": "https://freesound.org/people/jamesdrake89/sounds/662269/",
+  "lizenz": "CC0 1.0",
+  "stelle": "4.05 s + 0.5 s",
+  "sek": 0.55,
+  "kb": 6.8
+ },
+ {
+  "datei": "sounds/match/einzel_1.mp3",
+  "was": "Aufschlag und Schmetterball – von Kristian am 27.11.2026 ausgesucht (F1)",
+  "von": "rvdw2004",
+  "titel": "SFXTennis-EXT_Hitting a tennis ball-Mia_OwSfx",
+  "url": "https://freesound.org/people/rvdw2004/sounds/709678/",
+  "lizenz": "CC0 1.0",
+  "stelle": "0 s + 0.5 s",
+  "sek": 0.63,
+  "kb": 7.7
  }
 ]

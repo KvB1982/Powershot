@@ -13,14 +13,6 @@ SPITZE = 0.85
 VOR = 0.008          # so viele Sekunden vor dem Schlag fängt die Datei an
 # Name im Spiel: (Roh-Datei, suchen ab Sekunde, Länge in Sekunden)
 STUECKE = {
-    'ki_schlag_1': ('roh2/schlagA_3.wav', 0.0, 0.22),
-    'ki_schlag_2': ('roh2/schlagB_3.wav', 0.0, 0.40),
-    'ki_schlag_3': ('roh2/slice_2.wav', 0.0, 0.20),
-    'ki_schlag_4': ('roh2/slice_3.wav', 0.15, 0.20),
-    'ki_slice_1': ('roh/slice_2.wav', 0.6, 0.25),
-    'ki_slice_2': ('roh2/slice_4.wav', 0.2, 0.25),
-    'ki_aufschlag_1': ('roh/aufschlag_4.wav', 0.0, 0.30),
-    'ki_aufschlag_2': ('roh2/aufschlag_4.wav', 0.5, 0.35),
     'ki_aufprall_1': ('roh2/aufprall_1.wav', 0.1, 0.16),
     'ki_aufprall_2': ('roh2/aufprall_3.wav', 0.15, 0.16),
     'ki_aufprall_3': ('roh2/aufprall_4.wav', 0.1, 0.07),
