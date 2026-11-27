@@ -25,6 +25,12 @@ dann kann man es austauschen oder in <code>js/audio.js</code> (Tabelle <code>KLA
 <p class="dim">Diese Knöpfe benutzen denselben Code wie das Spiel: Jedes Mal kommt eine andere Aufnahme, harte Schläge sind lauter, jeder Belag klingt anders.</p>
 <div class="reihe" id="spiel"></div>
 
+<h2>Publikum je Spielsituation</h2>
+<p class="dim">So reagiert das Publikum im Match (derselbe Code wie im Spiel: <code>reaktion</code> und <code>spannung</code> in <code>js/audio.js</code>).
+Wähle zuerst, wie groß das Stadion ist – am kleinen Platz klatschen nur ein paar Leute.
+<select id="gross"><option value="1">volles Stadion</option><option value="0.7">mittleres Stadion</option><option value="0.2">kleiner Platz</option></select></p>
+<div class="reihe" id="lage"></div>
+
 <h2>Alle Dateien einzeln</h2>
 <table id="liste"></table>
 
@@ -52,6 +58,33 @@ for (const [name, tun] of Object.entries(KNOEPFE)) {
   b.textContent = name;
   b.onclick = () => { sound.unlock(); tun(); };       // der Ton darf erst nach dem ersten Tippen starten (Browser-Regel)
   spiel.append(b);
+}
+// Publikum je Spielsituation: Name → was das Spiel in dieser Lage aufruft
+const LAGEN = {
+  'Gewinnschlag (kurzer Ballwechsel)': () => sound.reaktion({ art: 'winner', rally: 3, staerke: 0.75 }),
+  'Gewinnschlag nach 6 Schlägen': () => sound.reaktion({ art: 'winner', rally: 6, staerke: 0.75 }),
+  'Gewinnschlag nach 12 Schlägen': () => sound.reaktion({ art: 'winner', rally: 12, staerke: 1 }),
+  'Ass': () => sound.reaktion({ art: 'ass', rally: 1, staerke: 0.75 }),
+  'Ball im Aus': () => sound.reaktion({ art: 'aus', rally: 4, staerke: 0.45 }),
+  'Ball im Netz nach langem Ballwechsel': () => sound.reaktion({ art: 'netz', rally: 9, staerke: 0.7 }),
+  'Doppelfehler': () => sound.reaktion({ art: 'doppelfehler', rally: 0, staerke: 0.45 }),
+  'Spiel gewonnen': () => sound.reaktion({ art: 'winner', rally: 4, ereignis: 'spiel', staerke: 0.8 }),
+  'Spiel durch Fehler gewonnen': () => sound.reaktion({ art: 'aus', rally: 4, ereignis: 'spiel', staerke: 0.8 }),
+  'Break!': () => sound.reaktion({ art: 'winner', rally: 5, ereignis: 'break', staerke: 0.8 }),
+  'Satz gewonnen': () => sound.reaktion({ art: 'winner', rally: 4, ereignis: 'satz', staerke: 0.95 }),
+  'Match gewonnen': () => sound.reaktion({ art: 'winner', rally: 4, ereignis: 'match', staerke: 1 }),
+  'Vor einem Breakball': () => sound.spannung('break'),
+  'Vor einem Satz- oder Matchball': () => sound.spannung('match'),
+  '„Quiet please“ – Schhh': () => sound.ruhe(),
+  'Mitten im langen Ballwechsel': () => sound.mitfiebern(10),
+  'Spieler kommen herein': () => sound.empfang(0.75),
+  'Klatschen im Takt': () => sound.play('takt'),
+};
+for (const [name, tun] of Object.entries(LAGEN)) {
+  const b = document.createElement('button');
+  b.textContent = name;
+  b.onclick = () => { sound.unlock(); sound.publikumOrt(parseFloat(document.querySelector('#gross').value)); tun(); };
+  document.querySelector('#lage').append(b);
 }
 window.__sound = sound;
 

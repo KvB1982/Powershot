@@ -10,6 +10,12 @@ import { dateienFuer, LINIE, LUECKE } from './stimme.js';
 import { baueLautsprecher, sprechTeil } from './lautsprecher.js';
 const D = new URL('../sounds/', import.meta.url).href;      // der Ordner sounds/ (liegt neben dem Ordner js/)
 // Stimmen von Schiedsrichter und Linienrichtern (Aufnahmen in sounds/stimme/, was gesagt wird steht in js/stimme.js)
+// Publikum je Spielsituation (siehe `reaktion`, `spannung` unten). gross = wie voll das Stadion ist (0 … 1, `zuschauer` des Turniers)
+const KLEIN_BIS = 0.35;           // darunter stehen nur ein paar Leute da: nur leiser Applaus von wenigen
+const GROSS_AB = 0.6;             // ab hier gibt es Murmeln, „Schhh“, Klatschen im Takt und den großen Empfang
+const TAKT_OFT = 0.3;             // so oft klatschen alle im Takt vor einem Satz- oder Matchball (0 = nie, 1 = immer)
+const TAKT_PAUSE = 0.3;           // … und so oft beim Seitenwechsel
+const MIT_AB = 10, MIT_ALLE = 6;  // im Ballwechsel staunt das Publikum beim 10. Schlag und dann alle 6 Schläge
 const STIMME_LAUT = 1.3;          // Lautstärke des Schiedsrichters (1 = so laut wie die Datei ist). Zu leise oder zu laut? Hier ändern.
 const LINIE_LAUT = 1.0;           // Lautstärke der Linienrichter
 export const KLAENGE = {
@@ -29,6 +35,16 @@ export const KLAENGE = {
   raunen: { bus: 'raum', v: [1, 2, 3].map((n) => [`publikum/raunen_${n}.mp3`, 0.5]) },
   schreck: { bus: 'raum', v: [1, 2, 3].map((n) => [`publikum/schreck_${n}.mp3`, 0.45]) },
   stadion: { bus: 'raum', v: [['publikum/stadion.mp3', 0.78]] },          // Schleife im Hintergrund
+  // --- Publikum je Spielsituation (seit 27.11.2026, erzeugt mit 3D AI Studio – siehe `reaktion` weiter unten) ---
+  applausWenige: { bus: 'raum', v: [1, 2, 3].map((n) => [`publikum/ki_wenige_${n}.mp3`, 1]) },                  // eine Handvoll Leute am kleinen Platz
+  applausJubel: { bus: 'raum', v: [['publikum/ki_jubel_1.mp3', 0.9], ['publikum/ki_jubel_2.mp3', 0.78], ['publikum/ki_jubel_3.mp3', 0.85]] },   // begeisterter Applaus mit Rufen und Pfiffen
+  ovation: { bus: 'raum', v: [['publikum/ki_ovation_1.mp3', 0.9], ['publikum/ki_ovation_2.mp3', 0.8]] },        // das Stadion tobt (Matchgewinn)
+  empfang: { bus: 'raum', v: [['publikum/ki_empfang_1.mp3', 1]] },                                              // die Spieler kommen herein
+  stoehnen: { bus: 'raum', v: [['publikum/ki_stoehnen_1.mp3', 0.28], ['publikum/ki_stoehnen_2.mp3', 0.3], ['publikum/ki_stoehnen_3.mp3', 0.4]] },   // enttäuschtes „Ohhh“ nach einem Fehler
+  staunen: { bus: 'raum', v: [['publikum/ki_staunen_1.mp3', 0.22], ['publikum/ki_staunen_2.mp3', 0.25], ['publikum/ki_staunen_3.mp3', 0.23]] },    // staunendes „Oooh!“
+  gemurmel: { bus: 'raum', v: [['publikum/ki_gemurmel_1.mp3', 0.3], ['publikum/ki_gemurmel_2.mp3', 0.32]] },    // gespanntes Murmeln vor einem wichtigen Punkt
+  psst: { bus: 'raum', v: [['publikum/ki_psst_1.mp3', 0.2], ['publikum/ki_psst_2.mp3', 0.2]] },                 // „Schhh“ – es wird still
+  takt: { bus: 'raum', v: [['publikum/ki_takt_1.mp3', 0.9], ['publikum/ki_takt_2.mp3', 0.8]] },                 // alle klatschen im Takt
   // --- Turniergelände ---
   stimmen: { bus: 'raum', v: [['gelaende/stimmen.mp3', 0.3]] },              // Schleife
   park: { bus: 'raum', v: [['gelaende/park.mp3', 0.4]] },                    // Schleife
@@ -54,13 +70,15 @@ export const KLAENGE = {
 // In dieser Reihenfolge wird geladen: zuerst das Kleine fürs Menü, die langen Aufnahmen zum Schluss
 const REIHENFOLGE = ['klick', 'zurueck', 'tipp', 'richtig', 'falsch', 'schlag', 'aufprall', 'aufschlag', 'slice', 'netz', 'stadion',
   'applausKlein', 'applausMittel', 'applausGross', 'raunen', 'schreck', 'quietschen', 'rutschen', 'kasse', 'stern', 'geschafft', 'sieg',
-  'schalter', 'plopp', 'frage', 'stift', 'kamera', 'schritt', 'stimmen', 'park', 'autotuer', 'auto', 'jubel'];
+  'schalter', 'plopp', 'frage', 'stift', 'kamera', 'schritt', 'stimmen', 'park', 'autotuer', 'auto', 'jubel',
+  'stoehnen', 'staunen', 'applausWenige', 'applausJubel', 'gemurmel', 'psst', 'empfang', 'takt', 'ovation'];
 
 export class Sound {
   constructor() {
     this.ctx = null;
     this.enabled = true;
     this.stimme = 'aufnahme';     // Wer spricht? 'aufnahme' = die aufgenommenen Stimmen (Englisch), 'geraet' = Sprachausgabe des Geräts (Deutsch), 'aus'
+    this.gross = 1;               // wie voll das Stadion ist (0 … 1), siehe publikumOrt
     this.durchsage = 'an';        // 'an' = der Schiedsrichter klingt wie über Mikrofon und Stadion-Lautsprecher (js/lautsprecher.js), 'aus' = Stimme pur
     this.box = null;              // der Lautsprecher (wird beim ersten Mal gebaut)
     this.ortWunsch = [1, false];  // wo wir gerade spielen: [wie groß das Stadion ist, Halle?]
@@ -342,6 +360,8 @@ export class Sound {
   applause(strength = 0.6, cheer = false) {
     if (!this.ctx) return;
     // Echter Applaus aus der Aufnahme: je nach Stärke kurz, mittel oder lang
+    // Am kleinen Platz stehen nur ein paar Leute: Dort klatscht eine Handvoll (und nie ein ganzes Stadion)
+    if (this.gross < KLEIN_BIS && this.play('applausWenige', { gain: 0.7 + 0.9 * strength })) return;
     const kind = strength > 0.85 ? 'applausGross' : strength > 0.55 ? 'applausMittel' : 'applausKlein';
     if (this.play(kind, { gain: 1.6 + 1.6 * strength })) {
       if (cheer && strength >= 0.95) this.play('jubel', { gain: 0.8, when: 0.15 });      // Satz oder Match gewonnen: das Stadion jubelt
@@ -375,6 +395,80 @@ export class Sound {
     g.gain.setTargetAtTime(0.0001, t + 1.0, 0.45);
     src.connect(f).connect(g).connect(this.raum);
     src.start(t); src.stop(t + 3.5);
+  }
+
+  // Wie groß ist das Publikum? gross = 0 (ein paar Leute am Zaun) … 1 (volles Stadion). Setzt game3d.js beim Match-Start.
+  publikumOrt(gross = 1) { this.gross = gross; }
+
+  // Das Publikum reagiert auf einen Punkt – je nach Spielsituation anders. Das ist die Stelle zum Einstellen!
+  //   art      = wie der Punkt endete: 'winner', 'ass', 'aus', 'netz', 'doppelfehler'
+  //   rally    = wie viele Schläge der Ballwechsel hatte
+  //   ereignis = was der Punkt gebracht hat: 'match', 'satz', 'break' (Aufschlag abgenommen), 'spiel' oder nichts
+  //   staerke  = wie viel Applaus der Punkt sonst bekäme (0 … 1) – für die alten Aufnahmen
+  reaktion({ art = '', rally = 0, ereignis = '', staerke = 0.5 } = {}) {
+    if (!this.ctx) return;
+    const fehler = art === 'aus' || art === 'netz' || art === 'doppelfehler';
+    // Kleiner Platz: nur ein paar Leute, die klatschen (kein Stöhnen, kein Jubel)
+    if (this.gross < KLEIN_BIS) {
+      if (art === 'doppelfehler' && !ereignis) return;                // für einen Doppelfehler klatscht niemand
+      this.applause(fehler && !ereignis ? staerke * 0.6 : staerke);
+      return;
+    }
+    const voll = 0.6 + 0.4 * this.gross;       // im halb vollen Stadion ist alles etwas leiser
+    if (ereignis === 'match') {
+      // Matchgewinn: Das Stadion tobt, dazu der lange Applaus
+      if (!this.play('ovation', { gain: 1.1 * voll })) { this.applause(1, true); return; }
+      this.play('applausGross', { gain: 2.4 * voll, when: 0.4 });
+      return;
+    }
+    if (ereignis === 'satz') { this.applause(0.95, true); this.play('applausJubel', { gain: 0.7 * voll, when: 0.1 }); return; }
+    if (fehler) {
+      // Fehler: erst ein enttäuschtes „Ohhh“, dann höflicher Applaus für den, der den Punkt bekommt.
+      // Beim Doppelfehler bleibt es beim „Ohhh“ (außer er hat das Spiel entschieden).
+      const lang = rally >= 7;                                        // nach einem langen Ballwechsel ist die Enttäuschung größer
+      this.play('stoehnen', { gain: (lang ? 1.2 : 0.85) * voll, fadeOut: 0.2 });
+      if (ereignis === 'break') this.jubelApplaus({ gain: 0.6 * voll, when: 0.7 });
+      else if (ereignis === 'spiel') this.play('applausMittel', { gain: 2.2 * voll, when: 0.6 });
+      else if (art !== 'doppelfehler') this.play('applausKlein', { gain: (lang ? 2.2 : 1.6) * voll, when: 0.6 });
+      return;
+    }
+    // Gewinnschlag oder Ass
+    if (rally >= 5) this.play('staunen', { gain: (rally >= 9 ? 1.2 : 0.9) * voll, fadeOut: 0.2 });      // „Oooh!“ nach einem tollen Ballwechsel
+    if (ereignis === 'break' || rally >= 9) this.jubelApplaus({ gain: (ereignis === 'break' ? 1 : 0.85) * voll, when: rally >= 5 ? 0.25 : 0 });
+    else if (ereignis === 'spiel') this.play('applausMittel', { gain: 2.9 * voll, when: rally >= 5 ? 0.25 : 0 });
+    else if (art === 'ass') { this.play('staunen', { gain: 0.6 * voll, fadeOut: 0.2 }); this.play('applausMittel', { gain: 2.5 * voll, when: 0.2 }); }
+    else this.play(rally >= 5 ? 'applausMittel' : 'applausKlein', { gain: 2.6 * voll, when: rally >= 5 ? 0.25 : 0 });
+  }
+
+  // Begeisterter Applaus mit Rufen. Ist die Aufnahme noch nicht geladen, kommt der normale lange Applaus.
+  jubelApplaus(opt) { if (!this.play('applausJubel', opt)) this.play('applausMittel', { gain: 2.9, when: opt.when || 0 }); }
+
+  // Vor einem wichtigen Punkt (Breakball, Satzball, Matchball) wird es im großen Stadion unruhig:
+  // gespanntes Murmeln, bei Satz- und Matchbällen manchmal Klatschen im Takt – und kurz vor dem Aufschlag „Schhh“.
+  //   art = 'break', 'satz' oder 'match'; when = erst nach so vielen Sekunden
+  spannung(art, when = 0) {
+    if (!this.ctx || this.gross < GROSS_AB) return;
+    const voll = 0.6 + 0.4 * this.gross;
+    if (art !== 'break' && Math.random() < TAKT_OFT) {
+      if (this.play('takt', { gain: voll, when, fadeIn: 0.4, fadeOut: 0.6 })) { this.play('psst', { gain: 0.8 * voll, when: when + 4.2 }); return; }
+    }
+    this.play('gemurmel', { gain: (art === 'break' ? 0.8 : 1.1) * voll, when, fadeIn: 0.5, fadeOut: 0.8 });
+    if (art !== 'break') this.play('psst', { gain: 0.8 * voll, when: when + 3.6 });
+  }
+  // „Schhh“ – das Publikum wird ruhig (zum „Quiet please“ des Schiedsrichters)
+  ruhe(when = 0) { if (this.ctx && this.gross >= GROSS_AB) this.play('psst', { gain: 0.9, when }); }
+  // Die Spieler kommen ins Stadion: Begrüßungs-Applaus
+  empfang(stark = 0.7) {
+    if (!this.ctx) return;
+    if (this.gross >= GROSS_AB && this.play('empfang', { gain: 0.6 + 0.6 * stark })) return;
+    this.applause(stark, this.gross > 0.5);
+  }
+  // Seitenwechsel im großen Stadion: Manchmal klatschen alle im Takt
+  pause() { if (this.ctx && this.gross >= GROSS_AB && Math.random() < TAKT_PAUSE) this.play('takt', { gain: 0.7, when: 1.5, fadeIn: 0.5, fadeOut: 0.8 }); }
+  // Mitten im langen Ballwechsel staunt das Publikum leise mit
+  mitfiebern(rally) {
+    if (!this.ctx || this.gross < GROSS_AB || rally < MIT_AB || (rally - MIT_AB) % MIT_ALLE) return;
+    this.play('staunen', { gain: 0.45, fadeOut: 0.2 });
   }
 
   // Das Publikum erschrickt oder stöhnt (Fehler, knapp daneben)

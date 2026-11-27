@@ -20,7 +20,9 @@ for (const [name, k] of Object.entries(KLAENGE)) {
     bytes += fs.statSync(voll).size;
     const q = mitQuelle.get(datei);
     if (!q) meckern(`${name}: ${datei} steht nicht in quellen.json`);
-    else if (q.lizenz !== 'CC0 1.0') meckern(`${name}: ${datei} hat die Lizenz „${q.lizenz}“ – erlaubt ist nur CC0`);
+    // Erlaubt sind nur zwei Arten: fremde Aufnahmen mit der Lizenz CC0 – oder Klänge, die wir selbst mit 3D AI Studio erzeugt haben (Dateiname ki_…)
+    else if (q.lizenz === 'erzeugt (3D AI Studio)') { if (!path.basename(datei).startsWith('ki_')) meckern(`${name}: ${datei} ist erzeugt, heißt aber nicht ki_…`); }
+    else if (q.lizenz !== 'CC0 1.0') meckern(`${name}: ${datei} hat die Lizenz „${q.lizenz}“ – erlaubt ist nur CC0 (oder selbst erzeugt)`);
     else if (!/^https:\/\/(freesound\.org|kenney\.nl)\//.test(q.url)) meckern(`${name}: ${datei} hat keine Adresse der Quelle`);
     if (!(laut > 0 && laut <= 2)) meckern(`${name}: ${datei} hat eine merkwürdige Lautstärke (${laut})`);
   }
@@ -35,5 +37,5 @@ for (const f of alle(ordner)) {
 for (const d of mitQuelle.keys()) if (!benutzt.has(d)) meckern(`${d} steht in quellen.json, wird aber nicht benutzt`);
 
 console.log(`${Object.keys(KLAENGE).length} Geräusche, ${anzahl} Aufnahmen, zusammen ${(bytes / 1024 / 1024).toFixed(2)} MB`);
-console.log(fehler ? `${fehler} Fehler` : '✓ Alles da, alles CC0, bei allem steht die Quelle');
+console.log(fehler ? `${fehler} Fehler` : '✓ Alles da, alles CC0 oder selbst erzeugt, bei allem steht die Quelle');
 process.exit(fehler ? 1 : 0);

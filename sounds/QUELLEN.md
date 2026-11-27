@@ -51,6 +51,14 @@ und dieses Repository ist öffentlich. Bei Freesound nur „Creative Commons 0�
 - Wählt man in den Einstellungen „Deutsch (Stimme des Geräts)“, spricht der Schiedsrichter mit der Sprachausgabe des Geräts.
 - Fehlt eine Datei oder lädt sie noch, erzeugt `js/audio.js` ein einfaches Ersatz-Geräusch im Browser.
 
+## Publikum je Spielsituation (Dateien `publikum/ki_…`)
+
+21 Aufnahmen (zusammen 0,85 MB), am 27.11.2026 mit **3D AI Studio** erzeugt (Geräusch-Werkzeug; laut Anbieter für eigene Projekte nutzbar,
+auch gewerblich). Das sind keine fremden Aufnahmen und deshalb nicht CC0 – sie gehören zum Spiel. Erkennbar am Dateinamen `ki_…`.
+Arten: Applaus von wenigen, begeisterter Applaus, Ovation, Empfang, Stöhnen, Staunen, Gemurmel, „Schhh“, Klatschen im Takt.
+Die Beschreibung, mit der jede Art erzeugt wurde, steht in `quellen.json` (Feld `titel`). Zugeschnitten mit `tools/publikum_bau.py`,
+die Roh-Dateien liegen in den Projektdateien unter `publikum/roh/`.
+
 ## Stimmen (Ordner `stimme/`)
 
 Die Stimmen von Schiedsrichter und Linienrichtern sind **keine** Aufnahmen von Menschen und nicht von Freesound:

@@ -353,7 +353,9 @@ export class Game3D {
     const hud = () => self.hud || {};
     const call = (f, ...a) => { const h = hud(); if (h[f]) h[f](...a); };
     snd.stimmeOrt(this.venue ? this.venue.zuschauer ?? 1 : 1, !!this.venue && this.venue.surface === 'indoor');   // Lautsprecher-Klang: großes Stadion = mehr Echo, Halle = mehr Hall
+    snd.publikumOrt(this.venue ? this.venue.zuschauer ?? 1 : 1);       // wie viele Leute zuschauen: bestimmt, wie das Publikum reagiert
     snd.stimmeLaden(names);          // die Stimmen von Schiedsrichter und Linienrichtern holen (und die zwei Namen)
+    let punktArt = '';                // was für ein wichtiger Punkt gerade gespielt wird ('break', 'satz', 'match' oder nichts)
     let erster = true;               // der allererste Aufschlag des Matches? Dann sagt der Schiedsrichter "Play"
     self.wechselLief = false;
     return {
@@ -365,9 +367,10 @@ export class Game3D {
         // (Das gibt es nur mit den aufgenommenen Stimmen – die Stimme des Geräts sagt hier nichts.)
         if (self.match && self.match.mode === 'match' && !self.match.cfg.lernen && info.serveNo !== 2) {
           const w = self.match.score.wichtigerPunkt();
+          punktArt = w ? w.art + w.wer : '';  // merken: War das ein Breakball (und für wen)? Dann jubelt das Publikum nachher über das Break
           if (erster) snd.ansage(['en/play'], null, 0.4, true);
           else if (self.wechselLief) snd.ansage(['en/time'], null, 0.2, true);
-          else if (w && w.art !== 'break' && (self.venue ? self.venue.zuschauer ?? 1 : 1) >= 0.6 && Math.random() < QUIET_OFT) snd.ansage(['en/quiet'], null, 2.2, true);
+          else if (w && w.art !== 'break' && (self.venue ? self.venue.zuschauer ?? 1 : 1) >= 0.6 && Math.random() < QUIET_OFT) { snd.ansage(['en/quiet'], null, 2.2, true); snd.ruhe(2.6); }
           erster = false; self.wechselLief = false;
         }
         // Wichtiger Punkt? Dann steht es oben: Breakball, Satzball, Matchball (im Finale: Championship Point)
@@ -384,6 +387,7 @@ export class Game3D {
         if (show && self.wennShow) self.wennShow(side, show);
       },
       hit(h) {
+        if (self.match && self.match.mode === 'match') snd.mitfiebern(self.match.rally);      // langer Ballwechsel: das Publikum staunt mit
         snd.hit(clamp((h.speed - 8) / 40, 0.2, 1), h.type);      // die Schlagart bestimmt, welche Aufnahme kommt
         if (h.type === 'serve') call('serveSpeed', Math.round(h.speed * 3.6), h.side, h.art);
         const w = self.wucht(h);
@@ -434,7 +438,6 @@ export class Game3D {
         if (info.reason === 'winner' && info.rally <= 2) head = 'Nicht erreicht!';
         let sub = 'Punkt ' + w;
         let strength = info.reason === 'ass' || info.reason === 'winner' ? 0.75 : 0.45;
-        if (strength > 0.7 && info.rally >= 5) snd.staunen();       // toller Gewinnschlag nach langem Ballwechsel: das Publikum staunt
         let say = REASON_TEXT[info.reason] && info.reason !== 'winner' ? head.replace('!', '') + '. ' : '';
         if (info.events.includes('match')) { sub = 'Spiel, Satz und Sieg ' + w; strength = 1; say += sub; }
         else if (info.events.includes('set')) { sub = 'Satz ' + w; strength = 0.95; say += sub; }
@@ -446,9 +449,16 @@ export class Game3D {
           if (wichtig) say += '. ' + wichtig;
         }
         if (info.rally >= 9) strength = Math.min(1, strength + 0.25);
-        snd.applause(strength, strength > 0.7);
+        // Das Publikum reagiert je nach Situation: Stöhnen beim Fehler, Staunen nach langem Ballwechsel, Jubel beim Break, Toben beim Matchgewinn …
+        const ev = info.events;
+        const ereignis = ev.includes('match') ? 'match' : ev.includes('set') ? 'satz' : ev.includes('game') ? (punktArt === 'break' + info.winner ? 'break' : 'spiel') : '';
+        snd.reaktion({ art: info.reason, rally: info.rally, ereignis, staerke: strength });
         self.stadium.jubel(strength);
         snd.setCrowd(0.06);
+        // Kommt jetzt ein wichtiger Punkt? Dann wird es im großen Stadion unruhig (Murmeln, manchmal Klatschen im Takt)
+        const kommt = ereignis ? null : sc.wichtigerPunkt();
+        if (kommt) snd.spannung(kommt.art, 2.6);
+        punktArt = '';
         // Erst ruft (bei einem Ball im Aus) der Linienrichter, dann sagt der Schiedsrichter den Spielstand an
         const an = punktAnsage(info, sc, names, { finale: self.match.cfg.finale, netz: self.match.netHit });
         const rief = an.linie ? snd.linienrichter(an.linie) : false;
@@ -577,6 +587,7 @@ export class Game3D {
       const tossing = amAufschlag && !vonUnten;
       const st = { x: p.x, z: p.z, vx: p.vx, vz: p.vz, prep: p.prep, stroke: p.stroke, mood: m.state === 'pointOver' ? p.mood : null, ball: b };
       st.walk = m.state === 'changeover';       // beim Seitenwechsel wird aufrecht gegangen
+      if (st.walk && !this.wechselLief && i === 0) this.sound.pause();     // Seitenwechsel: im großen Stadion klatschen manchmal alle im Takt
       if (st.walk) this.wechselLief = true;     // merken: Danach sagt der Schiedsrichter "Time"
       if (tossing) {
         // Aufschlag: der Ballwurf steuert die Bewegung
@@ -741,6 +752,7 @@ export class Game3D {
   // wenn(name, info) meldet app.js, wenn ein neuer Teil beginnt ('teil') und wenn alles vorbei ist ('fertig').
   einlaufStart(art, spieler, wenn) {
     const snd = this.sound, gross = this.venue ? this.venue.zuschauer ?? 1 : 1;     // gross = wie voll die Tribüne ist (0…1)
+    snd.publikumOrt(gross);
     this.einlauf = new Einlauf({ art, spieler }, (name, info, E) => {
       if (name === 'schlag') {
         if (this.avatars[info.side]) this.avatars[info.side].swing(info.kind, info.y, 'drive');
@@ -750,7 +762,7 @@ export class Game3D {
       } else if (name === 'teil') {
         // Die Zuschauer klatschen, wenn die Spieler hereinkommen und wenn einer vorgestellt wird (bei kleinen Turnieren leiser)
         const stark = info.teil === 'einlaufen' ? 0.75 : info.seite != null ? 0.55 : 0;
-        if (stark) { snd.applause(Math.max(0.2, stark * gross), gross > 0.5); this.stadium.jubel(stark * gross); }
+        if (stark) { if (info.teil === 'einlaufen') snd.empfang(Math.max(0.2, stark * gross)); else snd.applause(Math.max(0.2, stark * gross), gross > 0.5); this.stadium.jubel(stark * gross); }
         snd.setCrowd(0.05);
       }
       wenn(name, info, E);
