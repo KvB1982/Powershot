@@ -6,7 +6,12 @@
 // Welche Aufnahmen gibt es für welches Geräusch? Mehrere Dateien = es wird jedes Mal eine andere genommen, damit es echter klingt.
 // Die Zahl hinter dem Dateinamen ist die Lautstärke (1 = so laut wie die Datei ist). Zu laut oder zu leise? Hier ändern.
 // bus: 'raum' = Publikum und Umgebung (lässt sich in den Einstellungen leiser stellen), sonst zählt nur die Lautstärke.
+import { dateienFuer, LINIE } from './stimme.js';
 const D = new URL('../sounds/', import.meta.url).href;      // der Ordner sounds/ (liegt neben dem Ordner js/)
+// Stimmen von Schiedsrichter und Linienrichtern (Aufnahmen in sounds/stimme/, was gesagt wird steht in js/stimme.js)
+const STIMME_LAUT = 1.3;          // Lautstärke des Schiedsrichters (1 = so laut wie die Datei ist). Zu leise oder zu laut? Hier ändern.
+const LINIE_LAUT = 1.0;           // Lautstärke der Linienrichter
+const STIMME_LUECKE = 0.05;       // winzige Pause zwischen zwei Aufnahmen einer Ansage (Sekunden)
 export const KLAENGE = {
   // --- Match ---
   schlag: { v: [1, 2, 3, 4, 5].map((n) => [`match/schlag_${n}.mp3`, 1]) },
@@ -55,7 +60,10 @@ export class Sound {
   constructor() {
     this.ctx = null;
     this.enabled = true;
-    this.voice = true;
+    this.stimme = 'aufnahme';     // Wer spricht? 'aufnahme' = die aufgenommenen Stimmen (Englisch), 'geraet' = Sprachausgabe des Geräts (Deutsch), 'aus'
+    this.stimmen = {};            // geladene Stimmen-Aufnahmen: 'en/deuce' → Tonspur
+    this.sprichtBis = 0;          // bis zu diesem Zeitpunkt redet der Schiedsrichter noch
+    this.spricht = [];            // was der Schiedsrichter gerade sagt (damit man ihn unterbrechen kann)
     this.volume = 0.8;
     this.umgebung = 1;            // Publikum und Umgebung: 1 = normal, 0.5 = leise, 0 = aus
     this.puffer = {};             // geladene Aufnahmen: Dateiname → Tonspur
@@ -76,6 +84,7 @@ export class Sound {
       if (name === 'stadion' && this.crowdLevel != null) this.setCrowd(this.crowdLevel);     // ab jetzt das echte Stadion
     }
     this.fertigGeladen = true;
+    this.stimmeLaden();                // zum Schluss schon einmal die Stimmen des Schiedsrichters holen – dann sind sie beim ersten Match da
   }
 
   // Eine Aufnahme abspielen. Gibt false zurück, wenn sie (noch) nicht da ist – dann nimmt der Aufrufer das erzeugte Geräusch.
@@ -387,9 +396,86 @@ export class Sound {
   // Das Publikum staunt („Ooh!“) – bei einem Ass oder einem tollen Gewinnschlag
   staunen() { if (this.ctx) this.play('raunen', { gain: 0.9, fadeOut: 0.3 }); }
 
-  // Der Schiedsrichter spricht (Sprachausgabe des Geräts)
+  // Die Stimmen-Aufnahmen laden, die ein Match braucht (alle Ansagen, die Linienrichter und die Namen der beiden Spieler).
+  // Was schon geladen ist, wird nicht noch einmal geholt. Alle Ansagen zusammen sind etwa 0,4 MB, ein Name etwa 4 KB.
+  async stimmeLaden(names = []) {
+    if (!this.ctx || this.stimme !== 'aufnahme') return;
+    const holen = async (clip) => {
+      try {
+        const data = await (await fetch(D + 'stimme/' + clip + '.mp3')).arrayBuffer();
+        this.stimmen[clip] = await new Promise((ok, err) => this.ctx.decodeAudioData(data, ok, err));
+      } catch (e) { console.warn('Stimme fehlt:', clip, e); }
+    };
+    // Die Namen zuerst (es sind nur zwei), dann der Rest – immer acht Dateien gleichzeitig, damit es schnell geht
+    const offen = dateienFuer(names).filter((clip) => this.stimmen[clip] === undefined);
+    offen.sort((a, b) => b.startsWith('namen/') - a.startsWith('namen/'));
+    for (const clip of offen) this.stimmen[clip] = null;          // null = wird gerade geholt
+    for (let i = 0; i < offen.length; i += 8) await Promise.all(offen.slice(i, i + 8).map(holen));
+  }
+
+  // Der Schiedsrichter sagt etwas an.
+  //   teile = Liste aus Aufnahmen und Pausen (siehe js/stimme.js), z. B. ['en/advantage', 'namen/sinner']
+  //   text  = derselbe Satz auf Deutsch für die Stimme des Geräts (wenn die Aufnahmen aus sind oder eine fehlt)
+  //   when  = erst nach so vielen Sekunden anfangen
+  //   danach = true: den Schiedsrichter ausreden lassen und erst dann sprechen (sonst unterbricht die neue Ansage die alte)
+  ansage(teile, text, when = 0, danach = false, versuch = 0) {
+    if (!this.enabled || this.stimme === 'aus') return;
+    const clips = teile ? teile.filter((t) => typeof t === 'string') : [];
+    const alleDa = this.ctx && this.stimme === 'aufnahme' && clips.length > 0 && clips.every((c) => this.stimmen[c]);
+    if (!alleDa) {
+      // Wird eine Aufnahme gerade noch geholt? Dann kurz warten (höchstens 4-mal 0,4 Sekunden) und es noch einmal versuchen.
+      if (this.ctx && this.stimme === 'aufnahme' && versuch < 4 && clips.some((c) => this.stimmen[c] === null)) {
+        setTimeout(() => this.ansage(teile, text, Math.max(0, when - 0.4), danach, versuch + 1), 400);
+        return;
+      }
+      if (text) { if (when > 0) setTimeout(() => this.say(text), when * 1000); else this.say(text); }
+      return;
+    }
+    if (!danach) this.still();
+    let t = this.ctx.currentTime + when;
+    if (danach && this.sprichtBis > t - 0.3) t = this.sprichtBis + 0.3;
+    for (const teil of teile) {
+      if (typeof teil === 'number') { t += teil; continue; }
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.stimmen[teil];
+      const g = this.ctx.createGain();
+      g.gain.value = STIMME_LAUT;
+      src.connect(g).connect(this.master);
+      src.start(t);
+      this.spricht.push(src);
+      t += src.buffer.duration + STIMME_LUECKE;
+    }
+    this.sprichtBis = t;
+  }
+
+  // Der Schiedsrichter hört mitten im Satz auf (weil schon die nächste Ansage kommt)
+  still() {
+    for (const src of this.spricht) { try { src.stop(); } catch (e) { /* war schon fertig */ } }
+    this.spricht = []; this.sprichtBis = 0;
+    try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (e) { /* egal */ }
+  }
+
+  // Ein Linienrichter ruft: art = 'out' (Ball im Aus) oder 'fault' (Aufschlag im Aus). Jedes Mal ruft ein anderer.
+  // Gibt true zurück, wenn wirklich eine Aufnahme gerufen hat.
+  linienrichter(art) {
+    if (!this.ctx || !this.enabled || this.stimme !== 'aufnahme' || !LINIE[art]) return false;
+    let nr = 1 + Math.floor(Math.random() * LINIE[art]);
+    if (nr === this.zuletzt['linie_' + art]) nr = nr % LINIE[art] + 1;
+    this.zuletzt['linie_' + art] = nr;
+    const buf = this.stimmen[`linie/${art}_${nr}`];
+    if (!buf) return false;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const g = this.ctx.createGain();
+    g.gain.value = LINIE_LAUT;
+    src.connect(g).connect(this.master);
+    src.start();
+    return true;
+  }
+
+  // Die Stimme des Geräts spricht einen deutschen Satz (Sprachausgabe)
   say(text) {
-    if (!this.enabled || !this.voice || !('speechSynthesis' in window)) return;
+    if (!this.enabled || this.stimme === 'aus' || !('speechSynthesis' in window)) return;
     try {
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'de-DE'; u.rate = 1.05; u.pitch = 0.9; u.volume = Math.min(1, this.volume);

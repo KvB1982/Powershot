@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Powershot – Stimmen anhören</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #10202c; color: #eef; margin: 0; padding: 16px; }
+  h1 { font-size: 22px; } h2 { font-size: 17px; margin: 22px 0 8px; color: #ffd76a; }
+  p { color: #b9c7d6; max-width: 760px; }
+  button { font: inherit; background: #1f3a50; color: #fff; border: 1px solid #36566f; border-radius: 8px; padding: 7px 11px; margin: 3px; cursor: pointer; }
+  button:active, button.an { background: #2f7d4f; }
+  input { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid #36566f; background: #0c1822; color: #fff; }
+</style>
+</head>
+<body>
+<h1>🎙️ Stimmen von Schiedsrichter und Linienrichtern</h1>
+<p>Hier kannst du jede Aufnahme einzeln anhören. Klingt eine falsch (ein Name wird komisch ausgesprochen, ein Ruf ist zu leise)?
+  Dann merk dir, was auf dem Knopf steht – das ist auch der Name der Datei in <code>sounds/stimme/</code>.</p>
+
+<h2>So klingt es im Match (mehrere Aufnahmen hintereinander)</h2>
+<div id="bsp"></div>
+<h2>Schiedsrichter</h2>
+<div id="en"></div>
+<h2>Linienrichter (drei Stimmen)</h2>
+<div id="linie"></div>
+<h2>Namen <input id="suche" placeholder="suchen …"></h2>
+<div id="namen"></div>
+
+<script type="module">
+// Diese Seite benutzt dieselben Listen wie das Spiel (js/stimme.js) und spielt die Dateien ganz einfach nacheinander ab.
+import { ANSAGEN, ANSAGE_TEXT, LINIE, NAMEN, PAUSE } from '../js/stimme.js';
+const ORDNER = '../sounds/stimme/';
+const warte = (s) => new Promise((ok) => setTimeout(ok, s * 1000));
+let lauf = 0;
+// Spielt eine Ansage ab: Texte sind Aufnahmen, Zahlen sind Pausen
+async function spiele(teile, knopf) {
+  const ich = ++lauf;
+  knopf.classList.add('an');
+  for (const t of teile) {
+    if (ich !== lauf) break;
+    if (typeof t === 'number') { await warte(t); continue; }
+    const a = new Audio(ORDNER + t + '.mp3');
+    await new Promise((ok) => { a.onended = ok; a.onerror = ok; a.play().catch(ok); });
+  }
+  knopf.classList.remove('an');
+}
+function knopf(wo, text, teile) {
+  const b = document.createElement('button');
+  b.textContent = text;
+  b.onclick = () => spiele(teile, b);
+  document.querySelector(wo).appendChild(b);
+  return b;
+}
+const PUNKT = ['love', 'fifteen', 'thirty', 'forty'];
+const text = (k) => ANSAGE_TEXT[k] || (/^p\d\d$/.test(k) ? `${k}: ${PUNKT[k[1]]} ${k[1] === k[2] ? 'all' : PUNKT[k[2]]}` : k.startsWith('all') ? `${k}: ${k.slice(3)} all` : `${k}: Zahl ${k.slice(1)}`);
+for (const k of ANSAGEN) knopf('#en', text(k), ['en/' + k]);
+for (const art of Object.keys(LINIE)) for (let i = 1; i <= LINIE[art]; i++) knopf('#linie', `${art}_${i}`, [`linie/${art}_${i}`]);
+for (const n of NAMEN) knopf('#namen', n, ['namen/' + n]).dataset.n = n;
+document.querySelector('#suche').oninput = (e) => {
+  for (const b of document.querySelectorAll('#namen button')) b.hidden = !b.dataset.n.includes(e.target.value.toLowerCase().trim());
+};
+// Beispiele
+knopf('#bsp', '„Out!“ – dann „Thirty forty. Break point.“', ['linie/out_1', 0.6, 'en/p23', PAUSE, 'en/break_point']);
+knopf('#bsp', '„Advantage, Sinner“', ['en/advantage', 'namen/sinner']);
+knopf('#bsp', '„Fault!“ – dann „Double fault. Deuce.“', ['linie/fault_3', 0.6, 'en/double_fault', PAUSE, 'en/deuce']);
+knopf('#bsp', '„Game, Alcaraz. Tie-break.“', ['en/game', 'namen/alcaraz', PAUSE, 'en/tiebreak']);
+knopf('#bsp', 'Tiebreak: „Five four, Zverev“', ['en/n5', 'en/n4', 'namen/zverev']);
+knopf('#bsp', '„Game, set and match, Zverev“', ['en/game_set_match', 'namen/zverev']);
+knopf('#bsp', 'Einlauf: „Please welcome the players“', ['en/welcome']);
+</script>
+</body>
+</html>

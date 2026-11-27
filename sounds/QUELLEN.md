@@ -48,5 +48,19 @@ und dieses Repository ist öffentlich. Bei Freesound nur „Creative Commons 0�
 
 ## Was noch erzeugt wird
 
-- Der Schiedsrichter spricht mit der Sprachausgabe des Geräts (dafür gibt es keine freien deutschen Aufnahmen).
+- Wählt man in den Einstellungen „Deutsch (Stimme des Geräts)“, spricht der Schiedsrichter mit der Sprachausgabe des Geräts.
 - Fehlt eine Datei oder lädt sie noch, erzeugt `js/audio.js` ein einfaches Ersatz-Geräusch im Browser.
+
+## Stimmen (Ordner `stimme/`)
+
+Die Stimmen von Schiedsrichter und Linienrichtern sind **keine** Aufnahmen von Menschen und nicht von Freesound:
+Sie sind am 27.11.2026 mit **3D AI Studio** erzeugt (Sprach-Werkzeug mit eingebauten Stimmen; laut Anbieter für eigene Projekte nutzbar).
+Es wird kein echter Schiedsrichter nachgemacht.
+
+| Ordner | Was | Stimme | Dateien |
+|---|---|---|---|
+| `stimme/en/` | Ansagen des Schiedsrichters auf Englisch (Punktestand, Deuce, Advantage, Game, Set, Match, Fault, Time, Play …) | „Daniel“ | 65 |
+| `stimme/linie/` | Linienrichter: „Out!“ und „Fault!“ | „Callum“, „Alice“, „Bill“ | 12 |
+| `stimme/namen/` | Nachnamen der 200 Profis und der 40 Nachwuchs-Nachnamen | „Daniel“ | 238 |
+
+Zusammen etwa 1,2 MB. Wie sie gebaut werden: `tools/stimme_bau/LIESMICH.md`. Was wann gesagt wird: `js/stimme.js`. Prüfen: `node tools/stimme.mjs`. Anhören: `tools/stimmen.html`.

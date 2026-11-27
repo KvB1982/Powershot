@@ -15,6 +15,7 @@ import { ladeRequisiten } from './requisiten.js';
 import { loadMocap, loadGang, mocapClip } from './mocap.js';
 import { SHOW } from './showschlaege.js';
 import { steckbrief } from './einlauf.js';
+import { nameClip } from './stimme.js';
 import { schlagbuchHtml, uhrHtml } from './schlagbuch.js';
 import * as D from './data.js';
 import * as TN from './tournament.js';
@@ -73,6 +74,9 @@ const zugSichern = () => { try { localStorage.setItem(ZUG_KEY, JSON.stringify(zu
 // laufen alle zusammen 10 % schneller ab – wie ein Film, der etwas schneller abgespielt wird. Flugbahnen bleiben gleich.
 const TEMPO_MAL = { echt: 1, schnell: 1.1, turbo: 1.22 };
 const tempoMal = () => TEMPO_MAL[settings.tempo] || 1;
+// Wer sagt den Spielstand an? 'aufnahme' = aufgenommene Stimmen auf Englisch (wie im Fernsehen), 'geraet' = die Stimme des Geräts auf Deutsch, 'aus'.
+// Früher gab es nur „Schiedsrichter spricht: Ja / Nein“ (settings.voice) – wer „Nein“ gewählt hatte, behält „Aus“.
+if (!['aufnahme', 'geraet', 'aus'].includes(settings.stimme)) settings.stimme = settings.voice === false ? 'aus' : 'aufnahme';
 const saveSettings = () => { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) { /* egal */ } };
 
 const CONTROL_NAMES = { klassik: 'Klassik (Maus)', touch: 'Touch (iPad)', wisch: 'Wischen (iPad, neu)', profi: 'Profi (Tastatur)', controller: 'Controller / iPhone-Schläger' };
@@ -83,7 +87,7 @@ const ASSIST_NAMES = { voll: 'Voll (läuft von allein)', seitlich: 'Nur seitlich
 // Grundgerüst
 // ---------------------------------------------------------------
 const sound = new Sound();
-sound.voice = settings.voice;
+sound.stimme = settings.stimme;
 sound.volume = settings.volume;
 sound.umgebung = settings.umgebung;      // Publikum und Umgebung: 1 normal, 0.5 leise, 0 aus
 sound.enabled = settings.sound;
@@ -448,7 +452,9 @@ actions.settings = (v) => {
       ${optionRow('Publikum und Umgebung', 'umgebung', { 1: 'Normal', 0.5: 'Leise', 0: 'Aus' })}
       <p class="dim" style="margin:6px 0 0;font-size:13px">Applaus, Stadion und die Geräusche auf dem Turniergelände. Schläge und Knöpfe hörst du weiter.
         Auf iPad und iPhone bleibt alles still, solange der Schalter „Stumm“ an ist.</p>
-      ${optionRow('Schiedsrichter spricht', 'voice', { true: 'Ja', false: 'Nein' })}
+      ${optionRow('Schiedsrichter und Linienrichter', 'stimme', { aufnahme: 'Englisch (wie im Fernsehen)', geraet: 'Deutsch (Stimme des Geräts)', aus: 'Aus' })}
+      <p class="dim" style="margin:6px 0 0;font-size:13px">„Englisch“: aufgenommene Stimmen wie bei einem echten Turnier – „Fifteen love“ heißt 15:0, „Deuce“ Einstand,
+        „Advantage“ Vorteil, „Out“ Aus, „Fault“ Fehler. Auf dem Bildschirm steht alles weiter auf Deutsch.</p>
       ${optionRow('Grafik', 'quality', { hoch: 'Schön', niedrig: 'Schnell (ältere Geräte)' })}
       ${optionRow('Bildschärfe', 'schaerfe', { auto: 'Automatisch', fest: 'Immer voll' })}
       <p class="dim" style="margin:6px 0 0;font-size:13px">„Automatisch“: Wenn das Bild ruckelt (zum Beispiel auf einem großen Turniergelände), malt das Spiel
@@ -486,7 +492,8 @@ actions.set = (v, el) => {
   else if (key === 'volume' || key === 'umgebung') val = parseFloat(raw);
   settings[key] = val;
   saveSettings();
-  sound.voice = settings.voice;
+  sound.stimme = settings.stimme;
+  if (key === 'stimme') { sound.still(); sound.stimmeLaden(); }       // gerade auf „Englisch“ gestellt? Dann die Aufnahmen holen
   sound.setVolume(settings.volume);
   sound.setUmgebung(settings.umgebung);
   sound.setEnabled(settings.sound);
@@ -2815,7 +2822,7 @@ function einlaufLos(o) {
       karte.className = '';
       titel(info.teil === 'einlaufen' ? 'Die Spieler kommen auf den Platz' : 'Einspielen');
       $('#einlaufTitel').className = info.teil === 'einlaufen' ? 'on' : 'on klein';      // beim Einspielen nur ein kleines Schild, damit man die Spieler sieht
-      if (info.teil === 'einlaufen') sound.say('Bitte begrüßen Sie die Spieler!');
+      if (info.teil === 'einlaufen') { sound.stimmeLaden([o.me.short, o.opp.short]); sound.ansage(['en/welcome'], 'Bitte begrüßen Sie die Spieler!'); }
       return;
     }
     // Steckbrief: Wer wird gerade gezeigt?
@@ -2830,7 +2837,8 @@ function einlaufLos(o) {
     karte.className = '';
     void karte.offsetWidth;           // kurz „ausschalten“, damit die Karte jedes Mal neu hereingleitet
     karte.className = 'on';
-    sound.say(k.name);
+    const clip = nameClip(p.short);              // gibt es eine Aufnahme mit diesem Namen? Sonst sagt ihn die Stimme des Geräts
+    sound.ansage(clip ? [clip] : null, k.name);
   });
 }
 // Die Szene ist vorbei (oder übersprungen): Jetzt beginnt das Match.

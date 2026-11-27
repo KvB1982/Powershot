@@ -12,6 +12,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const REASON_TEXT = { aus: 'Aus!', netz: 'Netz!', doppelfehler: 'Doppelfehler!', ass: 'Ass!', winner: 'Winner!' };
 
 import { Siegerehrung } from './siegerehrung.js';
+import { punktAnsage, QUIET_OFT } from './stimme.js';
 import { Anlage } from './anlage.js';
 import { Einlauf } from './einlauf.js';
 
@@ -351,11 +352,23 @@ export class Game3D {
     const snd = this.sound, self = this;
     const hud = () => self.hud || {};
     const call = (f, ...a) => { const h = hud(); if (h[f]) h[f](...a); };
+    snd.stimmeLaden(names);          // die Stimmen von Schiedsrichter und Linienrichtern holen (und die zwei Namen)
+    let erster = true;               // der allererste Aufschlag des Matches? Dann sagt der Schiedsrichter "Play"
+    self.wechselLief = false;
     return {
       serveSetup(info) {
         self.landing.visible = self.landingDot.visible = false;
         snd.setCrowd(0.035);
         call('update');
+        // Der Schiedsrichter: "Play" zu Beginn, "Time" nach dem Seitenwechsel, vor einem Satz- oder Matchball manchmal "Quiet please".
+        // (Das gibt es nur mit den aufgenommenen Stimmen – die Stimme des Geräts sagt hier nichts.)
+        if (self.match && self.match.mode === 'match' && !self.match.cfg.lernen && info.serveNo !== 2) {
+          const w = self.match.score.wichtigerPunkt();
+          if (erster) snd.ansage(['en/play'], null, 0.4, true);
+          else if (self.wechselLief) snd.ansage(['en/time'], null, 0.2, true);
+          else if (w && w.art !== 'break' && (self.venue ? self.venue.zuschauer ?? 1 : 1) >= 0.6 && Math.random() < QUIET_OFT) snd.ansage(['en/quiet'], null, 2.2, true);
+          erster = false; self.wechselLief = false;
+        }
         // Wichtiger Punkt? Dann steht es oben: Breakball, Satzball, Matchball (im Finale: Championship Point)
         const wichtig = self.match && self.match.mode === 'match' ? self.match.score.wichtigText(names, self.match.cfg.finale) : '';
         if (wichtig) call('message', wichtig + (info.serveNo === 2 ? ' · 2. Aufschlag' : ''), 'wichtig');
@@ -400,7 +413,8 @@ export class Game3D {
       },
       fault(n, why) {
         call('message', why === 'netz' ? 'Netz – Fehler!' : 'Fehler!', 'warn');
-        snd.say('Fehler');
+        // Aufschlag im Aus: Der Linienrichter ruft "Fault!". Aufschlag im Netz: Das sagt der Schiedsrichter selbst.
+        if (why === 'netz' || !snd.linienrichter('fault')) snd.ansage(['en/fault'], 'Fehler');
         snd.ooh();
       },
       point(info) {
@@ -434,7 +448,10 @@ export class Game3D {
         snd.applause(strength, strength > 0.7);
         self.stadium.jubel(strength);
         snd.setCrowd(0.06);
-        setTimeout(() => snd.say(say), 500);
+        // Erst ruft (bei einem Ball im Aus) der Linienrichter, dann sagt der Schiedsrichter den Spielstand an
+        const an = punktAnsage(info, sc, names, { finale: self.match.cfg.finale, netz: self.match.netHit });
+        const rief = an.linie ? snd.linienrichter(an.linie) : false;
+        snd.ansage(an.teile, say, rief ? 1.0 : 0.5);
         call('point', head, sub, info);
         call('update');
         self.stadium.setBoard([names[0] + '  ' + sc.sets.map((s) => s[0]).join(' ') + ' ' + sc.games[0], names[1] + '  ' + sc.sets.map((s) => s[1]).join(' ') + ' ' + sc.games[1]], sc.pointLabels().join(' : '));
@@ -559,6 +576,7 @@ export class Game3D {
       const tossing = amAufschlag && !vonUnten;
       const st = { x: p.x, z: p.z, vx: p.vx, vz: p.vz, prep: p.prep, stroke: p.stroke, mood: m.state === 'pointOver' ? p.mood : null, ball: b };
       st.walk = m.state === 'changeover';       // beim Seitenwechsel wird aufrecht gegangen
+      if (st.walk) this.wechselLief = true;     // merken: Danach sagt der Schiedsrichter "Time"
       if (tossing) {
         // Aufschlag: der Ballwurf steuert die Bewegung
         st.stroke = 'sv';
