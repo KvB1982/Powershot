@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Schlag-Geräusche zum Probehören</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #12202b; color: #eef; margin: 0; padding: 16px; max-width: 900px; margin: auto; }
+  h1 { font-size: 22px; } p { line-height: 1.45; }
+  .quelle { background: #1c2f3d; border-radius: 12px; padding: 12px; margin: 14px 0; }
+  .quelle h2 { font-size: 17px; margin: 0 0 2px; } .quelle small { color: #9bb; }
+  .quelle a { color: #8cf; }
+  .reihe { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .stueck { display: flex; border-radius: 10px; overflow: hidden; }
+  button { font-size: 17px; border: 0; padding: 12px 16px; background: #2f6f9f; color: #fff; cursor: pointer; }
+  button.stern { background: #33475a; padding: 12px 12px; }
+  button.stern.an { background: #d9a400; }
+  button:active { filter: brightness(1.3); }
+  #wahl { position: sticky; bottom: 0; background: #0b151d; padding: 10px; border-radius: 12px 12px 0 0; }
+  #wahl textarea { width: 100%; box-sizing: border-box; font-size: 16px; height: 52px; background: #1c2f3d; color: #fff; border: 1px solid #456; border-radius: 8px; }
+</style>
+</head>
+<body>
+<h1>🎾 Schlag-Geräusche zum Probehören</h1>
+<p>Hier sind echte Aufnahmen von Tennisschlägen (alle von Freesound, Lizenz CC0 = frei benutzbar).
+Aus jeder Aufnahme sind die klarsten Stellen herausgeschnitten. Ein Programm hat sie gesucht – es kann nicht hören,
+ob eine Stelle ein Schlag, ein Aufprall oder etwas anderes ist. Deshalb: <b>anhören und mit ⭐ merken, was gut klingt.</b>
+Unten steht dann deine Auswahl zum Kopieren. Mit „ganze Aufnahme“ kommst du zur Seite der Aufnahme bei Freesound.</p>
+<div id="liste">Lade …</div>
+<div id="wahl"><b>Deine Auswahl</b> (kopieren und in den Chat schreiben):<textarea id="text" readonly></textarea></div>
+
+<script type="module">
+// Die Liste aller Stücke: tools/schlag_probe/liste.json (Buchstabe = Aufnahme, Zahl = Stück daraus)
+const liste = await (await fetch('schlag_probe/liste.json')).json();
+const gemerkt = new Set(JSON.parse(localStorage.getItem('powershot.schlagprobe.v1') || '[]'));
+const box = document.querySelector('#liste');
+box.textContent = '';
+const zeigeWahl = () => {
+  document.querySelector('#text').value = [...gemerkt].sort().join(', ');
+  localStorage.setItem('powershot.schlagprobe.v1', JSON.stringify([...gemerkt]));
+};
+for (const q of liste) {
+  const kasten = document.createElement('div');
+  kasten.className = 'quelle';
+  kasten.innerHTML = `<h2>${q.buchstabe} · ${q.hinweis}</h2><small>„${q.titel}“ von ${q.von} · <a href="${q.seite}" target="_blank" rel="noopener">ganze Aufnahme</a></small>`;
+  const reihe = document.createElement('div');
+  reihe.className = 'reihe';
+  q.stuecke.forEach((s, i) => {
+    const name = q.buchstabe + (i + 1);
+    const paar = document.createElement('div');
+    paar.className = 'stueck';
+    const spiel = document.createElement('button');
+    spiel.textContent = '▶ ' + name;
+    spiel.onclick = () => new Audio('schlag_probe/' + s.datei).play();      // abspielen
+    const stern = document.createElement('button');
+    stern.textContent = '⭐';
+    stern.className = 'stern' + (gemerkt.has(name) ? ' an' : '');
+    stern.onclick = () => {                                                 // merken oder wieder vergessen
+      if (gemerkt.has(name)) gemerkt.delete(name); else gemerkt.add(name);
+      stern.classList.toggle('an', gemerkt.has(name));
+      zeigeWahl();
+    };
+    paar.append(spiel, stern);
+    reihe.append(paar);
+  });
+  kasten.append(reihe);
+  box.append(kasten);
+}
+zeigeWahl();
+</script>
+</body>
+</html>
