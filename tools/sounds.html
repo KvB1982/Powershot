@@ -50,7 +50,10 @@ const KNOEPFE = {
   'Wagentür': () => sound.autotuer(), 'Wagen fährt los': () => sound.auto(), 'Fotoapparat': () => sound.kamera(),
   'Knopf': () => sound.click(), 'Zurück': () => sound.zurueck(), 'Umschalten': () => sound.schalter(), 'Antippen': () => sound.tipp(), 'Ablegen': () => sound.plopp(),
   'Richtig': () => sound.richtig(), 'Falsch': () => sound.falsch(), 'Stern': () => sound.stern(), 'Geschafft': () => sound.geschafft(), 'Sieg-Melodie': () => sound.sieg(),
-  'Kasse': () => sound.kasse(), 'Stift': () => sound.stift(), 'Schiedsrichter': () => sound.say('Spiel, Satz und Sieg'),
+  'Kasse': () => sound.kasse(), 'Stift': () => sound.stift(), 'Schiedsrichter': async () => {                       // die Aufnahme (alle Ansagen: tools/stimmen.html)
+    for (let i = 0; i < 50 && !sound.stimmen['en/game_set_match']; i++) await new Promise((ok) => setTimeout(ok, 200));   // warten, bis die Aufnahme geladen ist
+    sound.ansage(['en/game_set_match'], 'Spiel, Satz und Sieg');
+  },
 };
 const spiel = document.querySelector('#spiel');
 for (const [name, tun] of Object.entries(KNOEPFE)) {
