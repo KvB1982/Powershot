@@ -1,2 +1,4 @@
 xcuserdata/
 *.xcuserstate
+testflight.env
+*.p8
