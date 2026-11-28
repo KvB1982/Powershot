@@ -17,6 +17,7 @@
 // Fehlt sie, nimmt das Match den Standard: erster Aufschlag gerade, zweiter Kick.
 // Eine Steuerung darf außerdem in "schlag" eigene Zahlen mitgeben, z. B. { top: 3400, seite: -500, tempo: 31 }.
 
+import { R } from './regler.js';      // Regler vom Physik-Labor
 import { AUFSCHLAG_ARTEN } from './schlaege.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -80,7 +81,7 @@ const PAD_HALTBAR = 0.6;               // so lange "gilt" ein Tastendruck, bis d
 // Ein echter Schwung (Uhr, iPhone, Joy-Con) gilt viel länger (seit 22.11.2026, Wunsch von Kristian: den Ball öfter treffen).
 // Wer schwingt, sobald der Gegner geschlagen hat, trifft also trotzdem – der Ball geht dann nur ganz cross.
 // (Ein Schwung, BEVOR der Gegner schlägt, zählt weiter nicht: Der wird beim Schlag des Gegners gelöscht.)
-const SCHWUNG_HALTBAR = 1.6;
+// (SCHWUNG_HALTBAR = 1.6 ist jetzt der Regler R.uhrFrueh im Physik-Labor, js/regler.js.)
 // --- Schwingen mit Uhr, iPhone oder Controller: Hilfen, damit man damit auch Punkte macht (seit 21.11.2026, alle Zahlen geschätzt) ---
 const SCHWUNG_MIN = 0.5;               // so hart ist schon der sanfteste Schwung (0 bis 1). Früher 0.3 – da kam der Ball zu lahm.
 const SCHWUNG_KURVE = 0.6;             // kleiner als 1 = schon ein mittlerer Schwung gibt fast volle Härte
@@ -639,7 +640,7 @@ export class Controls {
       if (this.charging) this.power = Math.min(this.ctx === 'serve' ? 1.25 : 1, this.power + dt / 0.5);
     } else if (this.mode === 'controller' || this.mode === 'wisch') {
       // Zu früh geschwungen oder gewischt? Dann verfällt der Schlag wieder – wie beim echten Tennis muss das Timing stimmen.
-      if (this.committed && this.ctx === 'rally' && this.time - this.padAt > (this.mode === 'wisch' ? WISCH_HALTBAR : this.committed.schwung ? SCHWUNG_HALTBAR : PAD_HALTBAR)) {
+      if (this.committed && this.ctx === 'rally' && this.time - this.padAt > (this.mode === 'wisch' ? WISCH_HALTBAR : this.committed.schwung ? R.uhrFrueh : PAD_HALTBAR)) {
         if (this.onRek) this.onRek('verfallen', { art: this.committed.type, alt: Math.round((this.time - this.padAt) * 100) / 100 });
         this.committed = null;
       }

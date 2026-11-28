@@ -2,6 +2,8 @@
 // Koordinaten: x = quer (rechts +), y = Höhe, z = längs. Netz bei z = 0.
 // Seite 0 (du) spielt bei z > 0, Seite 1 (Gegner) bei z < 0.
 
+import { R } from './regler.js';     // die Regler vom Physik-Labor (steht alles auf Standard, ändert sich hier nichts)
+
 export const COURT = {
   L: 11.885,      // halbe Platzlänge (Netz bis Grundlinie)
   W: 4.115,       // halbe Breite Einzelfeld
@@ -50,7 +52,7 @@ function beschleunigung(v, spin, out) {
   if (w > 1 && vh > 0.5) {
     // Je schneller sich der Ball im Vergleich zu seinem Flugtempo dreht, desto stärker die Magnus-Kraft
     const cl = 1 / (2 + sp / (COURT.BALL_R * w));
-    const m = LUFT * cl * sp / w * RPM;
+    const m = LUFT * cl * sp / w * RPM * R.drall;      // R.drall: Regler „Wirkung des Dralls“ (1 = normal)
     const hx = v.x / vh, hz = v.z / vh;                  // Flugrichtung am Boden entlang
     // Topspin: drückt nach unten (und ein bisschen nach vorne, solange der Ball steigt)
     out.y -= m * spin.top * vh;
@@ -167,13 +169,16 @@ export class Ball {
     const vh = Math.hypot(v.x, v.z);
     const hx = vh > 0.01 ? v.x / vh : 0, hz = vh > 0.01 ? v.z / vh : -1;
     const fall = -v.y;
+    // Regler vom Physik-Labor: Absprung-Höhe und wie stark der Boden bremst (beide 1 = normal).
+    // Höher als 0,92 darf der Absprung nicht werden – sonst hüpft der Ball ewig weiter.
+    const e = Math.min(0.92, surface.e * R.absprung), mu = surface.mu * R.griff;
     // So schnell rutscht die Unterseite des Balls über den Boden: nach vorne und zur Seite (rechts)
     const rutschV = vh - r * s.top * RPM;
     const rutschS = r * s.drall * RPM;
     const rutsch = Math.hypot(rutschV, rutschS);
     if (rutsch > 0.01) {
       // Die Reibung kann höchstens so viel bremsen, wie der Boden hergibt – oder bis der Ball nicht mehr rutscht, sondern rollt
-      const j = Math.min(surface.mu * (1 + surface.e) * fall, rutsch / 2.5);
+      const j = Math.min(mu * (1 + e) * fall, rutsch / 2.5);
       const jv = j * rutschV / rutsch, js = j * rutschS / rutsch;
       const neuV = vh - jv;                   // Tempo nach vorne (kann beim Stoppball negativ werden = zurück)
       v.x = hx * neuV + -hz * js;
@@ -183,7 +188,7 @@ export class Ball {
       s.drall -= 1.5 * js / r / RPM;
     }
     s.seite *= 0.7;
-    v.y = fall * surface.e;
+    v.y = fall * e;
   }
 }
 

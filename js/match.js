@@ -6,24 +6,29 @@ import { MatchScore } from './rules.js';
 import { DIFFICULTY } from './data.js';
 import { achtWerte } from './faehigkeiten.js';
 import { GRUNDSCHLAEGE, AUFSCHLAEGE, schlagWerte, aufschlagWerte, standardAufschlag } from './schlaege.js';
+import { R, ballMal, beinMal } from './regler.js';      // Regler vom Physik-Labor (auf Standard ändern sie nichts)
 import { ZUEGE, ZugZaehler, zielfeld, zielPunkt, lieblingsZuege, ZUG_REAKTION, ZUG_STREUT, ZUG_SCHWACH, ZUG_SICHER } from './spielzuege.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const NOFX = new Proxy({}, { get: () => () => {} });
 const SPAET_WISCH = 0.18;    // Wischen: so lange nach dem besten Moment darf man noch wischen (gleiche Zahl wie WISCH_SPAET in controls.js)
-const SPAET_FENSTER = 0.35;  // Controller und Uhr: so lange (Sekunden) darf man nach dem besten Moment noch schlagen (= Ball geht longline).
+// (Früher stand hier SPAET_FENSTER = 0.35. Das ist jetzt der Regler R.uhrSpaet in js/regler.js.)
+// Controller und Uhr: so lange (Sekunden) darf man nach dem besten Moment noch schlagen (= Ball geht longline).
                              // Seit 22.11.2026 länger (vorher 0.15): Die Uhr meldet einen Schwung immer ein bisschen verspätet, dann hieß es oft "Zu spät!".
                              // Wer so spät schlägt, trifft den Ball an der Stelle, an der er am Schläger vorbeikam (siehe spaetVon in tryHit).
-const REACH_SCHWUNG = 0.3;   // Controller und Uhr: so viel weiter (Meter) reicht der Schläger – man kann beim Schwingen ja nicht fein hinlaufen
+// (REACH_SCHWUNG = 0.3 ist jetzt der Regler R.uhrReich in js/regler.js.)
+// Controller und Uhr: so viel weiter (Meter) reicht der Schläger – man kann beim Schwingen ja nicht fein hinlaufen
 // Tempo im Spiel (seit 21.11.2026 schneller, Wunsch von Kristian: mehr Action). Ball und Beine müssen zusammenpassen:
 // Wer hier die Bälle schneller macht (js/schlaege.js), muss auch die Spieler schneller machen – sonst gibt es nur noch Winner.
 const LAUF_LANGSAM = 4.6, LAUF_SCHNELL = 7.3;         // Lauftempo in m/s: Spieler mit wenig und mit viel Beinarbeit
 const ANTRITT_LANGSAM = 14, ANTRITT_SCHNELL = 23;     // Antritt: so schnell kommt er auf Tempo (m/s pro Sekunde)
 const AUFSCHLAG_LANGSAM = 38, AUFSCHLAG_SCHNELL = 63; // schnellster Aufschlag in m/s: schwacher und starker Aufschläger (63 m/s = 227 km/h)
-const SCHWUNG_GENAU = 0.7;  // Schwingen mit Uhr, iPhone oder Controller: Der Schlag streut nur so viel wie sonst (man kann ja nicht fein zielen)
-const SCHWUNG_UEBERRASCHT = 1.8;   // … und der Computer reagiert auf einen geschwungenen Schlag so viel später (1 = wie sonst). Größer = mehr Winner für dich.
-const REACH = 1.4;          // so weit reicht man mit dem Schläger (Meter)
+// Vier Zahlen von hier sind jetzt Regler im Physik-Labor (js/regler.js): SCHWUNG_GENAU → R.uhrGenau (0.7),
+// SCHWUNG_UEBERRASCHT → R.uhrUeberrascht (1.8), REACH → R.reichweite (1.4). Was sie bedeuten:
+// Schwingen mit Uhr, iPhone oder Controller: Der Schlag streut nur so viel wie sonst (man kann ja nicht fein zielen)
+// … und der Computer reagiert auf einen geschwungenen Schlag so viel später (1 = wie sonst). Größer = mehr Winner für dich.
+// so weit reicht man mit dem Schläger (Meter)
 const KAMERA_HILFE = 2.0;   // Kamera-Steuerung: So nah (Meter) musst du am Ball stehen, damit der Spieler den letzten Schritt allein macht
 export const TOSS_TIME = 1.4;      // Dauer der Aufschlagbewegung vom Stand bis zum Treffpunkt
 const WALK_SPEED = 1.5;            // Gehen beim Seitenwechsel (m/s) – gemütliches Gehen, kein Eilen
@@ -68,7 +73,8 @@ export class Match {
     this.cfg = cfg;
     this.fx = fx;
     this.controls = controls;
-    this.diff = DIFFICULTY[cfg.difficulty] || DIFFICULTY.mittel;
+    // cfg.diff = eine selbst gebaute Stufe aus dem Physik-Labor (sonst die gewählte Stufe aus data.js)
+    this.diff = cfg.diff || DIFFICULTY[cfg.difficulty] || DIFFICULTY.mittel;
     this.surface = SURFACES[cfg.surface] || SURFACES.hard;
     this.mode = cfg.mode || 'match';
     this.score = new MatchScore({ sets: cfg.sets, games: cfg.games, firstServer: this.mode === 'match' ? (Math.random() < 0.5 ? 0 : 1) : 0 });
@@ -139,8 +145,9 @@ export class Match {
       get c() { return this.stroke === 'bh' ? this.rhC : this.vhC; },
       aus: q(st.a), men: q(st.m), tak: q(st.k),
       gelaufen: 0, muede: 0,                // so viele Meter ist er schon gerannt, und wie müde er davon ist (0 bis 1)
-      topSpeed: LAUF_LANGSAM + (LAUF_SCHNELL - LAUF_LANGSAM) * q(st.b),        // so schnell läuft er, wenn er frisch ist
-      maxSpeed: LAUF_LANGSAM + (LAUF_SCHNELL - LAUF_LANGSAM) * q(st.b), accel: ANTRITT_LANGSAM + (ANTRITT_SCHNELL - ANTRITT_LANGSAM) * q(st.b),
+      topSpeed: (LAUF_LANGSAM + (LAUF_SCHNELL - LAUF_LANGSAM) * q(st.b)) * beinMal(),        // so schnell läuft er, wenn er frisch ist
+      maxSpeed: (LAUF_LANGSAM + (LAUF_SCHNELL - LAUF_LANGSAM) * q(st.b)) * beinMal(),
+      accel: (ANTRITT_LANGSAM + (ANTRITT_SCHNELL - ANTRITT_LANGSAM) * q(st.b)) * beinMal() * R.antritt,
       x: 0, z: dz * (C.L + 0.6), vx: 0, vz: 0,
       homeX: 0, homeZ: C.L + 0.7, netRush: false,
       plan: null, planAge: 9, react: 0, missed: false, lastDist: 99,
@@ -460,7 +467,7 @@ export class Match {
       S = aufschlagWerte(intent.art, intent.schlag);
       S = mitTechnik(S, p.data.technik && p.data.technik.aufschlag[intent.art || 'gerade'], p);
       const z = first ? { tempo: 1, streu: 1, netzfehler: 1 } : S.zweiter;     // zweiter Aufschlag: etwas vorsichtiger
-      vh = S.bogen ? 12 : (AUFSCHLAG_LANGSAM + (AUFSCHLAG_SCHNELL - AUFSCHLAG_LANGSAM) * p.s) * (0.72 + 0.28 * pw) * S.tempo * z.tempo;
+      vh = S.bogen ? 12 : (AUFSCHLAG_LANGSAM + (AUFSCHLAG_SCHNELL - AUFSCHLAG_LANGSAM) * p.s) * (0.72 + 0.28 * pw) * S.tempo * z.tempo * ballMal() * R.aufschlag;
       clear = S.netz;
       sigma = (0.24 + (1 - p.s) * 0.8) * (0.35 + pw * pw) * S.streu * z.streu;
       pNet = (0.02 + 0.09 * pw * (1 - p.s * 0.6)) * S.netzfehler * z.netzfehler;
@@ -474,6 +481,7 @@ export class Match {
       const tp = Array.isArray(S.tempo) ? S.tempo : [S.tempo || 12, S.tempo || 12];
       const nz = Array.isArray(S.netz) ? S.netz : [S.netz, S.netz];
       vh = (tp[0] + (tp[1] - tp[0]) * p.p) * (1 - (S.kraft || 0) + (S.kraft || 0) * pw);
+      if (type !== 'lob') vh *= ballMal();      // Regler „Tempo“ (der Lob bleibt, sonst fliegt er zu weit)
       clear = nz[0] + (nz[1] - nz[0]) * pw;
       if (S.tiefe) td = clamp(td, S.tiefe[0], S.tiefe[1]);
       if (type === 'volley') ctl = p.v;
@@ -485,18 +493,18 @@ export class Match {
     // Der Drall des Balls. Die Tabelle gilt für Rechtshänder – bei Linkshändern dreht sich die Seite um.
     // (dz dreht die Zahlen für den Spieler auf der anderen Platzseite nicht um: "rechts" heißt immer rechts in Flugrichtung.)
     spin = { top: S.top || 0, seite: (S.seite || 0) * p.hand, drall: (S.drall || 0) * p.hand };
-    sigma *= sigK; pNet *= netK;
+    sigma *= sigK * R.streu; pNet *= netK * R.netzfehler;      // Stufe mal Regler „Streuung“ und „Bälle ins Netz“
     if (intent.ruhig) { sigma *= 1 - intent.ruhig; pNet *= 1 - intent.ruhig; }     // Chance-Ball: bequem zu schlagen, also genauer
     if (this.lernZug && !p.isHuman) { sigma *= 0.4; pNet = 0; }      // der Trainer macht fast keine Fehler
     // Spielzüge: Wer vom Spielzug des Gegners unter Druck gesetzt wurde, schlägt ungenauer und schwächer.
     // Wer selbst gerade einen Spielzug geschafft hat, trifft für den Rest des Punkts genauer.
     if (p.druck > 0) { sigma *= 1 + ZUG_STREUT * p.druck; vh *= 1 - ZUG_SCHWACH * p.druck; }
     if (p.sicher > 0) sigma *= 1 - p.sicher;
-    if (intent.schwung && p.isHuman) sigma *= SCHWUNG_GENAU;        // Schwung-Hilfe (siehe SCHWUNG_… in controls.js)
+    if (intent.schwung && p.isHuman) sigma *= R.uhrGenau;        // Schwung-Hilfe (siehe SCHWUNG_… in controls.js)
     // Mental: Bei Breakball, Satzball und Matchball zittert die Hand – bei nervenstarken Spielern weniger.
     if (this.mode === 'match' && !this.lernZug && this.score.wichtigerPunkt()) sigma *= 1 + NERVEN * (NERVEN_MITTE - p.men);
     // Ausdauer: Wer müde ist, trifft ungenauer.
-    sigma *= 1 + MUEDE_STREUT * p.muede;
+    sigma *= 1 + MUEDE_STREUT * R.muede * p.muede;
     tx += gauss() * sigma;
     td += gauss() * sigma * 1.3;
     if (p.isHuman && d.autoReturn && type !== 'serve') {   // Stufe "Leicht": deine Bälle bleiben drin
@@ -534,7 +542,7 @@ export class Match {
     opp.spaetVon = null; opp.spaetSeit = null;        // Controller: ab wann der beste Moment zum Schlagen vorbei ist
     // Taktik des Schlägers: Ein kluger Spieler verrät spät, wohin er spielt – der Gegner reagiert später.
     opp.react = opp.isHuman ? (opp.hilfe ? HILFS_SPAET : this.diff.meReact ?? 0.04) : this.diff.aiReact * (1.15 - 0.3 * opp.t) * (isServe ? 0.65 : 1 + TAKTIK_TARNT * (p.tak - 0.5));
-    if (shot.schwung && !opp.isHuman && !isServe) opp.react *= SCHWUNG_UEBERRASCHT;      // Schwung-Hilfe: Der Computer braucht länger, um loszulaufen
+    if (shot.schwung && !opp.isHuman && !isServe) opp.react *= R.uhrUeberrascht;      // Schwung-Hilfe: Der Computer braucht länger, um loszulaufen
     if (this.rek) { this.rek.schlag(this, p, from, shot, isServe, this.rekInfo || {}); this.rekInfo = null; }
     this.zugSchlag(p, opp, from, shot, isServe);
     p.plan = null; p.prep = 0;
@@ -848,7 +856,7 @@ export class Match {
     if (this.mode === 'match' && this.state === 'rally') {
       p.gelaufen += Math.hypot(p.vx, p.vz) * dt;
       p.muede = clamp((p.gelaufen - MUEDE_AB) / (MUEDE_METER * (1 + 3 * p.aus)), 0, 1);
-      p.maxSpeed = p.topSpeed * (1 - MUEDE_BREMST * p.muede);
+      p.maxSpeed = p.topSpeed * (1 - Math.min(0.6, MUEDE_BREMST * R.muede) * p.muede);
     }
   }
 
@@ -910,8 +918,8 @@ export class Match {
     p.lastDist = dist;
     // Controller und Wischen: Der beste Moment ist vorbei, aber für einen kurzen Augenblick darf man noch (zu spät) schlagen.
     const pad = p.isHuman && (this.cfg.controlMode === 'controller' || this.cfg.controlMode === 'wisch');
-    const reach = (b.isServe ? REACH + 0.3 : REACH)      // beim Return streckt man sich weiter
-      + (p.isHuman && this.cfg.controlMode === 'controller' ? REACH_SCHWUNG : 0);
+    const reach = (b.isServe ? R.reichweite + 0.3 : R.reichweite)      // beim Return streckt man sich weiter
+      + (p.isHuman && this.cfg.controlMode === 'controller' ? R.uhrReich : 0);
     const spaet = pad && p.spaetSeit != null ? this.sinceHit - p.spaetSeit : 0;
     const nachzuegler = pad && p.spaetSeit != null && b.pos.y >= 0.1;     // läuft, bis getroffen oder endgültig verpasst
     if (!nachzuegler && (dist > reach || b.pos.y > 2.75 || b.pos.y < 0.1)) return;
@@ -931,7 +939,7 @@ export class Match {
     if (p.isHuman) {
       if (this.controls) this.controls.schlagSeite = (fh ? 1 : -1) * p.hand * p.dz;      // Ball rechts (+1) oder links (-1) von dir
       let raw = this.controls ? this.controls.consume(spaet) : null;
-      if (!raw && pad && (p.spaetSeit == null || spaet < (this.cfg.controlMode === 'wisch' ? SPAET_WISCH : SPAET_FENSTER))) {
+      if (!raw && pad && (p.spaetSeit == null || spaet < (this.cfg.controlMode === 'wisch' ? SPAET_WISCH : R.uhrSpaet))) {
         if (p.spaetSeit == null) { p.spaetSeit = this.sinceHit; p.spaetVon = wo; }      // ab jetzt läuft die kurze Frist für "spät"
         return;
       }
@@ -1002,7 +1010,7 @@ export class Match {
       // Chance-Ball: Kommt der Ball langsam und bequem in die Mitte, greift der Computer an –
       // hart und genau in die freie Ecke. Wer nur zurückschiebt, wird dafür bestraft; wer zielt, nicht.
       const bequem = opp.hilfe ? 1 : (this.diff.aiAngriff || 0) * clamp(1 - o.stretch / 0.3, 0, 1)
-        * clamp((CHANCE_SEITE - Math.abs(o.from.x)) / 1.4, 0, 1) * clamp((CHANCE_TEMPO - o.incoming) / 5, 0, 1);
+        * clamp((CHANCE_SEITE - Math.abs(o.from.x)) / 1.4, 0, 1) * clamp((CHANCE_TEMPO * ballMal() - o.incoming) / 5, 0, 1);
       if (bequem > 0 && Math.random() < bequem) {
         x = away * wide * (0.82 + 0.18 * Math.random());
         d = C.L * (0.72 + 0.14 * Math.random());

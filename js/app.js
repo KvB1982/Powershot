@@ -38,6 +38,8 @@ import * as PS from './profisaison.js';
 import * as SZ from './spielzuege.js';
 import * as LE from './lernen.js';
 import * as PR from './profile.js';
+import * as RG from './regler.js';
+import * as LB from './labor.js';
 import { Rekorder, kurzName } from './rekorder.js';
 import * as RS from './rekorderspeicher.js';
 import { auswerten, bericht, STEUERUNG_NAME } from './rekorderauswertung.js';
@@ -239,6 +241,7 @@ actions.home = () => {
     </div>
     <div class="menu" style="margin-top:14px">
       <div class="row"><button class="grow" data-a="settings" data-v="home">Einstellungen</button><button class="grow" data-a="help" data-v="home">Steuerung</button><button class="grow" data-a="neuImSpiel">Was ist was?</button></div>
+      <div class="row"><button class="grow ghost" data-a="labor">🔧 Physik-Labor <small class="dim">für Tüftler: Ball, Beine und Gegner selbst einstellen</small></button></div>
     </div>`);
 };
 
@@ -267,6 +270,7 @@ actions.neuImSpiel = () => {
     </table></div>
     <div class="panel"><h3 style="margin-top:0">Gut zu wissen</h3>
       <p><b>Schwierigkeit:</b> ${Object.keys(STUFE_TEXT).map((k) => `<b>${D.DIFFICULTY[k].name}</b> – ${STUFE_TEXT[k]}`).join(' ')}</p>
+      <p><b>Physik-Labor</b> (ganz unten im Hauptmenü): Für Tüftler. Mit Schiebereglern stellst du ein, wie schnell der Ball ist, wie hoch er springt, wie stark der Gegner ist – und probierst es gleich aus. Was dir gefällt, speicherst du als eigene Stufe für das Freie Spiel.</p>
       <p><b>Wer spielt?</b> Spielt ihr zu zweit an einem Gerät, legt für jeden ein Profil an (oben im Hauptmenü). Dann hat jeder seine eigene Karriere und seine eigene Steuerung.</p>
       <p><b>Pause:</b> Im Match oben rechts auf „II“ tippen. Daneben zeigt „?“ deine Steuerung als Spickzettel.</p></div>`);
 };
@@ -407,6 +411,7 @@ actions.ersteLos = (v) => {
 
 function enterMenu() {
   match = null; paused = false;
+  RG.standard();          // Regler vom Physik-Labor gelten nur während eines Test-Matches
   controls.enabled = false;
   controls.showStick(false);
   game.detach();
@@ -866,12 +871,15 @@ actions.help = (v) => { if (v) helpBack = v; show(`<div class="bar">${back(helpB
 // ---------------------------------------------------------------
 // Freies Spiel
 // ---------------------------------------------------------------
-const free = { me: 'zverev', opp: 'zufall', venue: 'ao', page: 0, oppPage: 0 };
+const free = { me: 'zverev', opp: 'zufall', venue: 'ao', page: 0, oppPage: 0, stufe: null };      // stufe = eine eigene Stufe aus dem Physik-Labor (oder null)
 actions.free = () => {
   if (free.me === 'me' && !career) free.me = 'zverev';
   const list = pagePlayers(free.page);
   if (career) list.unshift(CA.mePlayer(career));
   const chosen = getPlayer(free.me), chosenOpp = free.opp === 'zufall' ? null : getPlayer(free.opp);
+  labor = LB.laden(D.DIFFICULTY);
+  const eigene = LB.stufeVon(labor, free.stufe);
+  if (!eigene) free.stufe = null;
   show(`
     <div class="bar">${back()}<h2>Freies Spiel</h2><button class="primary" data-a="freeStart">Match starten ›</button></div>
     <div class="panel"><h3 style="margin-top:0">Stadion</h3><div class="row">
@@ -882,6 +890,12 @@ actions.free = () => {
       <button class="${free.opp === 'zufall' ? 'sel' : ''}" data-a="freeOpp" data-v="zufall">🎲 Zufall</button>
       ${pagePlayers(free.oppPage).map((p) => `<button class="${free.opp === p.id ? 'sel' : ''}" data-a="freeOpp" data-v="${p.id}">${flag(p.country)} ${esc(p.short)} <small class="dim">${D.overall(p.stats)}</small></button>`).join('')}
     </div></div>
+    <div class="panel"><h3 style="margin-top:0">Schwierigkeit: ${eigene ? '⭐ ' + esc(eigene.name) : D.DIFFICULTY[settings.difficulty].name}</h3><div class="row">
+      ${Object.entries(D.DIFFICULTY).map(([k, d]) => `<button class="${!eigene && settings.difficulty === k ? 'sel' : ''}" data-a="freeStufe" data-v="${k}">${d.name}</button>`).join('')}
+      ${labor.stufen.map((e) => `<button class="${eigene && eigene.id === e.id ? 'sel' : ''}" data-a="freeStufe" data-v="eigen:${e.id}">⭐ ${esc(e.name)}<br><small class="dim">${LB.kurzText(e, D.DIFFICULTY)}</small></button>`).join('')}
+      </div>
+      <p class="dim" style="margin:8px 0 0;font-size:13px">${eigene ? 'Eine eigene Stufe aus dem Physik-Labor. Sie gilt nur hier im Freien Spiel.' : STUFE_TEXT[settings.difficulty]}
+        ${labor.stufen.length ? '' : 'Eigene Stufen baust du im Physik-Labor (ganz unten im Hauptmenü).'}</p></div>
     <div class="row"><button class="primary grow" data-a="freeStart">Match starten ›</button><button data-a="settings" data-v="free">Einstellungen</button></div>`);
 };
 actions.freePage = (v) => { free.page = +v; keepScroll(actions.free); };
@@ -893,7 +907,88 @@ function keepScroll(fn) { const y = screen.scrollTop; fn(); screen.scrollTop = y
 actions.freeStart = () => {
   const me = getPlayer(free.me);
   const opp = free.opp === 'zufall' ? pick(pagePlayers(free.oppPage).filter((p) => p.id !== free.me)) : getPlayer(free.opp);
-  startMatch({ me, opp, def: D.tournamentById(free.venue), title: 'Freies Spiel', revanche: true, onEnd: () => actions.free() });
+  const eigene = LB.stufeVon(LB.laden(D.DIFFICULTY), free.stufe);
+  startMatch({ me, opp, def: D.tournamentById(free.venue), title: 'Freies Spiel' + (eigene ? ' · ⭐ ' + eigene.name : ''), revanche: true, onEnd: () => actions.free(),
+    labor: eigene ? { basis: eigene.basis, werte: { ...eigene.werte }, name: eigene.name } : null });
+};
+
+
+// ---------------------------------------------------------------
+// Physik-Labor: Regler für Ball, Beine, Gegner selbst einstellen und gleich ausprobieren
+// (Regler: js/regler.js · Seite und Speicher: js/labor.js)
+// ---------------------------------------------------------------
+let labor = LB.laden(D.DIFFICULTY);
+const laborSichern = () => LB.sichern(labor);
+actions.labor = () => { labor = LB.laden(D.DIFFICULTY); show(LB.laborHtml(labor, D.DIFFICULTY, back())); };
+const laborNeu = () => { laborSichern(); keepScroll(() => show(LB.laborHtml(labor, D.DIFFICULTY, back()))); };
+// Eine Zeile nach dem Schieben auffrischen, ohne die ganze Seite neu zu bauen (sonst rutscht der Regler unter dem Finger weg)
+function laborZeile(id) {
+  const r = RG.regler(id), w = LB.wert(labor, r, D.DIFFICULTY), std = RG.standardVon(r, D.DIFFICULTY[labor.basis]);
+  const zeile = screen.querySelector(`[data-zeile="${id}"]`);
+  if (!zeile) return;
+  zeile.classList.toggle('anders', w !== std);
+  zeile.querySelector('[data-wert]').textContent = RG.zeige(r, w);
+  zeile.querySelector('.lr-std').disabled = w === std;
+  const n = LB.anzahl(labor), zahl = $('#laborZahl');
+  if (zahl) zahl.textContent = n ? (n === 1 ? '1 Regler ist verstellt.' : n + ' Regler sind verstellt.') : 'Alle Regler stehen auf Standard.';
+  const alles = screen.querySelector('[data-a="laborAlles"]');
+  if (alles) alles.disabled = !n;
+}
+// Schieberegler: beim Schieben mitzählen, beim Loslassen speichern
+screen.addEventListener('input', (e) => {
+  const id = e.target.dataset && e.target.dataset.regler;
+  if (!id) return;
+  LB.stellen(labor, id, e.target.value, D.DIFFICULTY);
+  laborZeile(id);
+});
+screen.addEventListener('change', (e) => { if (e.target.dataset && e.target.dataset.regler) laborSichern(); });
+actions.laborStd = (id) => { const r = RG.regler(id); LB.stellen(labor, id, RG.standardVon(r, D.DIFFICULTY[labor.basis]), D.DIFFICULTY); laborNeu(); };
+actions.laborSchalter = (v) => { const [id, an] = v.split(':'); LB.stellen(labor, id, an === '1', D.DIFFICULTY); laborNeu(); };
+actions.laborBasis = (v) => { LB.basisSetzen(labor, v, D.DIFFICULTY); laborNeu(); };
+actions.laborAlles = () => { labor.werte = {}; laborNeu(); };
+actions.laborMerken = () => {
+  const feld = $('#laborName'), name = feld ? feld.value : '';
+  if (!name.trim()) { if (feld) { feld.focus(); feld.placeholder = 'Bitte erst einen Namen eintippen'; } return; }
+  if (!LB.stufeMerken(labor, name)) return showInfo('Kein Platz mehr', `Du hast schon ${LB.STUFEN_MAX} eigene Stufen. Lösche erst eine.`, 'labor');
+  laborNeu();
+};
+actions.laborHolen = (id) => { if (LB.stufeHolen(labor, id)) { laborSichern(); actions.labor(); } };
+actions.laborWeg = (id, el) => {
+  if (el && el.dataset.sicher !== '1') { el.dataset.sicher = '1'; el.textContent = 'Wirklich löschen?'; return; }      // zweimal tippen, damit nichts aus Versehen weg ist
+  LB.stufeWeg(labor, id); if (free.stufe === id) free.stufe = null; laborNeu();
+};
+// Die eigenen Stufen als Datei sichern (zum Aufheben oder zum Weitergeben)
+actions.laborDatei = async () => {
+  const text = JSON.stringify({ powershotLabor: 1, wann: new Date().toISOString(), stufen: labor.stufen, regler: { basis: labor.basis, werte: labor.werte } }, null, 1);
+  const name = `powershot-stufen-${new Date().toISOString().slice(0, 10)}.json`;
+  try {
+    const datei = new File([text], name, { type: 'application/json' });
+    if (touchDevice && navigator.canShare && navigator.canShare({ files: [datei] })) { await navigator.share({ files: [datei], title: 'Powershot-Stufen' }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; /* Teilen ging nicht – dann eben herunterladen */ }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+};
+// Ausprobieren: ein kurzes Match, die Ballmaschine oder Aufschläge – mit genau den Reglern von jetzt
+actions.laborTest = (art) => {
+  laborSichern();
+  const me = getPlayer(free.me === 'me' && !career ? 'zverev' : free.me);
+  const einstellung = { basis: labor.basis, werte: { ...labor.werte } };
+  const def = D.tournamentById(free.venue);
+  if (art === 'match') {
+    const opp = free.opp === 'zufall' ? pick(D.PLAYERS.slice(0, 20).filter((p) => p.id !== me.id)) : getPlayer(free.opp);
+    return startMatch({ me, opp, def, title: '🔧 Physik-Labor: Test-Match', length: 'kurz', ohneEinlauf: true, labor: einstellung, revanche: true, onEnd: () => actions.labor() });
+  }
+  const trainer = { ...D.PLAYERS[59], name: 'Trainer', short: 'Trainer' };
+  startMatch({ me, opp: trainer, def, mode: art, title: '🔧 Physik-Labor: Test', labor: einstellung, onEnd: () => actions.labor() });
+};
+// Freies Spiel: normale Stufe oder eine eigene Stufe aus dem Labor wählen
+actions.freeStufe = (v) => {
+  if (v.startsWith('eigen:')) free.stufe = v.slice(6);
+  else { free.stufe = null; settings.difficulty = v; saveSettings(); }
+  keepScroll(actions.free);
 };
 
 // ---------------------------------------------------------------
@@ -2764,10 +2859,15 @@ function startMatch(o) {
   const lernen = o.lernen || null;
   const mitZuegen = !lernen && mode === 'match' && settings.spielzuege === 'an';
   session = { o, names, over: false, mode: lernen ? 'spielzug' : mode, zugScore: 0, zuege: [0, 0], mitZuegen };
+  // Physik-Labor: Nur ein Test aus dem Labor oder eine eigene Stufe im Freien Spiel bringt eigene Regler mit (o.labor).
+  // Jedes andere Match rechnet mit den Standardwerten – auch wenn im Labor gerade etwas verstellt ist.
+  const lab = o.labor || null;
+  if (lab) RG.setze(lab.werte); else RG.standard();
   rekStart(o);
   match = new Match({
     rekorder: rek,
-    players: [o.me, o.opp], human: 0, surface: o.def.surface, difficulty: o.difficulty || settings.difficulty,
+    players: [o.me, o.opp], human: 0, surface: o.def.surface, difficulty: lab ? lab.basis : o.difficulty || settings.difficulty,
+    diff: lab ? RG.stufeAus(D.DIFFICULTY[lab.basis] || D.DIFFICULTY.mittel, lab.werte) : null,
     sets: lernen ? 3 : len.sets, games: lernen ? 99 : len.games, mode, balls: o.balls, assist: settings.assist, controlMode: settings.control,
     ohneHilfe: !!o.ohneHilfe,
     finale: !!o.finale,      // im Endspiel heißt der Matchball "Championship Point"
@@ -3167,6 +3267,7 @@ function rekStart(o) {
     titel: o.title || '', ort: o.def.id, steuerung: settings.control, kamera: settings.kamera,
     tempo: settings.tempo, tempoMal: tempoMal(), laenge: o.length || settings.length, blick: settings.blick,
     spielzuege: settings.spielzuege, version: window.__powershotVersion || '',
+    labor: o.labor ? { basis: o.labor.basis, werte: o.labor.werte, name: o.labor.name || '' } : null,       // eigene Regler aus dem Physik-Labor
     geraet: { touch: touchDevice, breit: window.innerWidth, hoch: window.innerHeight, app: !!window.webkit?.messageHandlers?.powershot },
   });
   controls.onRek = (was, d) => { if (rek) rek.eingabe(was, d); };
@@ -3257,6 +3358,7 @@ actions.rekAbspielen = (id) => {
   controls.enabled = false;
   const names = [me.short, opp.short];
   session = { o: { title: '▶ Aufnahme vom ' + datumKurz(K.wann), def, me, opp, onEnd: () => actions.rekorder() }, names, over: false, mode: 'wiedergabe', wiedergabe: true, zugScore: 0, zuege: [0, 0] };
+  RG.setze(K.labor ? K.labor.werte : null);      // mit denselben Reglern abspielen, mit denen aufgenommen wurde (sonst fliegt der Ball anders)
   match = new Wiedergabe(a, game.makeFx(names), [me, opp]);
   game.attach(match, hud);
   paused = false;
